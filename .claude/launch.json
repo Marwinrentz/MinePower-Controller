@@ -1,0 +1,16 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "minepower",
+      "runtimeExecutable": "docker",
+      "runtimeArgs": [
+        "compose",
+        "logs",
+        "-f",
+        "app"
+      ],
+      "port": 8080
+    }
+  ]
+}

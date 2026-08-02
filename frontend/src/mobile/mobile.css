@@ -1,0 +1,316 @@
+/* ============================================================================
+   MinePower – eigenständige Handy-Oberfläche
+   ----------------------------------------------------------------------------
+   Bewusst NICHT das geschrumpfte Desktop-Layout, sondern ein eigener Aufbau in
+   der Formensprache, die man vom iPhone kennt: große Titel, gruppierte Karten
+   mit weichen Radien, klare Abschnitts-Überschriften, viel Luft, und eine
+   verwaschene Leiste unten in der Daumenzone.
+
+   Alles hier ist unter `.m-app` gekapselt und überschreibt das Desktop-Theme
+   nicht – die beiden Oberflächen kommen sich nicht in die Quere.
+
+   Eiserne Regel gegen abgeschnittene Ränder: Jeder Container ist
+   `min-width: 0` + `max-width: 100%`, es gibt keine negativen Ränder und
+   keine festen Pixelbreiten. Umbruchfähiger Text bricht um, nicht die Seite.
+   ========================================================================== */
+
+.m-app {
+  /* Systemschrift: auf iOS ist das SF Pro, auf Android Roboto – dadurch fühlt
+     sich die Oberfläche nach dem Gerät an, auf dem sie läuft. */
+  --m-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable",
+            "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+
+  --m-r-card: 18px;
+  --m-r-inner: 12px;
+  --m-gap: 12px;
+  --m-pad: 16px;
+
+  /* Bewegung: kurz und federnd, wie bei nativen Übergängen */
+  --m-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --m-fast: 180ms;
+  --m-med: 300ms;
+
+  background: var(--m-bg);
+  color: var(--m-text);
+  font-family: var(--m-font);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: clip;
+  width: 100%;
+}
+
+[data-theme="light"] .m-app {
+  --m-bg: #f2f2f7;          /* iOS „grouped background" */
+  --m-card: #ffffff;
+  --m-card-2: #f7f7fa;
+  --m-sep: rgba(60, 60, 67, 0.12);
+  --m-text: #1c1c1e;
+  --m-text-2: #6c6c70;
+  --m-text-3: #9a9aa0;
+  --m-blur: rgba(249, 249, 251, 0.82);
+  --m-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="dark"] .m-app {
+  --m-bg: #000000;
+  --m-card: #1c1c1e;
+  --m-card-2: #2c2c2e;
+  --m-sep: rgba(84, 84, 88, 0.5);
+  --m-text: #ffffff;
+  --m-text-2: #98989f;
+  --m-text-3: #6c6c70;
+  --m-blur: rgba(28, 28, 30, 0.78);
+  --m-shadow: none;
+}
+
+.m-app *, .m-app *::before, .m-app *::after { box-sizing: border-box; }
+.m-app :is(div, section, header, span, p, h1, h2, h3) { min-width: 0; max-width: 100%; }
+
+/* ---------------------------------------------------------------- Gerüst */
+
+.m-scroll {
+  /* Platz unten für die Tab-Leiste inkl. Home-Indikator */
+  padding: 0 var(--m-pad) calc(76px + env(safe-area-inset-bottom, 0px));
+  padding-top: calc(env(safe-area-inset-top, 0px));
+}
+
+/* Großer Titel wie in iOS: steht beim Scrollen oben und rückt weg */
+.m-title-bar {
+  align-items: flex-end; display: flex; gap: var(--m-gap);
+  justify-content: space-between; padding: 14px 0 10px;
+}
+.m-title { font-size: 32px; font-weight: 750; letter-spacing: -0.022em; line-height: 1.1; margin: 0; }
+.m-title-sub { color: var(--m-text-2); font-size: 13px; font-weight: 500; }
+
+.m-live { align-items: center; color: var(--m-text-2); display: flex; font-size: 13px; font-weight: 600; gap: 6px; }
+.m-live-dot { border-radius: 50%; height: 8px; width: 8px; background: var(--ok); flex-shrink: 0; }
+.m-live-dot.off { background: var(--m-text-3); }
+
+.m-section {
+  color: var(--m-text-2); font-size: 12.5px; font-weight: 650; letter-spacing: 0.02em;
+  margin: 22px 4px 8px; text-transform: uppercase;
+}
+
+.m-card {
+  background: var(--m-card);
+  border-radius: var(--m-r-card);
+  box-shadow: var(--m-shadow);
+  overflow: hidden;
+  width: 100%;
+}
+.m-card-pad { padding: var(--m-pad); }
+
+/* ---------------------------------------------------------------- Waage */
+
+.m-balance { display: flex; flex-direction: column; gap: 12px; padding: 18px var(--m-pad); }
+.m-balance-top { align-items: center; display: flex; justify-content: space-between; gap: 10px; }
+.m-balance-cap {
+  color: var(--m-text-2); font-size: 12.5px; font-weight: 650;
+  letter-spacing: 0.02em; text-transform: uppercase;
+}
+.m-balance-pill {
+  background: var(--m-tone-soft); border-radius: 999px; color: var(--m-tone);
+  font-size: 12.5px; font-weight: 700; padding: 4px 11px; white-space: nowrap;
+}
+.m-balance-read { align-items: baseline; display: flex; gap: 6px; justify-content: center; }
+.m-balance-val {
+  color: var(--m-tone); font-size: 52px; font-weight: 730; letter-spacing: -0.03em;
+  line-height: 1; font-variant-numeric: tabular-nums;
+  transition: color var(--m-med) var(--m-spring);
+}
+.m-balance-unit { color: var(--m-text-2); font-size: 20px; font-weight: 650; }
+
+.m-balance-track {
+  background: var(--m-card-2); border-radius: 999px; height: 26px;
+  overflow: hidden; position: relative; width: 100%;
+}
+.m-balance-band {
+  background: color-mix(in srgb, var(--ok) 28%, transparent);
+  bottom: 0; position: absolute; top: 0;
+  transition: left var(--m-med) var(--m-spring), width var(--m-med) var(--m-spring);
+}
+.m-balance-zero {
+  background: var(--m-text-3); bottom: 0; left: 50%; opacity: 0.85;
+  position: absolute; top: 0; transform: translateX(-50%); width: 2px;
+}
+.m-balance-fill {
+  background: var(--m-tone); border-radius: 999px; bottom: 3px; position: absolute; top: 3px;
+  transition: width 520ms var(--m-spring), left 520ms var(--m-spring),
+              right 520ms var(--m-spring), background var(--m-med) var(--m-spring);
+}
+.m-balance-scale {
+  color: var(--m-text-3); display: flex; font-size: 11.5px; font-weight: 600;
+  justify-content: space-between;
+}
+
+.m-tone-ok { --m-tone: var(--c-pv); --m-tone-soft: color-mix(in srgb, var(--c-pv) 15%, transparent); }
+.m-tone-import { --m-tone: var(--c-grid-import); --m-tone-soft: color-mix(in srgb, var(--c-grid-import) 15%, transparent); }
+.m-tone-export { --m-tone: var(--c-waste); --m-tone-soft: color-mix(in srgb, var(--c-waste) 15%, transparent); }
+
+/* ---------------------------------------------------------------- Kennzahlen */
+
+.m-stats { display: grid; gap: var(--m-gap); grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.m-stat { display: flex; flex-direction: column; gap: 2px; padding: 14px var(--m-pad); }
+.m-stat-val {
+  font-size: 24px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15;
+  font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+}
+.m-stat-lab { color: var(--m-text-2); font-size: 12.5px; font-weight: 550; }
+
+/* ---------------------------------------------------------------- Flussleiste */
+
+.m-flow { display: flex; flex-direction: column; gap: 10px; padding: var(--m-pad); }
+.m-flow-row { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.m-flow-tag { color: var(--m-text-2); font-size: 11.5px; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; }
+.m-flow-track { display: flex; gap: 3px; height: 30px; min-width: 0; width: 100%; }
+.m-flow-seg {
+  align-items: center; border-radius: 8px; color: #fff; display: flex; gap: 4px;
+  font-size: 11.5px; font-weight: 700; justify-content: center; min-width: 0;
+  overflow: hidden; padding: 0 4px; white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: width 520ms var(--m-spring);
+}
+.m-flow-empty { background: var(--m-card-2); border-radius: 8px; flex: 1; }
+
+/* ---------------------------------------------------------------- Gerätekarten */
+
+.m-dev { display: flex; flex-direction: column; }
+.m-dev + .m-dev { border-top: 1px solid var(--m-sep); }
+.m-dev-head {
+  align-items: center; display: flex; gap: 12px; padding: 14px var(--m-pad); width: 100%;
+  background: none; border: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.m-dev-head:active { background: var(--m-card-2); }
+.m-dev-icon {
+  align-items: center; background: var(--m-icon-bg, var(--m-card-2)); border-radius: 10px;
+  display: flex; flex-shrink: 0; font-size: 17px; height: 34px; justify-content: center; width: 34px;
+}
+.m-dev-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.m-dev-name {
+  font-size: 15.5px; font-weight: 600; letter-spacing: -0.01em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.m-dev-sub { color: var(--m-text-2); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-dev-right { align-items: flex-end; display: flex; flex-direction: column; flex-shrink: 0; gap: 1px; }
+.m-dev-power { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.015em; }
+.m-dev-chev { color: var(--m-text-3); font-size: 13px; transition: transform var(--m-fast) var(--m-spring); flex-shrink: 0; }
+.m-dev-chev.open { transform: rotate(90deg); }
+
+/* Aufklappbereich: Höhe animiert über Grid – ohne feste Pixelwerte */
+.m-dev-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--m-med) var(--m-spring); }
+.m-dev-body.open { grid-template-rows: 1fr; }
+.m-dev-body-inner { overflow: hidden; }
+.m-dev-controls { display: flex; flex-direction: column; gap: 12px; padding: 2px var(--m-pad) 16px; }
+
+/* iOS-Segmentcontrol */
+.m-seg {
+  background: var(--m-card-2); border-radius: 9px; display: grid; gap: 2px; padding: 2px;
+  grid-auto-flow: column; grid-auto-columns: 1fr; width: 100%;
+}
+.m-seg button {
+  background: transparent; border: none; border-radius: 7px; color: var(--m-text);
+  cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; min-height: 32px;
+  min-width: 0; overflow: hidden; padding: 0 4px; text-overflow: ellipsis; white-space: nowrap;
+  transition: background var(--m-fast) var(--m-spring);
+  -webkit-tap-highlight-color: transparent;
+}
+.m-seg button.on { background: var(--m-card); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+
+.m-btnrow { display: grid; gap: 8px; grid-auto-flow: column; grid-auto-columns: 1fr; }
+.m-btn {
+  align-items: center; background: var(--m-card-2); border: none; border-radius: 10px;
+  color: var(--m-text); cursor: pointer; display: flex; font: inherit; font-size: 13.5px;
+  font-weight: 600; gap: 5px; justify-content: center; min-height: 42px; min-width: 0;
+  overflow: hidden; padding: 0 6px; white-space: nowrap;
+  transition: transform var(--m-fast) var(--m-spring), background var(--m-fast) var(--m-spring);
+  -webkit-tap-highlight-color: transparent;
+}
+.m-btn:active { transform: scale(0.95); }
+.m-btn.on { background: var(--accent); color: #fff; }
+.m-btn:disabled { opacity: 0.4; }
+
+/* Ladegrenze */
+.m-limit { display: flex; flex-direction: column; gap: 6px; }
+.m-limit-head { align-items: baseline; display: flex; justify-content: space-between; }
+.m-limit-lab { color: var(--m-text-2); font-size: 12.5px; font-weight: 600; }
+.m-limit-val { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.m-range { appearance: none; background: transparent; height: 34px; margin: 0; width: 100%; }
+.m-range::-webkit-slider-runnable-track {
+  background: linear-gradient(90deg, var(--c-car) var(--m-pct, 60%), var(--m-card-2) var(--m-pct, 60%));
+  border-radius: 999px; height: 8px;
+}
+.m-range::-moz-range-track {
+  background: linear-gradient(90deg, var(--c-car) var(--m-pct, 60%), var(--m-card-2) var(--m-pct, 60%));
+  border-radius: 999px; height: 8px;
+}
+.m-range::-webkit-slider-thumb {
+  appearance: none; background: #fff; border-radius: 50%; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28);
+  height: 26px; width: 26px; margin-top: -9px;
+}
+.m-range::-moz-range-thumb {
+  background: #fff; border: none; border-radius: 50%; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28);
+  height: 26px; width: 26px;
+}
+
+/* Hinweisbanner */
+.m-note {
+  align-items: flex-start; border-radius: var(--m-r-card); display: flex; gap: 10px;
+  padding: 13px var(--m-pad); width: 100%;
+}
+.m-note-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.m-note-txt strong { font-size: 14.5px; font-weight: 650; }
+.m-note-txt span { font-size: 12.5px; overflow-wrap: anywhere; }
+.m-note.warn { background: color-mix(in srgb, var(--warn) 16%, var(--m-card)); color: var(--m-text); }
+.m-note.err { background: color-mix(in srgb, var(--err) 16%, var(--m-card)); color: var(--m-text); }
+.m-note.info { background: var(--m-card); color: var(--m-text); }
+
+/* ---------------------------------------------------------------- Tab-Leiste */
+
+.m-tabs {
+  background: var(--m-blur);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-top: 0.5px solid var(--m-sep);
+  bottom: 0; display: grid; grid-auto-columns: 1fr; grid-auto-flow: column;
+  left: 0; padding-bottom: env(safe-area-inset-bottom, 0px);
+  position: fixed; right: 0; z-index: 60;
+}
+.m-tab {
+  align-items: center; color: var(--m-text-3); display: flex; flex-direction: column;
+  gap: 2px; font-size: 10px; font-weight: 550; min-height: 49px; justify-content: center;
+  text-decoration: none; -webkit-tap-highlight-color: transparent;
+  transition: color var(--m-fast) var(--m-spring);
+}
+.m-tab-icon { font-size: 20px; line-height: 1; }
+.m-tab.on { color: var(--accent); }
+.m-tab:active { opacity: 0.6; }
+
+/* ---------------------------------------------------------------- Übergänge */
+
+.m-in { animation: m-in 380ms var(--m-spring) both; }
+@keyframes m-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+.m-stagger > * { animation: m-in 400ms var(--m-spring) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .m-app *, .m-app *::before, .m-app *::after {
+    animation-duration: 0.01ms !important; transition-duration: 0.01ms !important;
+  }
+}
+
+/* Sehr schmale Geräte (iPhone SE & Co.): Fünf Modi nebeneinander lassen dort
+   nur ~49 px je Feld – eine Stufe kleinere Schrift statt abgeschnittener
+   Wörter. */
+@media (max-width: 360px) {
+  .m-app { --m-pad: 14px; }
+  .m-seg button { font-size: 11.5px; letter-spacing: -0.02em; }
+  .m-btn { font-size: 12.5px; gap: 3px; }
+  .m-balance-val { font-size: 46px; }
+  .m-stat-val { font-size: 21px; }
+  .m-title { font-size: 28px; }
+}

@@ -1,0 +1,29 @@
+MinePower – Proprietäre Lizenz / Proprietary License
+
+Copyright (c) 2026 Marwin Rentz. Alle Rechte vorbehalten. / All rights reserved.
+
+DE:
+Diese Software und die zugehörige Dokumentation sind urheberrechtlich
+geschützt. Nutzung, Vervielfältigung, Veränderung, Weitergabe oder
+öffentliche Bereitstellung – ganz oder in Teilen – bedürfen der vorherigen
+schriftlichen Zustimmung des Rechteinhabers. Die Nutzung des offiziellen
+Docker-Images für den Betrieb einer eigenen Installation ist gestattet;
+kommerzieller Weitervertrieb, Vermietung oder das Anbieten als Dienstleistung
+für Dritte bedürfen einer gesonderten kommerziellen Lizenz.
+
+EN:
+This software and its documentation are protected by copyright. Any use,
+reproduction, modification, distribution, or public provision – in whole or
+in part – requires prior written consent of the copyright holder. Running
+the official Docker image for your own installation is permitted; commercial
+redistribution, rental, or offering it as a service to third parties
+requires a separate commercial license.
+
+DIE SOFTWARE WIRD OHNE JEDE GEWÄHRLEISTUNG BEREITGESTELLT. DER EINSATZ ZUR
+STEUERUNG ELEKTRISCHER ANLAGEN ERFOLGT AUF EIGENE VERANTWORTUNG; DIE
+INSTALLATION ELEKTRISCHER KOMPONENTEN GEHÖRT IN DIE HÄNDE VON FACHPERSONAL.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. USE FOR
+CONTROLLING ELECTRICAL EQUIPMENT IS AT YOUR OWN RISK.
+
+Drittanbieter-Komponenten unterliegen ihren jeweiligen Open-Source-Lizenzen
+(u. a. FastAPI/MIT, SQLAlchemy/MIT, pymodbus/BSD, React/MIT, ECharts/Apache-2.0).
