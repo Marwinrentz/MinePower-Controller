@@ -1,174 +1,287 @@
-# ☀️ MinePower – PV-Überschuss-Ladecontroller
+# MinePower
 
-Intelligente Steuerung von **E-Auto-Ladung, Warmwasser und Hausbatterie**
-auf Basis von PV-Überschuss. Herstellerübergreifend, ohne Hub-Zwang
-(kein Home Assistant / ioBroker nötig), ausgeliefert als Docker-Stack.
+Überschussbasierte Ladesteuerung für E-Auto, Warmwasser und Hausbatterie.
+MinePower liest die Netzeinspeisung und die verfügbaren PV-Überschüsse aus
+und verteilt sie nach einer frei sortierbaren Prioritätskette auf die
+steuerbaren Verbraucher im Haus – mit dem Ziel, die Einspeisung ins
+öffentliche Netz möglichst nahe an 0 W zu halten, ohne Komfort oder
+Anlagensicherheit zu opfern.
 
-**Regelziel:** Netzeinspeisung gegen 0 W – Überschuss geht nach frei
-sortierbarer Prioritätskette in Batterie, Auto und Warmwasser statt ins Netz.
+Die Anwendung läuft als Docker-Stack (FastAPI-Backend, React-Frontend,
+TimescaleDB), braucht keine Cloud-Anbindung und keinen Smart-Home-Hub. Geräte
+werden über eine Plugin-Architektur angebunden; ein neuer Treiber ist eine
+einzelne Python-Datei ohne Änderungen am Kern.
 
-## Features
+[![License: proprietary](https://img.shields.io/badge/license-proprietary-lightgrey)](LICENSE)
+[![Docker Image](https://img.shields.io/docker/v/marwinrentz1/minepower?sort=semver&label=docker%20hub)](https://hub.docker.com/r/marwinrentz1/minepower)
+[![Build](https://github.com/Marwinrentz/MinePower-Controller/actions/workflows/docker.yml/badge.svg)](https://github.com/Marwinrentz/MinePower-Controller/actions/workflows/docker.yml)
 
-- **Geschlossener Regelkreis** (2–5 s): Totband, gleitende Mittelung,
-  Start-/Stopp-Hysterese, Min-Ladestrom-Handling (≥ 6 A), automatische
-  **1↔3-Phasenumschaltung** mit Sperrzeit, Hausanschluss-Schutz.
-- **Kein Watt verschenken** – drei Mechanismen, die messbar wirken:
-  - **Lückenfüller:** Rest-Überschuss, der für die nächste Last in der Kette
-    zu klein ist (z. B. 180 W vs. 6 A Mindeststrom), geht an eine stufenlos
-    modulierbare Last (Warmwasser) – unabhängig von deren Platz in der Kette.
-  - **Adaptives Totband:** bei stabiler Sonne enger regeln (weniger
-    verschenken), bei Wolkenwechsel weiter (weniger Start/Stopp-Zyklen).
-  - **Kennzahl „verschenkter Solarstrom“** live im Dashboard – inklusive
-    Klartext-Begründung, warum der Überschuss liegen blieb – und historisch
-    in der Statistik (kWh, Anteil, Gegenwert in €).
-- **Solarprognose fließt in Entscheidungen ein**, nicht nur in die Anzeige:
-  Bei kurzem Wolkendurchzug wird eine laufende Ladung gehalten statt
-  abgeschaltet; Zielladungen beginnen früher, wenn die Sonne bis zur
-  Deadline absehbar nicht reicht.
-- **Prioritätskette per Drag & Drop** (Batterie → Auto → Warmwasser …),
-  Batterie-Reserve, EV-Batteriesperre.
-- **Lademodi:** Nur-PV · Min+PV · Sofort · Zeitplan · **Zielladung mit
-  Deadline** · **Preisoptimiert** (Tibber / aWATTar).
-- **Batterie bleibt passiv:** Hybrid-Wechselrichter regeln ihre Batterie
-  selbst auf Nulleinspeisung. MinePower liest SoC und Leistung nur mit (ein
-  separates Batteriegerät ist dafür nicht nötig); aktives Zwangsladen bleibt
-  eine bewusst zu aktivierende Zusatzfunktion für Sonderfälle.
-- **Treiber-Plugin-Architektur** – neue Geräte ohne Kern-Änderung
-  ([Guide](docs/adding-drivers.md)). Jeder Treiber bringt Reconnect,
-  Plausibilitätsprüfung, Klartext-Fehler und **Readback nach jedem
-  Schreibbefehl** mit – „Befehl gesendet“ gilt nie als „Befehl ausgeführt“.
-  Startset:
-  - **Sungrow komplett:** SG- & SH-Serie (Modbus TCP via WiNet-S),
-    SBR/SBH-Batterie inkl. Zwangsladen/Reserve, DTSU666-Zähler,
-    AC007/AC011E-Wallbox – ohne Cloud/iSolarCloud.
-  - **Tesla als Ladepunkt:** wahlweise **externer TeslaBleHttpProxy**
-    (cloud-frei, läuft z. B. auf deinem Pi – wird *nicht* mitbetrieben)
-    oder **Fleet-API** (Cloud, zuverlässiger SoC).
-  - **SunSpec (herstellerübergreifend):** Kostal Plenticore, GoodWe ET/EH,
-    SolarEdge, Delta, SMA Tripower X … Das Gerät wird beim Verbinden nach
-    seinem Registeraufbau gefragt – unempfindlich gegen Firmware-Updates.
-  - **Hybrid-Wechselrichter mit Batterie-Monitoring:** Fronius GEN24 (Plus),
-    SMA Sunny Boy Storage, Huawei SUN2000 + LUNA2000 (experimentell).
-  - go-e Charger (HTTP v2), **OCPP 1.6J** (generisch), Shelly 3EM/Pro 3EM,
-    SMA Energy Meter / Home Manager, Fronius Smart Meter, generischer
-    Modbus-Zähler (SDM630 …), my-PV AC•THOR / ELWA-E, Shelly-Relais-Heizstab.
-- **Dashboard:** Systemzustand in einem Satz, animiertes
-  Energiefluss-Diagramm (Richtung, Stärke und Tempo folgen der realen
-  Leistung), weich zählende Messwerte, Live-Push per WebSocket, historische
-  Charts (TimescaleDB). Störungen – Sicherheits-Stopp, offline-Geräte, nicht
-  übernommene Befehle – stehen unübersehbar oben, nicht im Log.
-- **Setup-Assistent** mit Tooltips an jedem Feld, „Verbindung testen“ mit
-  allen Live-Werten im Klartext und optionalem **Steuerbefehl-Test samt
-  Readback**; Export/Import als JSON; [Headless-Config](docs/headless.md).
-- **Simulations-/Demo-Modus:** komplette Anlage ohne Hardware erlebbar.
-- **Statistik:** Autarkie, Eigenverbrauch, Solaranteil je Ladung, Ersparnis,
-  CO₂; CSV-Export. **Benachrichtigungen:** ntfy / Telegram / E-Mail.
-- **Mehrbenutzer + Rollen** (Admin/Nutzer/Read-only), RFID-Zuordnung,
-  Audit-Log, Diagnose-Seite mit Regelgüte-Kennzahlen, **i18n
-  Deutsch/Englisch**, durchgängiges Design-System hell/dunkel/system,
-  mobil mit Tab-Navigation voll bedienbar.
-- Optional: **MQTT-Publish** inkl. Home-Assistant-Auto-Discovery.
+## Inhalt
 
-## Quickstart (Plug & Play)
+- [Funktionsweise des Regelkreises](#funktionsweise-des-regelkreises)
+- [Unterstützte Geräte](#unterstützte-geräte)
+- [Installation](#installation)
+- [Tesla-Anbindung](#tesla-anbindung)
+- [Betrieb](#betrieb)
+- [Entwicklung](#entwicklung)
+- [Sicherheit](#sicherheit)
+- [Bekannte Einschränkungen](#bekannte-einschränkungen)
+- [Lizenz](#lizenz)
 
-Voraussetzung: Docker + Docker Compose (amd64 oder arm64/Raspberry Pi).
-**Keine `.env` nötig** – das JWT-Secret wird beim Erststart automatisch
-erzeugt und persistiert, die DB ist nur intern erreichbar.
+## Funktionsweise des Regelkreises
+
+Der Regelkreis läuft alle zwei bis fünf Sekunden (konfigurierbar). Jeder
+Zyklus liest die Messwerte aller aktivierten Geräte parallel ein, berechnet
+daraus ein Budget und verteilt es entlang der Prioritätskette:
+
+```
+budget = Σ(Leistung aller steuerbaren Lasten) − Netzleistung (geglättet) − Sollwert
+```
+
+Innerhalb eines Totbands um den Sollwert wird nicht nachgeregelt, um
+Flattern durch Messrauschen zu vermeiden. Das Totband ist adaptiv: Bei
+stabiler Erzeugung wird enger geregelt, bei starkem Wolkenwechsel weiter,
+um unnötige Start-/Stopp-Zyklen zu vermeiden.
+
+Batterien in der Prioritätskette werden standardmäßig nicht aktiv
+angesteuert. Hybrid-Wechselrichter (Sungrow SH, Fronius GEN24 Plus, SMA
+Sunny Boy Storage) regeln ihre Batterie bereits selbst auf Nulleinspeisung.
+MinePower liest Ladestand und Leistung nur mit, damit Lasten, die in der
+Kette vor der Batterie stehen, deren aktuelle Ladeleistung mitnutzen
+können – der Wechselrichter reduziert seine eigene Ladung automatisch,
+sobald eine andere Last zugreift. Aktives Zwangsladen oder eine
+Reserve-SoC-Vorgabe bleiben eine bewusst zu aktivierende Zusatzfunktion für
+Sonderfälle.
+
+Drei Mechanismen sollen verhindern, dass Überschuss ungenutzt ins Netz
+geht:
+
+**Lückenfüller.** Eine Wallbox kann nur ganze Ampere-Stufen laden; der
+Regler rundet dabei grundsätzlich ab, weil Aufrunden Netzbezug erzeugen
+würde. Der so entstehende Rest – etwa 180 W, während die nächste Last
+mindestens 6 A (1380 W) benötigt – wird nicht verworfen, sondern an eine
+stufenlos modulierbare Last (in der Regel Warmwasser) weitergereicht,
+unabhängig von deren Position in der Prioritätskette.
+
+**Solarprognose.** Die Anbindung an forecast.solar fließt aktiv in
+Entscheidungen ein statt nur zur Anzeige zu dienen. Bricht die Erzeugung
+kurzzeitig ein, während die Prognose für die nächste halbe Stunde weiter
+hoch ist, wird eine laufende Ladung gehalten statt beendet – ein Neustart
+kostet durch die Start-Hysterese mehr Überschuss, als das Halten an
+Netzstrom zieht. Bei der Zielladung mit Deadline verschiebt sich die
+Sicherheitsreserve vorausschauend, wenn absehbar ist, dass die Sonne bis
+zum gewünschten Zeitpunkt nicht ausreicht.
+
+**Kennzahl „verschenkter Solarstrom“.** Einspeisung oberhalb des
+Netz-Sollwerts, die keine steuerbare Last aufgenommen hat, wird als eigene
+Messgröße geführt – live im Dashboard mit Klartext-Begründung, warum der
+Überschuss liegen blieb, und historisch in der Statistik (kWh, Anteil an
+der Erzeugung, Gegenwert in Euro).
+
+Fällt die Netzmessung aus oder ist die Regelung manuell pausiert, werden
+alle steuerbaren Lasten sicher gestoppt. Dieses Verhalten hat Vorrang vor
+allen genannten Optimierungen und wird durch keine davon aufgeweicht.
+
+## Unterstützte Geräte
+
+Jeder Treiber ist mit einem Reifegrad gekennzeichnet, der im Setup-
+Assistenten als Hinweis erscheint:
+
+- **Stabil** – Registerkarte bzw. API an realer Hardware verifiziert.
+- **Beta** – Grundfunktionen geprüft, einzelne Modell- oder
+  Firmware-Varianten können abweichen.
+- **Experimentell** – Registerbelegung aus Herstellerdokumentation oder
+  Community-Quellen, nicht an Hardware verifiziert.
+
+Unabhängig vom Reifegrad meldet jeder Treiber unplausible Werte und nicht
+angenommene Schreibbefehle im Klartext, statt sie stillschweigend zu
+verarbeiten.
+
+| Gerät | Kategorie | Protokoll | Reifegrad |
+|---|---|---|---|
+| Sungrow SG-Serie | Wechselrichter | Modbus TCP (WiNet-S) | Stabil |
+| Sungrow SH-Serie | Hybrid-Wechselrichter, inkl. Batterie-Monitoring | Modbus TCP | Stabil |
+| Sungrow DTSU666 | Netzzähler | Modbus TCP (über WR) | Stabil |
+| Sungrow SBR/SBH | Batterie, optional aktiv steuerbar | Modbus TCP | Beta |
+| Sungrow AC007/AC011E | Wallbox | Modbus TCP | Beta |
+| Fronius GEN24 (Plus) | Wechselrichter, inkl. Batterie-Monitoring | Solar API | Stabil |
+| Fronius Smart Meter | Netzzähler | Solar API | Stabil |
+| SMA Sunny Boy / Tripower | Wechselrichter, inkl. Speicher-Monitoring | Modbus TCP | Stabil |
+| SMA Energy Meter / Home Manager | Netzzähler | Modbus TCP | Beta |
+| Kostal Plenticore, GoodWe ET/EH, SolarEdge, Delta, SMA Tripower X | Wechselrichter | SunSpec / Modbus TCP | Beta |
+| SunSpec-Zähler | Netzzähler | SunSpec / Modbus TCP | Beta |
+| Huawei SUN2000 + LUNA2000 | Hybrid-Wechselrichter | Modbus TCP | Experimentell |
+| Generischer Modbus-Zähler (z. B. Eastron SDM630) | Netzzähler | Modbus TCP, frei konfigurierbar | Stabil |
+| Shelly 3EM / Pro 3EM | Netzzähler | HTTP | Stabil |
+| Shelly-Relais | Warmwasser (Ein/Aus) | HTTP | Stabil |
+| my-PV AC·THOR / ELWA-E / ELWA 2 | Warmwasser, stufenlos modulierend | HTTP oder Modbus TCP | Stabil |
+| go-e Charger | Wallbox | HTTP v2 | Stabil |
+| Tesla (beliebiges Modell) | Fahrzeug als Ladepunkt | BLE-Proxy oder Fleet-API | Stabil |
+| Generische Wallbox | Wallbox | OCPP 1.6J | Beta |
+
+Bei SunSpec fragt der Treiber das Gerät beim Verbinden nach seinem
+Registeraufbau ab, statt eine feste Registerkarte vorauszusetzen – das
+macht ihn unempfindlich gegen Firmware-Updates, auf Kosten etwas höherer
+Verbindungszeit beim ersten Scan.
+
+Ein neuer Treiber erfordert keine Änderung am Regelkern; siehe
+[docs/adding-drivers.md](docs/adding-drivers.md).
+
+## Installation
+
+Voraussetzung ist Docker mit Compose-Plugin, amd64 oder arm64. Ein
+`.env`-File ist nicht erforderlich – das JWT-Secret wird beim ersten Start
+automatisch erzeugt und in der Datenbank persistiert.
 
 ```bash
-git clone <repo> minepower && cd minepower
+git clone https://github.com/Marwinrentz/MinePower-Controller.git minepower
+cd minepower
 docker compose up -d --build
 ```
 
-→ **http://localhost:8080** öffnen. Beim Erststart legst du das
-Admin-Konto an; danach führt der Assistent durch die Einrichtung
-(oder: „Demo-Modus starten" für eine simulierte Anlage).
+Danach `http://localhost:8080` öffnen. Beim ersten Zugriff wird das
+Administrator-Konto angelegt, anschließend führt der Setup-Assistent durch
+die Geräte-Einrichtung. Alternativ legt „Demo-Modus starten“ eine
+vollständig simulierte Anlage an, um die Oberfläche ohne Hardware
+kennenzulernen.
 
-Noch einfacher ohne lokalen Build – **fertiges Image von Docker Hub**
-(`marwinrentz1/minepower:latest`, multi-arch): einfach den Compose-Schnipsel
-aus der [Unraid-Anleitung](docs/unraid.md) verwenden (gilt sinngemäß für
-jede Docker-Plattform). Härten für Produktion: `.env.example` → `.env`
-(eigenes `POSTGRES_PASSWORD` usw.).
+Ohne lokalen Build lässt sich stattdessen das veröffentlichte Image
+verwenden:
 
-| Service | Port | Zweck |
+```bash
+docker pull marwinrentz1/minepower:latest
+```
+
+Verfügbare Tags: `latest` sowie versionierte Releases (`2.0.0` und
+folgende). Eine fertige Compose-Datei für Unraid liegt unter
+[docs/unraid.md](docs/unraid.md).
+
+| Dienst | Port | Zweck |
 |---|---|---|
-| app | `${HTTP_PORT:-8080}` → 8000 | Web-GUI + API + WebSocket (FastAPI serviert das Frontend) |
-| db | intern 5432 | TimescaleDB (Volume `db_data`) |
-| mqtt (optional) | 1883 | `docker compose --profile mqtt up -d` |
+| `app` | `${HTTP_PORT:-8080}` → 8000 | Web-Oberfläche, REST-API, WebSocket |
+| `db` | intern 5432 | TimescaleDB, Volume `db_data` |
+| `mqtt` (optional) | 1883 | `docker compose --profile mqtt up -d` |
 
-**Unraid:** Schritt-für-Schritt in [docs/unraid.md](docs/unraid.md).
+Für OCPP-Wallboxen zusätzlich den Treiber-Port freigeben (Standard 8887):
+`ports: ["8887:8887"]`. Die Wallbox wird dann auf
+`ws://<server-ip>:8887/<charge-point-id>` als Backend eingerichtet.
 
-**OCPP-Wallboxen:** Port des OCPP-Treibers (Default 8887) beim
-`app`-Service freigeben: `ports: ["8887:8887"]` – Backend-URL in der
-Wallbox: `ws://<server-ip>:8887/<charge-point-id>`.
+Für produktive Installationen empfiehlt sich, `.env.example` nach `.env`
+zu kopieren und ein eigenes `POSTGRES_PASSWORD` zu setzen. Headless-
+Konfiguration über eine gemountete JSON-Datei ist unter
+[docs/headless.md](docs/headless.md) beschrieben.
 
-## Tesla-Anbindung (optional)
+## Tesla-Anbindung
 
-- **Methode A – BLE-Proxy (empfohlen, cloud-frei):** Du betreibst
-  [TeslaBleHttpProxy](https://github.com/wimaha/TeslaBleHttpProxy) bereits
-  (typisch: Raspberry Pi am Stellplatz)? Dann im Assistenten nur die
-  Proxy-Adresse (`http://<pi-ip>:8080`) + VIN eintragen. Key-Enrollment
-  passiert im Proxy, nicht in MinePower. Kein Pi vorhanden? Separates
-  Referenz-Compose: [examples/tesla-ble-proxy](examples/tesla-ble-proxy/docker-compose.yml)
-  (bewusst **nicht** Teil des Haupt-Stacks).
-- **Methode B – Fleet-API (Cloud):** OAuth-Token + Fahrzeug-ID eintragen;
-  liefert zuverlässig SoC, ist aber rate-limitiert (konservatives Polling
-  ist eingebaut).
+Tesla-Fahrzeuge werden direkt als Ladepunkt angesteuert, unabhängig von der
+verwendeten Wallbox. Zwei Anbindungswege stehen zur Wahl:
+
+- **BLE-Proxy (cloud-frei).** Voraussetzung ist ein bereits laufender
+  [TeslaBleHttpProxy](https://github.com/wimaha/TeslaBleHttpProxy), etwa auf
+  einem Raspberry Pi in Bluetooth-Reichweite des Fahrzeugs. MinePower trägt
+  nur dessen Adresse und die Fahrzeug-VIN ein; die Schlüssel-Kopplung
+  erfolgt im Proxy selbst. Ein Referenz-Compose für den Proxy liegt unter
+  [examples/tesla-ble-proxy](examples/tesla-ble-proxy/docker-compose.yml)
+  und ist bewusst nicht Teil des Haupt-Stacks.
+- **Fleet-API (Cloud).** Erfordert ein OAuth-Token von Tesla, liefert dafür
+  zuverlässig den Ladestand. Das Polling ist konservativ ausgelegt, um im
+  Rate-Limit zu bleiben.
 
 ## Betrieb
 
-- **Update:** `git pull && docker compose up -d --build`
-- **Backup:** GUI → Einstellungen → Sicherung → Export (JSON).
-  Komplett-Backup der Zeitreihen: `docker compose exec db pg_dump -U minepower minepower > backup.sql`
-- **Restore:** Config-JSON importieren bzw. `psql < backup.sql` in eine frische DB.
-- **Logs:** `docker compose logs -f backend` (Log-Level via `LOG_LEVEL`).
-- **Diagnose:** GUI → Ereignisse → 🔬 zeigt Geräte-Rohwerte und jede
-  Regel-Entscheidung live.
-- **Multi-Arch-Build:** `docker buildx build --platform linux/amd64,linux/arm64 …`
-  (Basis-Images sind multi-arch).
+**Aktualisieren:**
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+**Sichern.** Für die Konfiguration (Geräte, Einstellungen, Prioritäten)
+genügt der Export unter Einstellungen → Sicherung als JSON. Für ein
+vollständiges Backup inklusive Messwert-Historie:
+
+```bash
+docker compose exec db pg_dump -U minepower -d minepower --no-owner --no-privileges > backup.sql
+```
+
+**Wiederherstellen.** Konfigurations-JSON über die Oberfläche importieren,
+oder für ein vollständiges Restore:
+
+```bash
+docker compose up -d db
+docker compose exec -T db psql -U minepower -d minepower -c "SELECT timescaledb_pre_restore();"
+docker compose exec -T db psql -v ON_ERROR_STOP=1 -U minepower -d minepower < backup.sql
+docker compose exec -T db psql -U minepower -d minepower -c "SELECT timescaledb_post_restore();"
+docker compose up -d app
+```
+
+Die App zuletzt starten: Sie legt beim Start nur dann Standardwerte oder
+einen Demo-Zugang an, wenn die Datenbank leer ist.
+
+**Logs:** `docker compose logs -f app` (Log-Level über `LOG_LEVEL`).
+
+**Diagnose:** Die Seite Ereignisse → Diagnose zeigt Geräte-Rohwerte, die
+aktuelle Regelgüte (wirksames Totband, Wetterlage) und jede
+Regel-Entscheidung live. Ein Diagnosebericht (JSON) lässt sich dort
+zeitraumbezogen exportieren.
 
 ## Entwicklung
 
 ```bash
 # Backend (Python 3.12)
-cd backend && pip install -r requirements.txt
-uvicorn app.main:app --reload          # braucht laufende DB, siehe .env
-python -m pytest                        # Regelungs-Tests (ohne Hardware/DB)
+cd backend
+pip install -r requirements.txt
+uvicorn app.main:app --reload      # benötigt eine laufende Datenbank
+python -m pytest                    # Regelungs- und Treiber-Tests, ohne Hardware
 
 # Frontend
-cd frontend && npm install && npm run dev   # Proxy → localhost:8000
+cd frontend
+npm install
+npm run dev                         # Dev-Server mit Proxy auf localhost:8000
 ```
+
+Die Regelungslogik (`backend/app/core/regulation.py`) ist als reine,
+hardwareunabhängige Klassenhierarchie implementiert und vollständig über
+eine injizierte Uhr testbar. Neue Verhaltensweisen gehören dort und in die
+zugehörige Testdatei, nicht in den Control-Loop selbst.
+
+Weiterführende Dokumentation:
 
 - [Architektur-Übersicht](docs/architecture.md)
 - [Neuen Treiber hinzufügen](docs/adding-drivers.md)
 - [Headless-Konfiguration](docs/headless.md)
+- [Installation auf Unraid](docs/unraid.md)
 
-## Sicherheit & Robustheit
+## Sicherheit
 
-- JWT-Auth (bcrypt-Hashes), Login-Rate-Limit, Rollen bis in die API.
-- Geräte-Timeouts crashen den Regelkreis nie; 3 Fehlversuche → offline,
-  Auto-Reconnect, Benachrichtigung.
-- **Fallback:** Ohne verlässliche Netzmessung werden alle steuerbaren
-  Lasten pausiert – es wird nie blind geladen.
-- Secrets nur via `.env`; Config-Export enthält Geräte-Zugangsdaten →
-  sicher aufbewahren.
+- Authentifizierung über JWT mit bcrypt-gehashten Passwörtern, Rollen
+  (Administrator, Nutzer, Nur-Lesen) werden bis in die API durchgesetzt,
+  Login ist rate-limitiert.
+- Ein einzelner Geräte-Timeout bringt den Regelkreis nicht zum Absturz.
+  Nach drei aufeinanderfolgenden Fehlversuchen gilt ein Gerät als offline;
+  die Verbindung wird automatisch neu aufgebaut, sobald das Gerät wieder
+  antwortet.
+- Ohne verlässliche Netzmessung werden alle steuerbaren Lasten gestoppt.
+  Es wird nie ohne Netzmessung geladen oder geheizt.
+- Zugangsdaten werden ausschließlich über Umgebungsvariablen bzw. `.env`
+  konfiguriert. Der Konfigurations-Export enthält Geräte-Zugangsdaten im
+  Klartext und sollte entsprechend sicher aufbewahrt werden.
 
-## Hinweise / Grenzen
+## Bekannte Einschränkungen
 
-- Treiber tragen einen **Reifegrad** (`stabil` / `Beta` / `experimentell`),
-  der im Assistenten als Badge und Warnbanner erscheint. Registerkarten
-  folgen den öffentlich dokumentierten Protokollen; einzelne Firmware-Stände
-  können abweichen → „Verbindung testen“ zeigt Live-Werte zur Verifikation,
-  und unplausible Werte melden sich von selbst statt still in die Regelung zu
-  laufen.
-  - **Beta:** Sungrow AC-Wallbox (Register-Basis wird beim Test automatisch
-    gesucht), Sungrow-Batteriegerät, SMA Energy Meter, SunSpec, OCPP.
-  - **Experimentell:** Huawei SUN2000/LUNA2000 – Registerkarte aus der
-    Herstellerdoku, nicht an Hardware verifiziert.
-- OCPP-Treiber: solide Teilmenge von OCPP 1.6J (SmartCharging-Profil);
-  Boxen ohne SmartCharging lassen sich nur ein-/ausschalten – der
-  Steuerbefehl-Test im Assistenten zeigt das sofort. OCPP 2.0.1 ist
-  vorbereitet, aber noch nicht implementiert.
-- PDF-Report: aktuell CSV-Export; PDF steht auf der Roadmap.
+- Der OCPP-Treiber deckt die für Überschussladen relevante Teilmenge von
+  OCPP 1.6J ab (SmartCharging-Profil für die Stromvorgabe). Wallboxen ohne
+  SmartCharging-Unterstützung lassen sich nur ein- und ausschalten, nicht
+  stufenlos regeln. OCPP 2.0.1 ist nicht implementiert.
+- Als Beta oder experimentell markierte Treiber (siehe Gerätetabelle oben)
+  sollten vor dem Dauerbetrieb über „Verbindung testen“ mit den tatsächlich
+  gelesenen Werten abgeglichen werden.
+- Statistik-Export steht aktuell als CSV zur Verfügung; ein PDF-Bericht ist
+  nicht enthalten.
 
-> „MinePower" ist ein Platzhalter-Produktname.
+## Lizenz
+
+Proprietär, Copyright © 2026 Marwin Rentz. Der Betrieb einer eigenen
+Installation über das offizielle Docker-Image ist gestattet;
+Weiterverbreitung, Vermietung oder das Anbieten als Dienstleistung für
+Dritte erfordert eine gesonderte Lizenz. Vollständiger Text: [LICENSE](LICENSE).
