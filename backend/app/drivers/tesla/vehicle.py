@@ -90,6 +90,12 @@ class TeslaVehicle(WallboxDriver):
         self.max_current = float(config.get("max_current") or 16)
         self._cache: WallboxData | None = None
         self._cache_time = 0.0
+        #: Letzter über eine echte Antwort bestätigter Zustand. Dient als
+        #: Rückfallwert bei Timeout (siehe read_data) – ohne das würde ein
+        #: Fahrzeug, das gar nicht angesteckt ist, beim ersten Timeout auf
+        #: „verbunden“ springen und dauerhaft Budget in der Prioritätskette
+        #: blockieren, das nie abgerufen wird.
+        self._last_known_state = WallboxState.IDLE
         # Fleet-API konservativer pollen (Rate-Limits)
         self._poll_interval = 60.0 if config.get("backend") == "fleet" else MIN_POLL_INTERVAL_S
 
@@ -106,10 +112,15 @@ class TeslaVehicle(WallboxDriver):
         try:
             data = await self.client.vehicle_data("charge_state")
         except TimeoutError:
-            # Fahrzeug schläft: nicht regelmäßig wecken (Vampir-Drain) –
-            # schlafend = verbunden, lädt nicht
-            self._cache = WallboxData(state=WallboxState.CONNECTED, power=0.0,
-                                      extra={"Fahrzeug": "schläft (wird nicht geweckt)",
+            # Nicht erreichbar heißt entweder „schläft, aber noch angesteckt“
+            # oder schlicht „gar nicht verbunden“ – per BLE nicht unterscheidbar,
+            # ohne das Fahrzeug regelmäßig zu wecken (Vampir-Drain). Wir nehmen
+            # daher den zuletzt bestätigten Zustand an, statt pauschal
+            # „verbunden“ zu unterstellen: Ein Fahrzeug, das nie angesteckt war,
+            # bleibt so korrekt „idle“ und blockiert kein Budget in der
+            # Prioritätskette, das nie abgerufen würde.
+            self._cache = WallboxData(state=self._last_known_state, power=0.0,
+                                      extra={"Fahrzeug": "nicht erreichbar (schläft oder nicht verbunden)",
                                              "capacity_kwh": self.config.get("capacity_kwh")})
             self._cache_time = now
             return self._cache
@@ -121,6 +132,7 @@ class TeslaVehicle(WallboxDriver):
                 "gekoppelt; bei der Fleet-API fehlt dem Token der Scope „vehicle_device_data“."
             )
         state = CHARGING_STATES.get(str(charge.get("charging_state")), WallboxState.CONNECTED)
+        self._last_known_state = state
         amps = _f(charge.get("charger_actual_current"))
         volts = _f(charge.get("charger_voltage")) or 230.0
         phases = int(_f(charge.get("charger_phases")) or 1)

@@ -76,7 +76,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="MinePower",
     description="PV-Überschuss-Ladecontroller für E-Auto, Warmwasser und Hausbatterie",
-    version="2.0.2",
+    version="2.0.3",
     lifespan=lifespan,
 )
 
