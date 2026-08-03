@@ -242,6 +242,13 @@ async def diagnostics(_: User = Depends(get_current_user)):
         "deadband_configured_w": loop.cfg.deadband_w,
         "volatility_index": round(loop.volatility.index, 3),
         "weather": loop.volatility.describe(),
+        # Batterie-Schutz sichtbar machen: Greift er? Wie viel wird
+        # abgezogen? Und mit welchem Ladestand wurde gerechnet?
+        "battery": snapshot.get("battery"),
+        "battery_guard_w": round(loop.battery_guard_w, 1),
+        "battery_claim_w": round(loop.battery_claim_w, 1),
+        "ev_lock_soc": loop.cfg.ev_lock_soc,
+        "battery_reserve_soc": loop.cfg.battery_reserve_soc,
         "waste_w": snapshot.get("waste_w"),
         "waste_reason": snapshot.get("waste_reason"),
         "gap_filled_w": snapshot.get("gap_filled_w"),

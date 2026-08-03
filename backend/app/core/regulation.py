@@ -677,6 +677,12 @@ def protected_battery_discharge(
     """
     if battery_power >= -BATTERY_IDLE_W:
         return 0.0
+    # 100 % heißt „niemals freigeben". Ohne diesen Sonderfall würde die
+    # Einstellung am Grenzwert das Gegenteil bewirken: Ein voller Speicher
+    # meldet über längere Zeit exakt 100,0 % – und genau dann wäre der Schutz
+    # aus, während das Auto ihn leerzieht.
+    if cfg.ev_lock_soc >= 100:
+        return -battery_power
     if battery_soc is not None and battery_soc >= cfg.ev_lock_soc:
         return 0.0  # Nutzer erlaubt die Entladung ab diesem Ladestand
     return -battery_power

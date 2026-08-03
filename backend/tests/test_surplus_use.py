@@ -513,3 +513,25 @@ def test_default_reserve_keeps_previous_behaviour():
     Wert bewusst hochsetzt."""
     cfg = RegulationConfig()
     assert reserved_battery_charge(55, 4000, cfg) == 0
+
+
+def test_lock_at_100_also_holds_at_exactly_full():
+    """Der gemeldete Fall: Ein voller Speicher meldet über längere Zeit exakt
+    100,0 %. Genau dann darf die Sperre nicht aufgehen – sonst zieht das Auto
+    den Speicher leer, während die Einstellung „niemals" verspricht."""
+    cfg = RegulationConfig(ev_lock_soc=100)
+    assert protected_battery_discharge(100.0, -2000, cfg) == 2000
+    assert protected_battery_discharge(99.9, -2000, cfg) == 2000
+
+
+def test_partial_release_still_works_at_its_threshold():
+    """Gegenprobe: Unter 100 bleibt die Freigabe ab dem Schwellwert erhalten."""
+    cfg = RegulationConfig(ev_lock_soc=90)
+    assert protected_battery_discharge(90.0, -2000, cfg) == 0
+    assert protected_battery_discharge(89.9, -2000, cfg) == 2000
+
+
+def test_missing_soc_is_treated_conservatively():
+    """Ohne SoC-Wert wird geschützt statt freigegeben."""
+    cfg = RegulationConfig(ev_lock_soc=50)
+    assert protected_battery_discharge(None, -2000, cfg) == 2000

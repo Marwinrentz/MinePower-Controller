@@ -140,6 +140,8 @@ class ControlLoop:
         self.grid_smoother = Smoother(self.cfg.smoothing_samples)
         self.volatility = VolatilityTracker()
         self.deadband_effective = self.cfg.deadband_w
+        self.battery_guard_w = 0.0
+        self.battery_claim_w = 0.0
         self.buffer = MeasurementBuffer()
         # Vollständig vorbelegt: Das Frontend bekommt beim allerersten Abruf
         # (vor dem ersten Tick) dieselbe Struktur wie später – sonst müsste es
@@ -394,6 +396,11 @@ class ControlLoop:
         battery_claim = reserved_battery_charge(
             battery.soc if battery else None, bat_power, self.cfg
         )
+        # Für Snapshot und Diagnose festhalten: Ob der Schutz greift, muss
+        # ablesbar sein – sonst bleibt bei „das Auto zieht aus der Batterie"
+        # nur Raten übrig.
+        self.battery_guard_w = battery_guard
+        self.battery_claim_w = battery_claim
 
         # --- Budget-Pools & Prioritätskette ----------------------------
         order = self._priority_order(wallboxes, heaters, battery_devs)
