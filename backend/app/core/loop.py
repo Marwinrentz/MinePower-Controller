@@ -3,9 +3,9 @@
 Ablauf je Tick (Default alle 3 s, konfigurierbar):
   1. Messwerte aller aktivierten Geräte parallel lesen (mit Timeout).
   2. Überschuss-Budget berechnen (geglättete Netzleistung, adaptives Totband).
-  3. Budget entlang der Prioritätskette auf die steuerbaren Lasten verteilen
-     (zwei Pools: PV-Überschuss + Batterie-Ladeleistung für Lasten, die in
-     der Kette VOR der Batterie stehen).
+  3. Was dem Hausspeicher gehört, abziehen (er hat Vorrang – Laden wie
+     Entladen), den Rest entlang der Prioritätskette auf die steuerbaren
+     Lasten verteilen.
   4. **Lückenfüller:** Was danach übrig bleibt und für die nächste grob
      gestufte Last zu klein wäre, geht an eine fein modulierbare Last –
      unabhängig von deren Platz in der Kette.
@@ -142,6 +142,7 @@ class ControlLoop:
         self.deadband_effective = self.cfg.deadband_w
         self.battery_guard_w = 0.0
         self.battery_claim_w = 0.0
+        self.battery_reserved_w = 0.0
         self.buffer = MeasurementBuffer()
         # Vollständig vorbelegt: Das Frontend bekommt beim allerersten Abruf
         # (vor dem ersten Tick) dieselbe Struktur wie später – sonst müsste es
@@ -221,6 +222,7 @@ class ControlLoop:
             house_limit_a=float(reg.get("house_limit_a", 35)),
             battery_reserve_soc=float(reg.get("battery_reserve_soc", 20)),
             ev_lock_soc=float(reg.get("ev_lock_soc", 30)),
+            battery_priority=bool(reg.get("battery_priority", True)),
             adaptive_deadband=bool(reg.get("adaptive_deadband", True)),
             deadband_min_w=float(reg.get("deadband_min_w", 40)),
             deadband_max_w=float(reg.get("deadband_max_w", 400)),
@@ -401,14 +403,19 @@ class ControlLoop:
         # nur Raten übrig.
         self.battery_guard_w = battery_guard
         self.battery_claim_w = battery_claim
+        # Laden und Entladen schließen sich aus; die Summe ist immer genau der
+        # eine Betrag, der dem Speicher gehört.
+        battery_reserved = battery_guard + battery_claim
+        self.battery_reserved_w = battery_reserved
 
-        # --- Budget-Pools & Prioritätskette ----------------------------
+        # --- Überschuss-Topf & Prioritätskette -------------------------
+        # Ein einziger Topf. Früher waren es zwei (PV + Batterie-Ladeleistung
+        # für Lasten „vor der Batterie“), was von der Reihenfolge in der Kette
+        # abhing und dadurch schwer vorhersagbar war: Dieselbe Wetterlage
+        # führte je nach Sortierung zu anderem Verhalten. Mit dem Vorrang des
+        # Speichers ist die zweite Quelle ohnehin gegenstandslos.
         order = self._priority_order(wallboxes, heaters, battery_devs)
-        bat_idx = next((i for i, d in enumerate(order) if d.category == DeviceCategory.BATTERY.value), None)
-        pool_pv = max(0.0, budget - battery_guard - battery_claim)
-        # Batterie-Ladeleistung steht nur Lasten VOR der Batterie zu – und nur,
-        # solange der Speicher nicht ohnehin Vorrang hat.
-        pool_bat = max(0.0, bat_power) if (bat_idx is not None and battery_claim <= 0) else 0.0
+        pool = max(0.0, budget - battery_reserved)
 
         price_ct = cheap = None
         if self.tariff:
@@ -419,31 +426,27 @@ class ControlLoop:
         other_wb_current = 0.0
         recovery, forecast_surplus = self._forecast_context(pv_power, house_power)
         #: Für den Lückenfüller gemerkte Entscheidungen fein modulierbarer Lasten
-        fine_loads: list[tuple[ManagedDevice, WaterHeaterDecision, bool]] = []
+        fine_loads: list[tuple[ManagedDevice, WaterHeaterDecision]] = []
         #: Warum blieb Überschuss liegen? (für die Kennzahl „verschenkt“)
         blockers: list[str] = []
         if battery_claim > 0:
             blockers.append(
-                f"Batterie hat Vorrang: {battery_claim:.0f} W Ladeleistung reserviert "
-                f"(bis {self.cfg.battery_reserve_soc:.0f} % Ladestand)"
+                f"Batterie lädt mit {battery_claim:.0f} W – Vorrang vor steuerbaren Lasten"
             )
         if battery_guard > 0:
             blockers.append(
-                f"Batterie wird geschont: {battery_guard:.0f} W Entladung zählen nicht "
-                f"als Überschuss (Freigabe erst ab {self.cfg.ev_lock_soc:.0f} % Ladestand)"
+                f"Batterie entlädt mit {battery_guard:.0f} W – das ist kein Solarüberschuss"
             )
 
-        for idx, dev in enumerate(order):
+        for dev in order:
             if dev.category == DeviceCategory.BATTERY.value:
-                pool_bat = 0.0  # ab hier hat die Batterie Vorrang auf ihre Ladeleistung
-                continue
+                continue  # der Speicher ist über battery_reserved schon bedient
             if not dev.online or dev.data is None or dev.controller is None:
                 if dev.enabled and not dev.online:
                     blockers.append(f"{dev.name} offline")
                 continue
 
-            above_battery = bat_idx is not None and idx < bat_idx
-            avail = pool_pv + (pool_bat if above_battery else 0.0)
+            avail = pool
 
             ctx = ChargeContext(
                 now=datetime.now(),
@@ -458,6 +461,9 @@ class ControlLoop:
                 solar_recovery_expected=recovery,
                 forecast_surplus_kwh=forecast_surplus,
                 battery_handled_globally=True,
+                # „Geschont“ heißt: Der Speicher entlädt sich gerade und ist
+                # geschützt. Nur dann müssen laufende Lasten sofort abregeln –
+                # beim Laden reicht es, ihnen den Topf zu kürzen.
                 battery_protected=battery_guard > 0,
             )
 
@@ -475,22 +481,18 @@ class ControlLoop:
             else:
                 decision_wh = dev.controller.decide(avail, dev.data, ctx)
                 allocated = decision_wh.power_w
-                fine_loads.append((dev, decision_wh, above_battery))
+                fine_loads.append((dev, decision_wh))
                 if allocated <= 0 and decision_wh.reason:
                     blockers.append(f"{dev.name}: {decision_wh.reason}")
 
-            # Verbrauch zuerst aus dem PV-Pool, Rest aus dem Batterie-Pool
-            from_pv = min(allocated, pool_pv)
-            pool_pv -= from_pv
-            if above_battery:
-                pool_bat = max(0.0, pool_bat - (allocated - from_pv))
+            pool = max(0.0, pool - allocated)
 
         # --- Lückenfüller ------------------------------------------------
-        pool_pv, pool_bat, filled_w = self._fill_gaps(fine_loads, pool_pv, pool_bat)
+        pool, filled_w = self._fill_gaps(fine_loads, pool)
 
         # Warmwasser-Sollwerte erst jetzt senden – nach dem Lückenfüller steht
         # der endgültige Wert fest, sonst würde jede Runde zweimal gestellt.
-        for dev, decision_wh, _ in fine_loads:
+        for dev, decision_wh in fine_loads:
             await self._apply_heater(dev, decision_wh.power_w, decision_wh.reason)
 
         # --- Batterie-Management (Reserve nachführen) -------------------
@@ -514,10 +516,9 @@ class ControlLoop:
 
     def _fill_gaps(
         self,
-        fine_loads: list[tuple["ManagedDevice", WaterHeaterDecision, bool]],
-        pool_pv: float,
-        pool_bat: float,
-    ) -> tuple[float, float, float]:
+        fine_loads: list[tuple["ManagedDevice", WaterHeaterDecision]],
+        pool: float,
+    ) -> tuple[float, float]:
         """Rest-Überschuss an fein modulierbare Lasten weiterreichen.
 
         Nach der Prioritätsverteilung bleibt regelmäßig ein Rest übrig, der für
@@ -531,28 +532,20 @@ class ControlLoop:
         Nur Erhöhungen; Absenken bleibt der regulären Entscheidung vorbehalten.
         """
         filled = 0.0
-        if pool_pv + pool_bat < self.cfg.gap_fill_min_w:
-            return pool_pv, pool_bat, filled
-        for index, (dev, decision, above_battery) in enumerate(fine_loads):
+        for index, (dev, decision) in enumerate(fine_loads):
+            if pool < self.cfg.gap_fill_min_w:
+                break
             controller = dev.controller
             if not isinstance(controller, WaterHeaterController) or not controller.fine_modulating:
                 continue
-            extra = pool_pv + (pool_bat if above_battery else 0.0)
-            if extra < self.cfg.gap_fill_min_w:
-                # Für DIESE Last lohnt es nicht – eine spätere Last kann aber
-                # oberhalb der Batterie stehen und dort mehr zur Verfügung haben.
-                continue
-            improved = controller.absorb(decision, extra, dev.data)
+            improved = controller.absorb(decision, pool, dev.data)
             added = improved.power_w - decision.power_w
             if added <= 0:
                 continue
-            fine_loads[index] = (dev, improved, above_battery)
-            from_pv = min(added, pool_pv)
-            pool_pv -= from_pv
-            if above_battery:
-                pool_bat = max(0.0, pool_bat - (added - from_pv))
+            fine_loads[index] = (dev, improved)
+            pool = max(0.0, pool - added)
             filled += added
-        return pool_pv, pool_bat, filled
+        return pool, filled
 
     @staticmethod
     def _waste_reason(waste_w: float, blockers: list[str], loads: list["ManagedDevice"]) -> str | None:

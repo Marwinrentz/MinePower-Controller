@@ -203,10 +203,16 @@ export const de = {
     useForecastHelp: "Hält eine laufende Ladung bei kurzem Wolkendurchzug (Erholung absehbar) und beginnt Zielladungen früher, wenn die Sonne bis zur Deadline nicht reicht.",
     houseLimit: "Hausanschluss-Limit (A je Phase)",
     houseLimitHelp: "Schutz: Gesamtstrom aller Wallboxen wird unter diesem Limit gehalten.",
+    batteryPriority: "Hausspeicher hat Vorrang",
+    batteryPriorityHelp:
+      "Empfohlen. Was der Speicher lädt oder entlädt, gilt nicht als Überschuss – " +
+      "Auto und Warmwasser bekommen nur, was darüber hinaus übrig ist. Den Haushalt " +
+      "versorgt der Speicher weiterhin ganz normal. Ausschalten nur, wenn die Lasten " +
+      "ab einem bestimmten Ladestand auf den Speicher zugreifen dürfen sollen.",
     batteryReserve: "Batterie-Reserve (% SoC)",
-    batteryReserveHelp: "Unter diesen Ladestand wird die Hausbatterie nicht entladen (Reserve fürs Haus).",
+    batteryReserveHelp: "Unter diesem Ladestand behält der Speicher seine Ladeleistung für sich.",
     evLock: "EV-Batteriesperre (% SoC)",
-    evLockHelp: "Unterhalb dieses Batterie-SoC wird Batterie-Entladung nicht fürs Auto verwendet.",
+    evLockHelp: "Ab diesem Ladestand darf die Batterie-Entladung fürs Auto verwendet werden.",
     priority: "Prioritätskette",
     tariff: "Dynamischer Stromtarif",
     tariffProvider: "Anbieter",

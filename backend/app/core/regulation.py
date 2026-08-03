@@ -9,13 +9,22 @@ P_grid ist geglättet, + = Bezug. Ein Export von 500 W bei 4 kW laufender
 Ladung ergibt also budget = 4500 W → so viel PV-Überschuss steht den
 steuerbaren Lasten insgesamt zur Verfügung.
 
-Batterie in der Prioritätskette:
-  * Lasten, die VOR der Batterie stehen, dürfen deren aktuelle Ladeleistung
-    zusätzlich verwenden (der Hybrid-WR reduziert die Batterieladung
-    automatisch, weil er selbst auf 0 W am Netzpunkt regelt).
-  * Steht die Batterie vorne, bleibt ihre Ladeleistung unantastbar.
-  * `ev_lock_soc`: unterhalb dieses SoC wird eine Batterie-Entladung nicht
-    fürs Auto verwendet (Budget wird um die Entladeleistung reduziert).
+Batterie (Standard: `battery_priority = True`):
+    Der Hausspeicher hat **immer** Vorrang vor allen steuerbaren Lasten.
+    Weder seine Lade- noch seine Entladeleistung gilt als Überschuss:
+
+      pool = budget − |P_batterie|
+
+    Lädt der Speicher mit 2 kW, stehen die 2 kW den Lasten nicht zur
+    Verfügung. Entlädt er sich, sinkt das Budget um genau diesen Betrag –
+    sonst würden Auto und Warmwasser aus dem Speicher gefüttert, während der
+    Netzpunkt weiterhin ausgeglichen aussieht.
+
+    Der Hausverbrauch bleibt unberührt: Geschützt wird nur gegen die
+    *steuerbaren* Lasten, den Haushalt darf der Speicher weiter versorgen.
+
+    Nur wenn `battery_priority` bewusst abgeschaltet wird, greifen wieder die
+    alten SoC-Schwellen (`ev_lock_soc`, `battery_reserve_soc`).
 
 Drei Mechanismen sorgen dafür, dass möglichst wenig Überschuss ins Netz geht:
 
@@ -144,11 +153,18 @@ class RegulationConfig:
     deadband_w: float = 100.0      # Totband: kleine Abweichungen nicht ausregeln
     smoothing_samples: int = 3
     house_limit_a: float = 35.0    # Hausanschluss-Schutz (je Phase)
+    #: Hausspeicher hat immer Vorrang: Weder Lade- noch Entladeleistung zählt
+    #: als Überschuss für steuerbare Lasten. Das ist die einzige Einstellung,
+    #: die man dafür braucht – und der Standard.
+    #:
+    #: Vorher regelten zwei SoC-Schwellen dasselbe Thema, und beide hatten
+    #: dieselbe Falle: Sie beschrieben, ab wann die Batterie *freigegeben*
+    #: wird. Wer „nie anzapfen“ wollte, musste den Grenzwert exakt treffen –
+    #: 99,9 statt 100 kehrte die Wirkung bei vollem Speicher um.
+    battery_priority: bool = True
     battery_reserve_soc: float = 20.0
-    #: Ab diesem Batterie-SoC darf sich die Entladung als Überschuss verwenden
-    #: lassen. Darunter ist sie geschützt: Was aus dem Speicher kommt, gilt
-    #: nicht als Solarüberschuss und füttert weder Auto noch Warmwasser.
-    #: 100 = Batterie wird nie für steuerbare Lasten angezapft.
+    #: Nur wirksam, wenn `battery_priority` abgeschaltet ist: Ab diesem
+    #: Ladestand darf die Entladung als Überschuss verwendet werden.
     ev_lock_soc: float = 30.0
     # --- Verschenkte Energie minimieren ---
     adaptive_deadband: bool = True  # Totband an die Wetterlage anpassen
@@ -212,6 +228,9 @@ class WallboxSettings:
     #: "down" = abrunden (nie Netzbezug erzeugen; der Rest geht an eine fein
     #: modulierbare Last, siehe Lückenfüller). "nearest" = kaufmännisch runden.
     current_rounding: str = "down"
+    #: Um wie viel Ampere der Sollstrom je Takt höchstens steigen darf.
+    #: Nach unten wird nicht begrenzt – Schutz vor Batteriebezug geht vor.
+    ramp_up_step_a: float = 3.0
     # --- Prognose ---
     use_forecast: bool = True
     #: Wie lange eine Ladung bei absehbarer Erholung höchstens gehalten wird.
@@ -221,6 +240,13 @@ class WallboxSettings:
     def from_dict(cls, d: dict) -> "WallboxSettings":
         known = {f: d[f] for f in cls.__dataclass_fields__ if f in d and d[f] is not None}
         return cls(**known)
+
+
+#: Plausible Spanne für „Leistung je Ampere“: einphasig ≈ 230 W, dreiphasig
+#: ≈ 690 W. Alles außerhalb stammt aus einer Messung während des Hochrampens
+#: oder ist schlicht falsch – daraus wird nicht gelernt.
+WATTS_PER_AMP_MIN = 150.0
+WATTS_PER_AMP_MAX = 800.0
 
 
 @dataclass
@@ -250,17 +276,53 @@ class WallboxController:
         self._last_phase_switch = -1e9
         self._forecast_hold_since: float | None = None
         self.override: str | None = None   # None|"fast"|"stop" (manueller Override)
+        #: Gemessene Leistung je Ampere (siehe observe). None = noch nichts
+        #: gelernt, dann gilt der Nennwert aus Phasenzahl × 230 V.
+        self._watts_per_amp: float | None = None
+        #: Zuletzt entschiedener Sollstrom – Basis für die Anstiegsbegrenzung.
+        self._last_current_a = 0.0
 
     # ------------------------------------------------------------ Helpers
 
+    def observe(self, data: WallboxData) -> None:
+        """Aus der Messung lernen, wie viel Leistung ein Ampere wirklich bringt.
+
+        Der Umrechnungsfaktor A → W ist keine Konstante: Die Netzspannung liegt
+        real bei 230–245 V, ein Fahrzeug lädt je nach Kabel und Standort ein-
+        oder dreiphasig, und Ladeverluste kommen obendrauf. Rechnet der Regler
+        starr mit 230 V je Phase, liegt der Sollstrom systematisch daneben –
+        zu hoch heißt Batteriebezug, zu niedrig heißt Einspeisung. Genau das
+        soll die Ampere-Regelung ja vermeiden.
+
+        Gelernt wird nur aus eindeutigen Messungen (Fahrzeug lädt wirklich,
+        Sollstrom bekannt, Ergebnis physikalisch plausibel) und dann geglättet,
+        damit ein einzelner Ausreißer die Regelung nicht verzieht.
+        """
+        if data.state != WallboxState.CHARGING:
+            return
+        amps = data.current_set
+        if not amps or amps < 1.0 or data.power < 200.0:
+            return
+        measured = data.power / amps
+        if not (WATTS_PER_AMP_MIN <= measured <= WATTS_PER_AMP_MAX):
+            return  # unplausibel (Messfehler, Fahrzeug rampt gerade hoch)
+        self._watts_per_amp = (
+            measured if self._watts_per_amp is None
+            else 0.7 * self._watts_per_amp + 0.3 * measured
+        )
+
+    def watts_per_amp(self) -> float:
+        """Aktueller Umrechnungsfaktor A → W (gelernt, sonst Nennwert)."""
+        return self._watts_per_amp or (self.phases * VOLTAGE)
+
     def _min_power(self) -> float:
-        return self.s.min_current * self.phases * VOLTAGE
+        return self.s.min_current * self.watts_per_amp()
 
     def _max_power(self) -> float:
-        return self.s.max_current * self.phases * VOLTAGE
+        return self.s.max_current * self.watts_per_amp()
 
     def _amps_for(self, watts: float) -> float:
-        return watts / (self.phases * VOLTAGE)
+        return watts / self.watts_per_amp()
 
     def _quantize(self, amps: float) -> float:
         """Auf die kleinste Stromstufe der Box bringen.
@@ -277,7 +339,7 @@ class WallboxController:
         return max(self.s.min_current, min(stepped, self.s.max_current))
 
     def _decide_power(self, amps: float) -> float:
-        return amps * self.phases * VOLTAGE
+        return amps * self.watts_per_amp()
 
     def _effective_mode(self, ctx: ChargeContext) -> str:
         if self.override == "stop":
@@ -352,19 +414,31 @@ class WallboxController:
 
     # ------------------------------------------------------------ Hauptlogik
 
+    def _stop(self, reason: str) -> WallboxDecision:
+        """Einheitlicher Abbruch: Ladezustand zurücksetzen und Grund melden.
+
+        An einer Stelle gebündelt, damit kein Rückgabepfad den zuletzt
+        gesendeten Sollstrom stehen lässt – sonst würde die
+        Anstiegsbegrenzung beim Wiederanlauf von einem veralteten Wert
+        ausgehen."""
+        self.charging = False
+        self._last_current_a = 0.0
+        return WallboxDecision(enable=False, current_a=0, reason=reason)
+
     def decide(self, budget_w: float, data: WallboxData, ctx: ChargeContext) -> WallboxDecision:
         s = self.s
         mode = self._effective_mode(ctx)
+        # Zuerst aus der Messung lernen – die Entscheidung unten rechnet dann
+        # schon mit dem realen Watt-je-Ampere dieser Installation.
+        self.observe(data)
 
         if data.state in (WallboxState.IDLE, WallboxState.ERROR, WallboxState.COMPLETE):
-            self.charging = False
             self.start_timer.reset()
             self.stop_timer.reset()
-            return WallboxDecision(enable=False, current_a=0, reason=f"state={data.state.value}")
+            return self._stop(f"state={data.state.value}")
 
         if mode == "off":
-            self.charging = False
-            return WallboxDecision(enable=False, current_a=0, reason="manuell gestoppt")
+            return self._stop("manuell gestoppt")
 
         # Batterie-Sperre: Entladung der Hausbatterie nicht fürs Auto verwenden.
         # (Die Verteilung der Batterie-LADEleistung über die Prioritätskette
@@ -384,8 +458,7 @@ class WallboxController:
             return self._finish(WallboxDecision(True, s.max_current, self._phase_target(1e9), "Volllast"), ctx)
 
         if mode == "schedule" and not ctx.schedule_active:
-            self.charging = False
-            return WallboxDecision(enable=False, current_a=0, reason="außerhalb Zeitfenster")
+            return self._stop("außerhalb Zeitfenster")
 
         if mode == "price":
             if ctx.cheap_hour or (ctx.price_ct is not None and ctx.price_ct <= s.price_limit_ct):
@@ -405,7 +478,7 @@ class WallboxController:
 
         guaranteed_w = 0.0
         if mode == "min_pv":
-            guaranteed_w = s.min_pv_current * self.phases * VOLTAGE
+            guaranteed_w = s.min_pv_current * self.watts_per_amp()
 
         # --- PV-Überschussregelung mit Hysterese ---
         surplus_for_start = budget_w
@@ -414,7 +487,7 @@ class WallboxController:
                 self.charging = True
                 self.stop_timer.reset()
             else:
-                return WallboxDecision(enable=False, current_a=0, reason=f"warte auf Überschuss ({budget_w:.0f} W)")
+                return self._stop(f"warte auf Überschuss ({budget_w:.0f} W)")
 
         desired_w = max(guaranteed_w, budget_w)  # ungekappt – Basis der Phasenwahl
         target_w = max(guaranteed_w, min(budget_w, self._max_power()))
@@ -437,10 +510,15 @@ class WallboxController:
                 target_w = self._min_power()
                 self.stop_timer.reset()
                 reason = "Wolkendurchzug – Ladung wird gehalten (Prognose: Erholung)"
-            elif self.stop_timer.check(budget_w < self._min_power() - self.s.stop_threshold_w):
-                self.charging = False
+            elif ctx.battery_protected:
+                # Der fehlende Überschuss käme aus dem Speicher, nicht aus der
+                # Sonne. Sofort abregeln statt die Stopp-Verzögerung
+                # abzuwarten – jede Sekunde Halten entlädt die Batterie.
                 self.start_timer.reset()
-                return WallboxDecision(enable=False, current_a=0, reason="Überschuss zu gering → Stopp")
+                return self._stop("Batterie hat Vorrang → Stopp")
+            elif self.stop_timer.check(budget_w < self._min_power() - self.s.stop_threshold_w):
+                self.start_timer.reset()
+                return self._stop("Überschuss zu gering → Stopp")
             else:
                 target_w = self._min_power()  # Mindeststrom halten bis Stop-Timer greift
         else:
@@ -487,11 +565,19 @@ class WallboxController:
             if d.current_a < self.s.min_current:
                 d.enable = False
                 d.current_a = 0.0
+        # Sanft hochfahren: Ein Fahrzeug folgt einem neuen Sollstrom erst nach
+        # etlichen Sekunden. Springt der Regler in einem Takt von 6 auf 16 A,
+        # sieht er die Wirkung erst Takte später am Netzpunkt – bis dahin hat
+        # er längst mehr angefordert, als die Sonne hergibt, und der Speicher
+        # deckt die Lücke. Nach unten wird bewusst nicht begrenzt.
+        if d.enable and self._last_current_a >= self.s.min_current:
+            d.current_a = min(d.current_a, self._last_current_a + self.s.ramp_up_step_a)
         if d.enable:
             d.current_a = self._quantize(d.current_a)
             d.power_w = self._decide_power(d.current_a)
         else:
             d.power_w = 0.0
+        self._last_current_a = d.current_a if d.enable else 0.0
         return d
 
     # Rückwärtskompatibler Alias (frühere Versionen nutzten _limit)
@@ -535,6 +621,12 @@ class WaterHeaterController:
         self._forecast_hold_since: float | None = None
 
     def _forecast_active(self, ctx: ChargeContext) -> bool:
+        # Wie bei der Wallbox: Wird die Batterie geschont, hieße „Heizung über
+        # den Wolkendurchzug halten“ nichts anderes als den Speicher
+        # leerzuziehen. Dann lieber abschalten und später neu starten.
+        if ctx.battery_protected:
+            self._forecast_hold_since = None
+            return False
         if not (self.s.use_forecast and ctx.solar_recovery_expected):
             self._forecast_hold_since = None
             return False
@@ -576,6 +668,13 @@ class WaterHeaterController:
                 return WaterHeaterDecision(0.0, f"warte auf Überschuss ({budget_w:.0f} W)")
 
         if budget_w < min_w:
+            if ctx.battery_protected:
+                # Ohne diesen Zweig würde die Stopp-Verzögerung den Heizstab
+                # noch minutenlang auf Mindestleistung halten – bezahlt aus
+                # dem Speicher, weil am Netzpunkt nichts übrig ist.
+                self.on = False
+                self.start_timer.reset()
+                return WaterHeaterDecision(0.0, "Batterie hat Vorrang → Stopp")
             if self._forecast_active(ctx):
                 return WaterHeaterDecision(min_w, "Wolkendurchzug – Heizung wird gehalten (Prognose: Erholung)")
             if self.stop_timer.check(True):
@@ -667,9 +766,7 @@ def protected_battery_discharge(
     längst nicht mehr reicht. Ohne diese Korrektur füttert der Speicher die
     steuerbaren Lasten, bis er leer ist.
 
-    Was hier abgezogen wird, ist genau die Entladeleistung. Oberhalb von
-    `ev_lock_soc` gibt der Nutzer die Batterie bewusst frei – bei 100 %
-    (Standard-Empfehlung für „nie anzapfen“) bleibt sie immer geschützt.
+    Was hier abgezogen wird, ist genau die Entladeleistung.
 
     Wichtig: Der Hausverbrauch bleibt davon unberührt. Geschützt wird nur
     gegen die *steuerbaren* Lasten; die Batterie darf weiterhin ganz normal
@@ -677,15 +774,17 @@ def protected_battery_discharge(
     """
     if battery_power >= -BATTERY_IDLE_W:
         return 0.0
-    # 100 % heißt „niemals freigeben". Ohne diesen Sonderfall würde die
-    # Einstellung am Grenzwert das Gegenteil bewirken: Ein voller Speicher
-    # meldet über längere Zeit exakt 100,0 % – und genau dann wäre der Schutz
-    # aus, während das Auto ihn leerzieht.
+    discharge = -battery_power
+    # Standardfall: Der Speicher hat immer Vorrang, unabhängig vom Ladestand.
+    # Bewusst ohne Schwellenvergleich – jede Schwelle hatte bisher genau am
+    # Grenzwert die umgekehrte Wirkung (99,9 bei vollem Speicher = ungeschützt).
+    if cfg.battery_priority:
+        return discharge
     if cfg.ev_lock_soc >= 100:
-        return -battery_power
+        return discharge
     if battery_soc is not None and battery_soc >= cfg.ev_lock_soc:
         return 0.0  # Nutzer erlaubt die Entladung ab diesem Ladestand
-    return -battery_power
+    return discharge
 
 
 def reserved_battery_charge(
@@ -698,16 +797,15 @@ def reserved_battery_charge(
     keinen Weg, der Batterie umgekehrt Vorrang zu geben. Ein Auto konnte damit
     auf 16 A stehen bleiben, während der Speicher nur noch den Rest bekam.
 
-    Unterhalb von `battery_reserve_soc` hat der Speicher jetzt absoluten
-    Vorrang: Seine aktuelle Ladeleistung wird aus dem Überschuss-Topf
-    herausgerechnet. Darüber gilt wieder die Prioritätskette – ein fast voller
-    Speicher soll das Auto nicht ausbremsen.
-
-    Standard ist 20 %, das Verhalten ändert sich also nur, wenn der Nutzer den
-    Wert bewusst hochsetzt.
+    Mit `battery_priority` (Standard) bleibt die gesamte Ladeleistung dem
+    Speicher vorbehalten – er lädt zuerst voll, die Lasten bekommen nur, was
+    darüber hinaus übrig ist. Ohne die Einstellung gilt wieder die alte
+    Schwelle `battery_reserve_soc`.
     """
     if battery_power <= BATTERY_IDLE_W:
         return 0.0  # lädt nicht
+    if cfg.battery_priority:
+        return battery_power
     if battery_soc is None or battery_soc >= cfg.battery_reserve_soc:
         return 0.0
     return battery_power

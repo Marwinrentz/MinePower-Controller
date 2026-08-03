@@ -43,15 +43,36 @@ Flattern durch Messrauschen zu vermeiden. Das Totband ist adaptiv: Bei
 stabiler Erzeugung wird enger geregelt, bei starkem Wolkenwechsel weiter,
 um unnötige Start-/Stopp-Zyklen zu vermeiden.
 
-Batterien in der Prioritätskette werden standardmäßig nicht aktiv
-angesteuert. Hybrid-Wechselrichter (Sungrow SH, Fronius GEN24 Plus, SMA
-Sunny Boy Storage) regeln ihre Batterie bereits selbst auf Nulleinspeisung.
-MinePower liest Ladestand und Leistung nur mit, damit Lasten, die in der
-Kette vor der Batterie stehen, deren aktuelle Ladeleistung mitnutzen
-können – der Wechselrichter reduziert seine eigene Ladung automatisch,
-sobald eine andere Last zugreift. Aktives Zwangsladen oder eine
+Der Hausspeicher hat dabei Vorrang vor allen steuerbaren Lasten. Weder
+seine Lade- noch seine Entladeleistung zählt als Überschuss:
+
+```
+Topf für Auto und Warmwasser = budget − |Batterieleistung|
+```
+
+Das ist wichtiger, als es aussieht. Die Budgetformel kennt nur den
+Netzpunkt, und dort sieht ein Speicher, der gerade einspringt, wie ein
+ausgeglichenes Haus aus – ohne diesen Abzug würden Auto und Warmwasser den
+Speicher leerziehen, während die Anzeige Überschuss meldet. Umgekehrt gilt:
+Was der Speicher gerade lädt, gehört ihm und wird den Lasten nicht
+angeboten. Den Haushalt versorgt die Batterie davon unberührt weiter –
+geschützt wird nur gegen die *steuerbaren* Lasten.
+
+Batterien werden dabei standardmäßig nicht aktiv angesteuert.
+Hybrid-Wechselrichter (Sungrow SH, Fronius GEN24 Plus, SMA Sunny Boy
+Storage) regeln ihre Batterie bereits selbst auf Nulleinspeisung; MinePower
+liest Ladestand und Leistung nur mit. Aktives Zwangsladen oder eine
 Reserve-SoC-Vorgabe bleiben eine bewusst zu aktivierende Zusatzfunktion für
 Sonderfälle.
+
+Der Sollstrom einer Wallbox wird nicht mit dem Nennwert von 230 V je Phase
+gerechnet, sondern mit dem Verhältnis, das sich aus Messung und gesetztem
+Ladestrom tatsächlich ergibt. Reale Netzspannung, Phasenzahl und
+Ladeverluste stecken damit im Umrechnungsfaktor – ein starr gerechneter
+Sollstrom liegt sonst systematisch daneben und erzeugt genau das, was
+vermieden werden soll: Einspeisung oder Bezug aus dem Speicher. Erhöht wird
+in begrenzten Schritten, weil ein Fahrzeug einem neuen Sollstrom erst nach
+einigen Sekunden folgt; gesenkt wird ohne Begrenzung.
 
 Drei Mechanismen sollen verhindern, dass Überschuss ungenutzt ins Netz
 geht:

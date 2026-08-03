@@ -100,12 +100,20 @@ export function Settings() {
           <Field label={t("settings.houseLimit")} help={t("settings.houseLimitHelp")}>
             <Num value={reg.house_limit_a} onChange={(v) => setVal("regulation", "house_limit_a", v)} />
           </Field>
-          <Field label={t("settings.batteryReserve")} help={t("settings.batteryReserveHelp")}>
-            <Num value={reg.battery_reserve_soc} onChange={(v) => setVal("regulation", "battery_reserve_soc", v)} />
+          <Field label={t("settings.batteryPriority")} help={t("settings.batteryPriorityHelp")}>
+            <Toggle on={reg.battery_priority !== false}
+                    onChange={(v) => setVal("regulation", "battery_priority", v)} />
           </Field>
-          <Field label={t("settings.evLock")} help={t("settings.evLockHelp")}>
-            <Num value={reg.ev_lock_soc} onChange={(v) => setVal("regulation", "ev_lock_soc", v)} />
-          </Field>
+          {reg.battery_priority === false && (
+            <>
+              <Field label={t("settings.batteryReserve")} help={t("settings.batteryReserveHelp")}>
+                <Num value={reg.battery_reserve_soc} onChange={(v) => setVal("regulation", "battery_reserve_soc", v)} />
+              </Field>
+              <Field label={t("settings.evLock")} help={t("settings.evLockHelp")}>
+                <Num value={reg.ev_lock_soc} onChange={(v) => setVal("regulation", "ev_lock_soc", v)} />
+              </Field>
+            </>
+          )}
 
           <h3 style={{ marginTop: "var(--s5)" }}>{t("dash.wasted")}</h3>
           <Field label={t("settings.adaptiveDeadband")} help={t("settings.adaptiveDeadbandHelp")}>

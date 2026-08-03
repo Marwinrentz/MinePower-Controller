@@ -22,6 +22,10 @@ DEFAULT_SETTINGS: dict[str, dict] = {
         "deadband_w": 100,
         "smoothing_samples": 3,
         "house_limit_a": 35,
+        # Hausspeicher zuerst: Weder Lade- noch Entladeleistung gilt als
+        # Überschuss für Auto und Warmwasser. Die beiden SoC-Schwellen
+        # darunter greifen nur, wenn das bewusst abgeschaltet wird.
+        "battery_priority": True,
         "battery_reserve_soc": 20,
         "ev_lock_soc": 30,
         # Weniger verschenken (siehe core/regulation.py)

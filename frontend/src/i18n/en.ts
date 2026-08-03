@@ -201,10 +201,16 @@ export const en: Dict = {
     useForecastHelp: "Holds an active charge through a short cloud passage (recovery expected) and starts target charging earlier when the sun will not be enough before the deadline.",
     houseLimit: "Main fuse limit (A per phase)",
     houseLimitHelp: "Protection: total wallbox current is kept below this limit.",
+    batteryPriority: "Home battery comes first",
+    batteryPriorityHelp:
+      "Recommended. Whatever the battery charges or discharges does not count as surplus – " +
+      "car and water heating only get what is left beyond that. The battery still powers " +
+      "the household as usual. Turn this off only if loads should be allowed to draw from " +
+      "the battery above a given state of charge.",
     batteryReserve: "Battery reserve (% SoC)",
-    batteryReserveHelp: "The home battery will not be discharged below this level (house reserve).",
+    batteryReserveHelp: "Below this level the battery keeps its charging power to itself.",
     evLock: "EV battery lock (% SoC)",
-    evLockHelp: "Below this battery SoC, battery discharge is not used for car charging.",
+    evLockHelp: "From this state of charge upwards, battery discharge may be used for the car.",
     priority: "Priority chain",
     tariff: "Dynamic tariff",
     tariffProvider: "Provider",

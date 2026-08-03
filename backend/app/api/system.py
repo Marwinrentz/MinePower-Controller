@@ -247,6 +247,8 @@ async def diagnostics(_: User = Depends(get_current_user)):
         "battery": snapshot.get("battery"),
         "battery_guard_w": round(loop.battery_guard_w, 1),
         "battery_claim_w": round(loop.battery_claim_w, 1),
+        "battery_reserved_w": round(loop.battery_reserved_w, 1),
+        "battery_priority": loop.cfg.battery_priority,
         "ev_lock_soc": loop.cfg.ev_lock_soc,
         "battery_reserve_soc": loop.cfg.battery_reserve_soc,
         "waste_w": snapshot.get("waste_w"),

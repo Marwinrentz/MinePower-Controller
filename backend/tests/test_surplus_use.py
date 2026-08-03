@@ -355,11 +355,11 @@ def test_loop_hands_leftover_to_modulating_load():
     dev = FakeDevice("Warmwasser", wh, data)
     decision = WaterHeaterDecision(power_w=800, reason="PV-Überschuss 800 W")
 
-    fine = [(dev, decision, False)]
-    pool_pv, pool_bat, filled = _loop()._fill_gaps(fine, pool_pv=180.0, pool_bat=0.0)
+    fine = [(dev, decision)]
+    pool, filled = _loop()._fill_gaps(fine, 180.0)
 
     assert filled == 180.0          # kompletter Rest verwertet
-    assert pool_pv == 0.0           # nichts bleibt fürs Netz übrig
+    assert pool == 0.0              # nichts bleibt fürs Netz übrig
     assert fine[0][1].power_w == 980.0
 
 
@@ -367,37 +367,33 @@ def test_loop_skips_gap_filling_below_threshold():
     """Unter der Bagatellgrenze lohnt kein Nachstellen (Gerätelebensdauer)."""
     clock = FakeClock()
     wh, data = running_heater(clock)
-    fine = [(FakeDevice("Warmwasser", wh, data), WaterHeaterDecision(800, "x"), False)]
-    pool_pv, _, filled = _loop(gap_fill_min_w=25)._fill_gaps(fine, pool_pv=10.0, pool_bat=0.0)
+    fine = [(FakeDevice("Warmwasser", wh, data), WaterHeaterDecision(800, "x"))]
+    pool, filled = _loop(gap_fill_min_w=25)._fill_gaps(fine, 10.0)
     assert filled == 0.0
-    assert pool_pv == 10.0
+    assert pool == 10.0
 
 
 def test_loop_gap_filling_stops_at_device_maximum():
     clock = FakeClock()
     wh, data = running_heater(clock)  # max 3000 W
-    fine = [(FakeDevice("Warmwasser", wh, data), WaterHeaterDecision(2800, "x"), False)]
-    pool_pv, _, filled = _loop()._fill_gaps(fine, pool_pv=900.0, pool_bat=0.0)
+    fine = [(FakeDevice("Warmwasser", wh, data), WaterHeaterDecision(2800, "x"))]
+    pool, filled = _loop()._fill_gaps(fine, 900.0)
     assert filled == 200.0
-    assert pool_pv == 700.0  # Rest bleibt liegen – dafür gibt es keinen Abnehmer
+    assert pool == 700.0  # Rest bleibt liegen – dafür gibt es keinen Abnehmer
 
 
-def test_loop_battery_pool_only_for_loads_above_battery():
-    """Die Batterie-Ladeleistung steht nur Lasten VOR der Batterie zu –
-    auch der Lückenfüller darf diese Regel nicht aushebeln."""
+def test_loop_gap_filler_never_taps_the_battery():
+    """Früher durfte der Lückenfüller zusätzlich die Batterie-Ladeleistung
+    verwenden, solange die Last in der Kette vor der Batterie stand. Diese
+    Sonderregel gibt es nicht mehr: Was der Speicher lädt, gehört dem
+    Speicher und wurde vorher global abgezogen – im Topf taucht es gar
+    nicht erst auf."""
     clock = FakeClock()
-    wh_below, data_below = running_heater(clock)
-    below = [(FakeDevice("Warmwasser", wh_below, data_below), WaterHeaterDecision(500, "x"), False)]
-    _, pool_bat, filled_below = _loop()._fill_gaps(below, pool_pv=0.0, pool_bat=1000.0)
-    assert filled_below == 0.0      # unterhalb der Batterie: kein Zugriff
-    assert pool_bat == 1000.0
-
-    clock2 = FakeClock()
-    wh_above, data_above = running_heater(clock2)
-    above = [(FakeDevice("Warmwasser", wh_above, data_above), WaterHeaterDecision(500, "x"), True)]
-    _, pool_bat_after, filled_above = _loop()._fill_gaps(above, pool_pv=0.0, pool_bat=1000.0)
-    assert filled_above == 1000.0   # oberhalb: darf die Ladeleistung mitnutzen
-    assert pool_bat_after == 0.0
+    wh, data = running_heater(clock)
+    fine = [(FakeDevice("Warmwasser", wh, data), WaterHeaterDecision(500, "x"))]
+    pool, filled = _loop()._fill_gaps(fine, 0.0)
+    assert filled == 0.0
+    assert pool == 0.0
 
 
 def test_waste_reason_names_the_blocker():
@@ -444,8 +440,9 @@ def test_idle_battery_ignores_measurement_noise():
 
 
 def test_full_battery_may_be_used_when_user_allows_it():
-    """Ab dem eingestellten Ladestand gibt der Nutzer die Batterie frei."""
-    cfg = RegulationConfig(ev_lock_soc=80)
+    """Nur mit abgeschaltetem Batterie-Vorrang: Ab dem eingestellten
+    Ladestand gibt der Nutzer die Batterie frei."""
+    cfg = RegulationConfig(battery_priority=False, ev_lock_soc=80)
     assert protected_battery_discharge(85, -2000, cfg) == 0
     assert protected_battery_discharge(79, -2000, cfg) == 2000
 
@@ -498,8 +495,9 @@ def test_charging_battery_is_reserved_below_reserve_soc():
 
 
 def test_full_enough_battery_does_not_block_the_car():
-    """Ein fast voller Speicher soll das Auto nicht ausbremsen."""
-    cfg = RegulationConfig(battery_reserve_soc=80)
+    """Nur mit abgeschaltetem Batterie-Vorrang: Ein fast voller Speicher
+    soll das Auto nicht ausbremsen."""
+    cfg = RegulationConfig(battery_priority=False, battery_reserve_soc=80)
     assert reserved_battery_charge(85, 4000, cfg) == 0
 
 
@@ -508,10 +506,10 @@ def test_discharging_battery_is_not_a_charge_claim():
     assert reserved_battery_charge(45, -2000, cfg) == 0
 
 
-def test_default_reserve_keeps_previous_behaviour():
-    """Standard 20 %: Das Verhalten ändert sich nur, wenn der Nutzer den
-    Wert bewusst hochsetzt."""
-    cfg = RegulationConfig()
+def test_reserve_threshold_applies_only_without_priority():
+    """Ohne Batterie-Vorrang gilt wieder die alte Schwelle: Oberhalb von
+    20 % darf die Ladeleistung an die Lasten weitergereicht werden."""
+    cfg = RegulationConfig(battery_priority=False)
     assert reserved_battery_charge(55, 4000, cfg) == 0
 
 
@@ -525,8 +523,9 @@ def test_lock_at_100_also_holds_at_exactly_full():
 
 
 def test_partial_release_still_works_at_its_threshold():
-    """Gegenprobe: Unter 100 bleibt die Freigabe ab dem Schwellwert erhalten."""
-    cfg = RegulationConfig(ev_lock_soc=90)
+    """Gegenprobe ohne Batterie-Vorrang: Unter 100 bleibt die Freigabe ab
+    dem Schwellwert erhalten."""
+    cfg = RegulationConfig(battery_priority=False, ev_lock_soc=90)
     assert protected_battery_discharge(90.0, -2000, cfg) == 0
     assert protected_battery_discharge(89.9, -2000, cfg) == 2000
 
@@ -535,3 +534,121 @@ def test_missing_soc_is_treated_conservatively():
     """Ohne SoC-Wert wird geschützt statt freigegeben."""
     cfg = RegulationConfig(ev_lock_soc=50)
     assert protected_battery_discharge(None, -2000, cfg) == 2000
+
+
+# --------------------------------------------- Batterie hat IMMER Vorrang
+# Dritter Anlauf beim selben Thema, diesmal ohne Schwellwert. Zweimal ist der
+# Schutz vorher genau am Grenzwert gekippt (100 gemeint, 100 gemessen; dann
+# 99,9 eingestellt, 100,0 gemessen). Eine Einstellung, die man exakt treffen
+# muss, damit sie das Gegenteil nicht tut, ist die falsche Einstellung.
+
+def test_battery_priority_protects_discharge_at_any_soc():
+    """Standard: Der Speicher hat Vorrang, egal wie voll er ist."""
+    cfg = RegulationConfig()
+    for soc in (0.0, 20.0, 55.0, 99.9, 100.0, None):
+        assert protected_battery_discharge(soc, -2000, cfg) == 2000
+
+
+def test_battery_priority_reserves_charge_at_any_soc():
+    """Auch die Ladeleistung gehört dem Speicher – nicht erst unter 20 %."""
+    cfg = RegulationConfig()
+    for soc in (0.0, 20.0, 55.0, 99.9, 100.0, None):
+        assert reserved_battery_charge(soc, 4000, cfg) == 4000
+
+
+def test_almost_full_lock_no_longer_backfires():
+    """Der zuletzt gemeldete Fall: ev_lock_soc = 99,9 bei einem Speicher, der
+    exakt 100,0 % meldet. Mit der Schwellenlogik war der Schutz genau dann
+    aus. Der Vorrang kennt diesen Grenzfall nicht mehr."""
+    cfg = RegulationConfig(ev_lock_soc=99.9)
+    assert protected_battery_discharge(100.0, -3000, cfg) == 3000
+
+
+def test_pool_excludes_everything_the_battery_uses():
+    """Rechenprobe zum gemeldeten Fall: 9 kW Überschuss, davon lädt der
+    Speicher 4 kW. Für Auto und Warmwasser bleiben 5 kW – nicht 9."""
+    cfg = RegulationConfig()
+    guard = protected_battery_discharge(95.0, 4000, cfg)
+    claim = reserved_battery_charge(95.0, 4000, cfg)
+    assert max(0.0, 9000 - guard - claim) == 5000
+
+
+def test_wallbox_stops_at_once_when_battery_is_protected():
+    """Ohne diesen Zweig hielte die Stopp-Verzögerung das Auto noch drei
+    Minuten auf Mindeststrom – bezahlt aus dem Speicher."""
+    clock = FakeClock()
+    wb = running_wallbox(clock)
+    d = wb.decide(200, charging(1380),
+                  ctx(battery_protected=True, battery_handled_globally=True))
+    assert not d.enable
+    assert "Batterie" in d.reason
+
+
+def test_heater_stops_at_once_when_battery_is_protected():
+    """Gleiches Spiel beim Warmwasser: Die Stopp-Verzögerung darf den
+    Heizstab nicht aus dem Speicher weiterlaufen lassen."""
+    clock = FakeClock()
+    wh, data = running_heater(clock)
+    d = wh.decide(50, data, ctx(battery_protected=True))
+    assert d.power_w == 0
+    assert "Batterie" in d.reason
+
+
+def test_heater_forecast_hold_cannot_override_battery_protection():
+    """Auch die Prognose darf den Heizstab nicht am Speicher halten."""
+    clock = FakeClock()
+    wh, data = running_heater(clock)
+    d = wh.decide(50, data, ctx(solar_recovery_expected=True, battery_protected=True))
+    assert d.power_w == 0
+
+
+# ------------------------------------------- Ampere-Regelung am Netzpunkt
+# Ziel des Nutzers: weder Einspeisung noch Batteriebezug. Dafür muss der
+# Sollstrom zur Wirklichkeit passen – 230 V je Phase ist nur ein Nennwert.
+
+def test_learned_watts_per_amp_prevents_overdraw():
+    """Mit starren 230 V fordert der Regler bei 2400 W Budget 10 A an. Das
+    Fahrzeug zieht davon real 2500 W – die fehlenden 100 W kommen aus dem
+    Speicher. Mit dem gemessenen Faktor bleibt es bei 9 A."""
+    clock = FakeClock()
+    wb = running_wallbox(clock)
+    measured = WallboxData(state=WallboxState.CHARGING, power=2500, current_set=10)
+    wb.decide(2500, measured, ctx())
+    assert wb.watts_per_amp() == pytest.approx(250.0)
+
+    d = wb.decide(2400, measured, ctx())
+    assert d.current_a == 9
+    assert d.power_w <= 2400
+
+
+def test_implausible_measurement_is_not_learned():
+    """Beim Hochrampen passen Sollstrom und Messung kurz nicht zusammen.
+    Daraus zu lernen würde die Regelung dauerhaft verziehen."""
+    clock = FakeClock()
+    wb = running_wallbox(clock)
+    ramping = WallboxData(state=WallboxState.CHARGING, power=300, current_set=16)
+    wb.decide(3000, ramping, ctx())
+    assert wb.watts_per_amp() == pytest.approx(230.0)  # Nennwert bleibt
+
+
+def test_current_rises_gradually():
+    """Ein Sprung von 6 auf 16 A überfordert die Regelung: Das Fahrzeug folgt
+    erst Sekunden später, bis dahin deckt der Speicher die Lücke."""
+    clock = FakeClock()
+    wb = WallboxController(
+        WallboxSettings(mode="pv_only", min_current=6, max_current=16,
+                        phases_mode="fixed1", start_delay_s=0, ramp_up_step_a=3),
+        clock=clock,
+    )
+    assert wb.decide(1400, connected(), ctx()).current_a == 6
+    assert wb.decide(10000, charging(1380), ctx()).current_a == 9
+    assert wb.decide(10000, charging(2070), ctx()).current_a == 12
+    assert wb.decide(10000, charging(2760), ctx()).current_a == 15
+
+
+def test_current_may_drop_immediately():
+    """Nach unten wird nicht begrenzt – sonst zöge das Fahrzeug bei einer
+    Wolke minutenlang weiter aus dem Speicher."""
+    clock = FakeClock()
+    wb = running_wallbox(clock)  # steht bei 13 A
+    assert wb.decide(1380, charging(3000), ctx()).current_a == 6
