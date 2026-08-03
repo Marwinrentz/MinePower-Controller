@@ -22,11 +22,19 @@ genau das und meldet es im Klartext, statt stumm ins Leere zu regeln.
 """
 from __future__ import annotations
 
+import logging
+
 from .base import ConfigField, DeviceCategory, DriverMeta, FieldType, WaterHeaterData, WaterHeaterDriver
 from .http_util import HttpDevice
 from .modbus_util import ModbusConnection, s16, u16
 from .registry import register
-from .validation import DeviceRejected, checked, sanitized
+from .validation import CommandNotApplied, DeviceRejected, checked, sanitized
+
+log = logging.getLogger(__name__)
+
+#: Toleranz beim Readback des Leistungs-Sollwerts. my-PV rundet und begrenzt
+#: auf die reale Heizstab-Leistung; kleine Abweichungen sind normal.
+MAX_READBACK_TOLERANCE_W = 60
 
 # Modbus-Register (0-basiert = „reale“ my-PV-Adresse)
 REG_POWER_SET = 1000     # R/W Leistung [W]
@@ -105,6 +113,9 @@ class MyPvAcThor(WaterHeaterDriver):
         )
         self._conn: ModbusConnection | None = None
         self._last_status: int | None = None
+        #: Vom Gerät zurückgemeldete tatsächliche Höchstleistung (siehe
+        #: _write_modbus). None, solange sie noch nicht beobachtet wurde.
+        self._device_max: int | None = None
 
     # ---------------------------------------------------------------- HTTP
 
@@ -168,9 +179,36 @@ class MyPvAcThor(WaterHeaterDriver):
     async def _write_modbus(self, watts: int) -> None:
         if self._last_status == STATUS_NO_CONTROL:
             raise DeviceRejected(NO_CONTROL_HINT)
-        # Readback auf Register 1000: my-PV übernimmt den Sollwert sofort,
-        # verwirft ihn aber stumm, wenn der Steuerungstyp nicht passt.
-        await self._connection().write_register(REG_POWER_SET, watts, verify=True)
+
+        conn = self._connection()
+        await conn.write_register(REG_POWER_SET, watts)
+        got = u16(await conn.read_holding(REG_POWER_SET, 1))
+
+        # my-PV begrenzt den Sollwert auf die tatsächliche Leistung des
+        # angeschlossenen Heizstabs: Wer 3000 W schreibt, liest bei einem
+        # 2,8-kW-Stab 2800 zurück. Das ist eine Übernahme mit Begrenzung,
+        # keine Ablehnung – ein strenger Gleichheitstest würde hier bei jedem
+        # Tick fälschlich Alarm schlagen.
+        if watts > 0 and got <= 0:
+            raise CommandNotApplied(
+                f"my-PV nimmt den Sollwert nicht an (geschrieben {watts} W, zurückgelesen "
+                f"{got} W). Im my-PV-Setup den Steuerungstyp auf „Modbus TCP“ stellen."
+            )
+        if got > watts + MAX_READBACK_TOLERANCE_W:
+            raise CommandNotApplied(
+                f"my-PV meldet {got} W statt der angeforderten {watts} W zurück. "
+                f"Das Gerät folgt einer anderen Quelle – prüfen, ob noch eine zweite "
+                f"Steuerung (my-PV-Cloud, zweiter Regler) auf das Gerät schreibt."
+            )
+        # Begrenzung merken und künftige Sollwerte daran ausrichten, damit der
+        # Regelkreis mit der echten Gerätegrenze rechnet statt mit dem Wunschwert.
+        if got < watts - MAX_READBACK_TOLERANCE_W:
+            if self._device_max is None or got > self._device_max:
+                self._device_max = got
+                log.info(
+                    "my-PV begrenzt auf %d W (angefordert %d W) – Obergrenze übernommen",
+                    got, watts,
+                )
 
     def _status_extra(self, status: int) -> dict:
         label = STATUS_LABELS.get(status)
@@ -206,7 +244,10 @@ class MyPvAcThor(WaterHeaterDriver):
         return await self._read_http()
 
     async def set_power(self, watts: float) -> None:
-        value = max(0, min(int(watts), int(self.rated_power)))
+        limit = int(self.rated_power)
+        if self._device_max is not None:
+            limit = min(limit, self._device_max)
+        value = max(0, min(int(watts), limit))
         if self.method == "modbus_tcp":
             await self._write_modbus(value)
         else:

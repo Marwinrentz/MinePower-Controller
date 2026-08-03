@@ -145,7 +145,11 @@ class RegulationConfig:
     smoothing_samples: int = 3
     house_limit_a: float = 35.0    # Hausanschluss-Schutz (je Phase)
     battery_reserve_soc: float = 20.0
-    ev_lock_soc: float = 30.0      # Auto darf Batterie nicht unter diesen SoC ziehen
+    #: Ab diesem Batterie-SoC darf sich die Entladung als Überschuss verwenden
+    #: lassen. Darunter ist sie geschützt: Was aus dem Speicher kommt, gilt
+    #: nicht als Solarüberschuss und füttert weder Auto noch Warmwasser.
+    #: 100 = Batterie wird nie für steuerbare Lasten angezapft.
+    ev_lock_soc: float = 30.0
     # --- Verschenkte Energie minimieren ---
     adaptive_deadband: bool = True  # Totband an die Wetterlage anpassen
     deadband_min_w: float = 40.0
@@ -175,6 +179,14 @@ class ChargeContext:
     #: Erwarteter, für steuerbare Lasten nutzbarer Solarertrag bis zur
     #: Zielladungs-Deadline in kWh (None = keine Prognose konfiguriert).
     forecast_surplus_kwh: float | None = None
+    #: True, wenn der Control-Loop die Batterie-Entladung bereits global aus
+    #: dem Budget herausgerechnet hat. Dann darf der Regler das nicht noch
+    #: einmal tun – sonst wird sie doppelt abgezogen.
+    battery_handled_globally: bool = False
+    #: True, wenn die Batterie gerade geschont wird (Entladung zählt nicht als
+    #: Überschuss). In dem Zustand darf keine Halte-Logik greifen: Eine Ladung
+    #: „über den Wolkendurchzug zu retten“ hieße hier, den Speicher leerzuziehen.
+    battery_protected: bool = False
 
 
 @dataclass
@@ -280,6 +292,12 @@ class WallboxController:
         Nur, solange die Erholung wirklich absehbar ist *und* das Halten nicht
         ausufert. Ohne diese Obergrenze würde eine dauerhaft falsche Prognose
         stundenlang Netzstrom ziehen."""
+        # Wird die Batterie gerade geschont, ist Halten die falsche Antwort:
+        # Der fehlende Überschuss käme nicht aus der Sonne, sondern aus dem
+        # Speicher. Lieber sauber abschalten und später neu starten.
+        if ctx.battery_protected:
+            self._forecast_hold_since = None
+            return False
         if not (self.s.use_forecast and ctx.solar_recovery_expected):
             self._forecast_hold_since = None
             return False
@@ -351,8 +369,11 @@ class WallboxController:
         # Batterie-Sperre: Entladung der Hausbatterie nicht fürs Auto verwenden.
         # (Die Verteilung der Batterie-LADEleistung über die Prioritätskette
         # übernimmt der Control-Loop über getrennte Budget-Pools.)
+        # Hat der Control-Loop die Entladung schon global abgezogen, wäre ein
+        # zweiter Abzug hier doppelt gemoppelt.
         if (
-            ctx.battery_soc is not None
+            not ctx.battery_handled_globally
+            and ctx.battery_soc is not None
             and ctx.battery_power < -50
             and not s.use_battery_for_ev
         ):
@@ -629,6 +650,61 @@ def compute_budget(
     if abs(error) <= band:
         return controllable_power
     return controllable_power - error
+
+
+#: Unterhalb dieser Leistung gilt die Batterie als in Ruhe (Messrauschen).
+BATTERY_IDLE_W = 50.0
+
+
+def protected_battery_discharge(
+    battery_soc: float | None, battery_power: float, cfg: RegulationConfig
+) -> float:
+    """Wie viel Batterie-Entladeleistung darf **nicht** als Überschuss gelten?
+
+    Der Kern des Problems: `compute_budget` sieht nur den Netzpunkt. Entlädt
+    sich die Hausbatterie, um Auto und Warmwasser zu versorgen, steht am Netz
+    trotzdem 0 W – das Budget wirkt also unverändert groß, obwohl die Sonne
+    längst nicht mehr reicht. Ohne diese Korrektur füttert der Speicher die
+    steuerbaren Lasten, bis er leer ist.
+
+    Was hier abgezogen wird, ist genau die Entladeleistung. Oberhalb von
+    `ev_lock_soc` gibt der Nutzer die Batterie bewusst frei – bei 100 %
+    (Standard-Empfehlung für „nie anzapfen“) bleibt sie immer geschützt.
+
+    Wichtig: Der Hausverbrauch bleibt davon unberührt. Geschützt wird nur
+    gegen die *steuerbaren* Lasten; die Batterie darf weiterhin ganz normal
+    den Haushalt versorgen – dafür ist sie da.
+    """
+    if battery_power >= -BATTERY_IDLE_W:
+        return 0.0
+    if battery_soc is not None and battery_soc >= cfg.ev_lock_soc:
+        return 0.0  # Nutzer erlaubt die Entladung ab diesem Ladestand
+    return -battery_power
+
+
+def reserved_battery_charge(
+    battery_soc: float | None, battery_power: float, cfg: RegulationConfig
+) -> float:
+    """Ladeleistung, die dem Speicher vorbehalten bleibt.
+
+    Gegenstück zum bisherigen Modell: Bislang durften Lasten, die in der Kette
+    **vor** der Batterie stehen, deren Ladeleistung mitnutzen – es gab aber
+    keinen Weg, der Batterie umgekehrt Vorrang zu geben. Ein Auto konnte damit
+    auf 16 A stehen bleiben, während der Speicher nur noch den Rest bekam.
+
+    Unterhalb von `battery_reserve_soc` hat der Speicher jetzt absoluten
+    Vorrang: Seine aktuelle Ladeleistung wird aus dem Überschuss-Topf
+    herausgerechnet. Darüber gilt wieder die Prioritätskette – ein fast voller
+    Speicher soll das Auto nicht ausbremsen.
+
+    Standard ist 20 %, das Verhalten ändert sich also nur, wenn der Nutzer den
+    Wert bewusst hochsetzt.
+    """
+    if battery_power <= BATTERY_IDLE_W:
+        return 0.0  # lädt nicht
+    if battery_soc is None or battery_soc >= cfg.battery_reserve_soc:
+        return 0.0
+    return battery_power
 
 
 def wasted_power(grid_power_smoothed: float, cfg: RegulationConfig) -> float:

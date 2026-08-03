@@ -367,6 +367,14 @@ small, .dim { color: var(--text-dim); font-size: var(--text-sm); }
 .banner.info { background: color-mix(in srgb, var(--info) 9%, var(--surface));
   border-color: color-mix(in srgb, var(--info) 40%, transparent); }
 .banner.ok { background: var(--accent-soft); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+.banner-close {
+  background: transparent; border: none; border-radius: var(--r-sm);
+  color: var(--text-dim); cursor: pointer; flex-shrink: 0; font-size: 13px;
+  height: 26px; line-height: 1; padding: 0; width: 26px;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+.banner-close:hover { background: var(--surface-3); color: var(--text-strong); }
+
 @keyframes banner-in {
   from { opacity: 0; transform: translateY(-6px); }
   to { opacity: 1; transform: none; }

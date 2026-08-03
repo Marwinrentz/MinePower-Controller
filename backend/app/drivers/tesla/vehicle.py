@@ -79,6 +79,10 @@ class TeslaVehicle(WallboxDriver):
     )
 
     min_current = 5.0  # Tesla erlaubt ab 5 A
+    #: Ein schlafendes Fahrzeug antwortet über BLE erst nach etlichen Sekunden.
+    #: Mit dem Standard-Timeout von 6 s flattert das Gerät im Minutentakt
+    #: zwischen online und offline – und fällt dabei aus der Regelung.
+    read_timeout_s = 25.0
 
     def __init__(self, config: dict) -> None:
         super().__init__(config)

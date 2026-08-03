@@ -19,6 +19,8 @@ from app.core.regulation import (
     WaterHeaterDecision,
     WaterHeaterSettings,
     compute_budget,
+    protected_battery_discharge,
+    reserved_battery_charge,
     wasted_power,
 )
 from app.drivers.base import WallboxData, WallboxState, WaterHeaterData
@@ -416,3 +418,98 @@ def test_waste_reason_when_everything_runs_at_maximum():
 
 def test_no_waste_reason_for_negligible_amounts():
     assert ControlLoop._waste_reason(10.0, [], []) is None
+
+
+# ------------------------------------------------------------ Batterie schonen
+# Praxisfall aus einem Diagnosebericht: Das Auto lud, aber die Hausbatterie
+# entlud sich dabei. Ursache war, dass `ev_lock_soc` zwar konfigurierbar war,
+# aber von keiner Entscheidung gelesen wurde – und dass der Schutz nur in der
+# Wallbox griff, nicht im gemeinsamen Überschuss-Topf.
+
+def test_discharge_is_not_surplus():
+    """Was aus dem Speicher kommt, ist kein Solarüberschuss."""
+    cfg = RegulationConfig(ev_lock_soc=100)
+    assert protected_battery_discharge(80, -2000, cfg) == 2000
+
+
+def test_charging_battery_is_not_protected():
+    """Nur Entladung wird geschützt – Ladung darf die Kette weiterreichen."""
+    cfg = RegulationConfig(ev_lock_soc=100)
+    assert protected_battery_discharge(80, +2000, cfg) == 0
+
+
+def test_idle_battery_ignores_measurement_noise():
+    cfg = RegulationConfig(ev_lock_soc=100)
+    assert protected_battery_discharge(80, -30, cfg) == 0
+
+
+def test_full_battery_may_be_used_when_user_allows_it():
+    """Ab dem eingestellten Ladestand gibt der Nutzer die Batterie frei."""
+    cfg = RegulationConfig(ev_lock_soc=80)
+    assert protected_battery_discharge(85, -2000, cfg) == 0
+    assert protected_battery_discharge(79, -2000, cfg) == 2000
+
+
+def test_lock_at_100_never_releases_the_battery():
+    """Die Einstellung, die der Nutzer erwartet: niemals aus dem Speicher laden."""
+    cfg = RegulationConfig(ev_lock_soc=100)
+    assert protected_battery_discharge(99, -3000, cfg) == 3000
+
+
+def test_controller_does_not_subtract_twice():
+    """Hat der Loop die Entladung schon abgezogen, darf der Regler es nicht
+    noch einmal tun – sonst fehlt die Leistung doppelt im Budget."""
+    clock = FakeClock()
+    wb = running_wallbox(clock)
+    d = wb.decide(2500, charging(2500),
+                  ctx(battery_soc=50, battery_power=-2000, battery_handled_globally=True))
+    assert d.current_a == 10  # 2500 W / 230 V, abgerundet – kein zweiter Abzug
+
+
+def test_battery_protection_defeats_the_forecast_hold():
+    """Eine Ladung „über den Wolkendurchzug retten" wäre hier falsch: Der
+    fehlende Überschuss käme aus dem Speicher, nicht aus der Sonne."""
+    clock = FakeClock()
+    wb = running_wallbox(clock)
+    context = dict(solar_recovery_expected=True, battery_protected=True,
+                   battery_handled_globally=True)
+    wb.decide(300, charging(1380), ctx(**context))
+    clock.advance(181)
+    assert not wb.decide(300, charging(1380), ctx(**context)).enable
+
+
+def test_forecast_hold_still_works_without_battery_drain():
+    """Gegenprobe: Ohne Batterie-Schutz greift die Halte-Logik weiterhin."""
+    clock = FakeClock()
+    wb = running_wallbox(clock)
+    wb.decide(300, charging(1380), ctx(solar_recovery_expected=True))
+    clock.advance(181)
+    assert wb.decide(300, charging(1380), ctx(solar_recovery_expected=True)).enable
+
+
+# ------------------------------------------------- Batterie hat Vorrang
+# Zweiter Praxisfall: Das Auto stand auf 16 A, während der Speicher nur den
+# Rest bekam. Ursache: Es gab bislang nur den Weg, der Batterie Ladeleistung
+# wegzunehmen – aber keinen, ihr Vorrang zu geben.
+
+def test_charging_battery_is_reserved_below_reserve_soc():
+    cfg = RegulationConfig(battery_reserve_soc=80)
+    assert reserved_battery_charge(45, 4000, cfg) == 4000
+
+
+def test_full_enough_battery_does_not_block_the_car():
+    """Ein fast voller Speicher soll das Auto nicht ausbremsen."""
+    cfg = RegulationConfig(battery_reserve_soc=80)
+    assert reserved_battery_charge(85, 4000, cfg) == 0
+
+
+def test_discharging_battery_is_not_a_charge_claim():
+    cfg = RegulationConfig(battery_reserve_soc=80)
+    assert reserved_battery_charge(45, -2000, cfg) == 0
+
+
+def test_default_reserve_keeps_previous_behaviour():
+    """Standard 20 %: Das Verhalten ändert sich nur, wenn der Nutzer den
+    Wert bewusst hochsetzt."""
+    cfg = RegulationConfig()
+    assert reserved_battery_charge(55, 4000, cfg) == 0

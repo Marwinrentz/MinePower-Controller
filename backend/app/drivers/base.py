@@ -170,6 +170,12 @@ class BaseDriver(abc.ABC):
 
     meta: ClassVar[DriverMeta]
 
+    #: Wie lange der Control-Loop auf eine Antwort wartet, bevor er das Gerät
+    #: als gestört zählt. Treiber mit langsamem Transport (Funk, BLE-Proxy,
+    #: Cloud-API) erhöhen den Wert – sonst melden sie sich im Minutentakt
+    #: fälschlich offline, obwohl sie nur langsam sind.
+    read_timeout_s: float = 6.0
+
     def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
 

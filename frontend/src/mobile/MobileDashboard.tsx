@@ -259,6 +259,9 @@ export function MobileDashboard() {
   const snapshot = useLive((s) => s.snapshot);
   const connected = useLive((s) => s.connected);
   const [busy, setBusy] = useState(false);
+  // Wie am Desktop: Meldungen werden über ihren Inhalt gemerkt, damit ein
+  // neuer Fehler wieder auftaucht und derselbe weggeklickt bleibt.
+  const [dismissed, setDismissed] = useState<string[]>([]);
 
   if (!snapshot) {
     return (
@@ -271,6 +274,9 @@ export function MobileDashboard() {
 
   const offline = snapshot.devices.filter((d) => d.enabled && !d.online);
   const failing = snapshot.devices.filter((d) => d.command_error);
+  const offlineKey = `off:${offline.map((d) => d.id).join(",")}`;
+  const failingKey = `cmd:${failing.map((d) => `${d.id}=${d.command_error}`).join("|")}`;
+  const hide = (k: string) => setDismissed((d) => [...d, k]);
   const devices = snapshot.devices.filter((d) => d.enabled);
 
   const togglePause = async () => {
@@ -311,22 +317,26 @@ export function MobileDashboard() {
             </span>
           </div>
         )}
-        {failing.length > 0 && (
+        {failing.length > 0 && !dismissed.includes(failingKey) && (
           <div className="m-note err">
             <span aria-hidden="true">✕</span>
             <span className="m-note-txt">
               <strong>{t("dash.commandFailed")}</strong>
               <span>{failing.map((d) => `${d.name}: ${d.command_error}`).join(" · ")}</span>
             </span>
+            <button className="m-note-close" onClick={() => hide(failingKey)}
+                    aria-label={t("common.close")}>✕</button>
           </div>
         )}
-        {offline.length > 0 && (
+        {offline.length > 0 && !dismissed.includes(offlineKey) && (
           <div className="m-note warn">
             <span aria-hidden="true">⚠</span>
             <span className="m-note-txt">
               <strong>{t("dash.deviceOffline")}</strong>
               <span>{offline.map((d) => d.name).join(", ")}</span>
             </span>
+            <button className="m-note-close" onClick={() => hide(offlineKey)}
+                    aria-label={t("common.close")}>✕</button>
           </div>
         )}
 

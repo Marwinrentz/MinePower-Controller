@@ -57,6 +57,13 @@ export function Dashboard() {
   const [stats, setStats] = useState<Statistics | null>(null);
   const [forecast, setForecast] = useState<Forecast | null>(null);
   const [busy, setBusy] = useState(false);
+  // Weggeklickte Meldungen werden über ihren Inhalt gemerkt, nicht über eine
+  // laufende Nummer: Ein *neuer* Fehler taucht damit wieder auf, derselbe
+  // bleibt weg. Zustände, die weiter gelten (Sicherheits-Stopp, Pause),
+  // lassen sich bewusst nicht ausblenden.
+  const [dismissed, setDismissed] = useState<string[]>([]);
+  const hide = (key: string) => setDismissed((d) => [...d, key]);
+  const isHidden = (key: string) => dismissed.includes(key);
 
   useEffect(() => {
     let alive = true;
@@ -87,6 +94,8 @@ export function Dashboard() {
     .sort((a, b) => (TILE_ORDER[a.category] ?? 9) - (TILE_ORDER[b.category] ?? 9));
   const offline = tiles.filter((d) => !d.online);
   const failing = tiles.filter((d) => d.online && d.command_error);
+  const offlineKey = `off:${offline.map((d) => d.id).join(",")}`;
+  const failingKey = `cmd:${failing.map((d) => `${d.id}=${d.command_error}`).join("|")}`;
 
   const togglePause = async () => {
     setBusy(true);
@@ -112,14 +121,16 @@ export function Dashboard() {
       {!connected && (
         <Banner tone="warn" title={t("dash.disconnected")}>{t("dash.disconnectedSub")}</Banner>
       )}
-      {offline.length > 0 && (
-        <Banner tone="warn" title={t("dash.deviceOffline")}>
+      {offline.length > 0 && !isHidden(offlineKey) && (
+        <Banner tone="warn" title={t("dash.deviceOffline")}
+                onDismiss={() => hide(offlineKey)} dismissLabel={t("common.close")}>
           {offline.map((d) => d.name).join(", ")}
           {offline[0].last_error ? ` — ${offline[0].last_error}` : ""}
         </Banner>
       )}
-      {failing.length > 0 && (
-        <Banner tone="err" title={t("dash.commandFailed")}>
+      {failing.length > 0 && !isHidden(failingKey) && (
+        <Banner tone="err" title={t("dash.commandFailed")}
+                onDismiss={() => hide(failingKey)} dismissLabel={t("common.close")}>
           {failing.map((d) => `${d.name}: ${d.command_error}`).join(" · ")}
         </Banner>
       )}

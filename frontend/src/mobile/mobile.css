@@ -314,3 +314,12 @@
   .m-stat-val { font-size: 21px; }
   .m-title { font-size: 28px; }
 }
+
+/* Schließen-Kreuz an Hinweisbannern: nur für Meldungen, die man zur Kenntnis
+   genommen hat – laufende Zustände (Sicherheits-Stopp) bleiben stehen. */
+.m-note-close {
+  background: transparent; border: none; border-radius: 8px; color: var(--m-text-2);
+  cursor: pointer; flex-shrink: 0; font-size: 14px; height: 30px; margin-left: auto;
+  padding: 0; width: 30px; -webkit-tap-highlight-color: transparent;
+}
+.m-note-close:active { background: var(--m-card-2); }

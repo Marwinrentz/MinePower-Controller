@@ -65,6 +65,8 @@ from .regulation import (
     WaterHeaterDecision,
     WaterHeaterSettings,
     compute_budget,
+    protected_battery_discharge,
+    reserved_battery_charge,
     wasted_power,
 )
 from .schedules import any_window_active
@@ -260,11 +262,16 @@ class ControlLoop:
     # ------------------------------------------------------------ Mess-Zyklus
 
     async def _read_device(self, dev: ManagedDevice) -> None:
+        # Nicht jedes Gerät antwortet gleich schnell: Ein Modbus-Zähler im LAN
+        # ist in Millisekunden da, ein schlafendes Fahrzeug über einen
+        # BLE-Proxy braucht auch mal 20 Sekunden. Ein pauschaler Timeout würde
+        # so ein Gerät im Minutentakt fälschlich offline melden.
+        timeout = float(getattr(dev.driver, "read_timeout_s", READ_TIMEOUT_S))
         try:
             if not dev.connected:
-                await asyncio.wait_for(dev.driver.connect(), timeout=READ_TIMEOUT_S)
+                await asyncio.wait_for(dev.driver.connect(), timeout=timeout)
                 dev.connected = True
-            dev.data = await asyncio.wait_for(dev.driver.read_data(), timeout=READ_TIMEOUT_S)
+            dev.data = await asyncio.wait_for(dev.driver.read_data(), timeout=timeout)
             if not dev.online and dev.failures >= OFFLINE_AFTER_FAILURES:
                 await log_event(f"Gerät wieder online: {dev.name}", category="device")
                 if self.notifier:
@@ -375,12 +382,26 @@ class ControlLoop:
         controllable = wb_power + wh_power
         budget = compute_budget(grid_smoothed, controllable, self.cfg, deadband_w=deadband)
 
+        # --- Batterie schonen ------------------------------------------
+        # Entlädt sich der Speicher, ist diese Leistung kein Solarüberschuss.
+        # Ohne den Abzug würde die Batterie Auto und Warmwasser versorgen, bis
+        # sie leer ist – am Netzpunkt sähe alles nach „ausgeglichen" aus.
+        battery_guard = protected_battery_discharge(
+            battery.soc if battery else None, bat_power, self.cfg
+        )
+        # Umgekehrter Fall: Unterhalb der Reserve hat das Laden des Speichers
+        # Vorrang vor Auto und Warmwasser.
+        battery_claim = reserved_battery_charge(
+            battery.soc if battery else None, bat_power, self.cfg
+        )
+
         # --- Budget-Pools & Prioritätskette ----------------------------
         order = self._priority_order(wallboxes, heaters, battery_devs)
         bat_idx = next((i for i, d in enumerate(order) if d.category == DeviceCategory.BATTERY.value), None)
-        pool_pv = max(0.0, budget)
-        # Batterie-Ladeleistung steht nur Lasten VOR der Batterie zu
-        pool_bat = max(0.0, bat_power) if bat_idx is not None else 0.0
+        pool_pv = max(0.0, budget - battery_guard - battery_claim)
+        # Batterie-Ladeleistung steht nur Lasten VOR der Batterie zu – und nur,
+        # solange der Speicher nicht ohnehin Vorrang hat.
+        pool_bat = max(0.0, bat_power) if (bat_idx is not None and battery_claim <= 0) else 0.0
 
         price_ct = cheap = None
         if self.tariff:
@@ -394,6 +415,16 @@ class ControlLoop:
         fine_loads: list[tuple[ManagedDevice, WaterHeaterDecision, bool]] = []
         #: Warum blieb Überschuss liegen? (für die Kennzahl „verschenkt“)
         blockers: list[str] = []
+        if battery_claim > 0:
+            blockers.append(
+                f"Batterie hat Vorrang: {battery_claim:.0f} W Ladeleistung reserviert "
+                f"(bis {self.cfg.battery_reserve_soc:.0f} % Ladestand)"
+            )
+        if battery_guard > 0:
+            blockers.append(
+                f"Batterie wird geschont: {battery_guard:.0f} W Entladung zählen nicht "
+                f"als Überschuss (Freigabe erst ab {self.cfg.ev_lock_soc:.0f} % Ladestand)"
+            )
 
         for idx, dev in enumerate(order):
             if dev.category == DeviceCategory.BATTERY.value:
@@ -419,6 +450,8 @@ class ControlLoop:
                 house_limit_a=self.cfg.house_limit_a,
                 solar_recovery_expected=recovery,
                 forecast_surplus_kwh=forecast_surplus,
+                battery_handled_globally=True,
+                battery_protected=battery_guard > 0,
             )
 
             if isinstance(dev.controller, WallboxController):
@@ -785,6 +818,11 @@ class ControlLoop:
         b.add("site", "house_power", house)
         b.add("site", "surplus", budget)
         b.add("site", "waste_power", waste_w)
+        # Summen auch auf Anlagenebene führen: Ohne sie bleiben Verlaufs-Chart
+        # und Diagnosebericht für Auto und Warmwasser leer, weil dort nur
+        # `source="site"` abgefragt wird.
+        b.add("site", "wallbox_power", wb_power)
+        b.add("site", "water_power", wh_power)
         if battery:
             b.add("site", "battery_power", battery.power)
             b.add("site", "battery_soc", battery.soc)

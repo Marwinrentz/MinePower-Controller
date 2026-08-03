@@ -135,8 +135,13 @@ export function Badge({ tone, children }: { tone?: Tone; children: ReactNode }) 
 /** Fehler- und Sonderzustände sind Teil des Designs, nicht ein Sonderfall:
  *  Wenn die Regelung pausiert oder ein Befehl scheitert, gehört das nach oben
  *  und in Klartext – nicht in ein Log. */
-export function Banner({ tone = "warn", title, children, action }: {
+export function Banner({ tone = "warn", title, children, action, onDismiss, dismissLabel }: {
   tone?: "ok" | "warn" | "err" | "info"; title: string; children?: ReactNode; action?: ReactNode;
+  /** Ist gesetzt, erscheint ein Schließen-Kreuz. Gedacht für Meldungen, die
+   *  der Nutzer zur Kenntnis genommen hat – nicht für Zustände, die weiterhin
+   *  gelten (ein Sicherheits-Stopp lässt sich nicht wegklicken). */
+  onDismiss?: () => void;
+  dismissLabel?: string;
 }) {
   const icon = { ok: "✓", warn: "⚠", err: "✕", info: "ℹ" }[tone];
   return (
@@ -146,7 +151,12 @@ export function Banner({ tone = "warn", title, children, action }: {
         <strong>{title}</strong>
         {children && <span>{children}</span>}
       </div>
-      {action && <><div className="spacer" />{action}</>}
+      {(action || onDismiss) && <div className="spacer" />}
+      {action}
+      {onDismiss && (
+        <button className="banner-close" onClick={onDismiss}
+                title={dismissLabel} aria-label={dismissLabel}>✕</button>
+      )}
     </div>
   );
 }

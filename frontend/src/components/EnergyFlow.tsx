@@ -44,10 +44,10 @@ function Edge({ from, to, power, reverse = false, color, curve = 0, label }: Edg
   // Dicke wächst gedämpft (Wurzel), sonst dominiert ein einzelner großer
   // Verbraucher das ganze Bild.
   const width = active ? Math.min(8, 2.2 + Math.sqrt(magnitude) / 13) : 2;
-  // Tempo: viel Leistung = schnellerer Fluss – aber gedeckelt auf ein
-  // ruhiges Höchsttempo (3 s je Dash-Zyklus), damit auch hohe Leistungen
-  // nicht hektisch wirken. Bei wenig Leistung wird es entsprechend gemächlich.
-  const duration = active ? Math.max(3.0, Math.min(14, 16000 / magnitude)) : 0;
+  // Tempo: viel Leistung = schnellerer Fluss – aber mit einem ruhigen
+  // Höchsttempo (7 s je Dash-Zyklus). Das Diagramm läuft im Dauerbetrieb auf
+  // einem Bildschirm; alles Schnellere zieht dauernd den Blick auf sich.
+  const duration = active ? Math.max(7.0, Math.min(30, 34000 / magnitude)) : 0;
 
   return (
     <g aria-label={`${label}: ${fmtW(magnitude)}`}>

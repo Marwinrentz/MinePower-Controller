@@ -12,7 +12,7 @@ from ..core.regulation import WallboxController, WaterHeaterController
 from ..db import get_db
 from ..drivers import registry
 from ..drivers.base import BatteryDriver, BatteryMode, TestResult
-from ..models import Device, User
+from ..models import Device, Setting, User
 from ..schemas import (
     DeviceActionRequest,
     DeviceCreate,
@@ -80,9 +80,17 @@ async def update_device(device_id: int, body: DeviceUpdate, db: AsyncSession = D
 async def delete_device(device_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(require_role("admin"))):
     device = await db.get(Device, device_id)
     if device:
+        name = device.name
         await db.delete(device)
+        # Verwaiste ID aus der Prioritätskette entfernen – sonst bleibt sie
+        # dort für immer stehen und ein später neu angelegtes Gerät landet
+        # unbemerkt am Ende der Kette statt an der gewünschten Stelle.
+        priority = await db.get(Setting, "priority")
+        if priority is not None:
+            order = [i for i in (priority.value or {}).get("order", []) if i != device_id]
+            priority.value = {"order": order}
         await db.commit()
-        await log_event(f"Gerät gelöscht: {device.name}", category="config", user_id=user.id)
+        await log_event(f"Gerät gelöscht: {name}", category="config", user_id=user.id)
         _reload()
 
 
