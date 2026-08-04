@@ -2,200 +2,136 @@ MinePower — Lizenzbedingungen / License Terms
 
 Copyright (c) 2026 Marwin Rentz. Alle Rechte vorbehalten / All rights reserved.
 
-Der deutsche Text ist maßgeblich; die englische Fassung dient der Information.
-The German text is authoritative; the English version is provided for
-information only.
+Der deutsche Text ist maßgeblich, die englische Fassung dient der Information.
+The German text is authoritative; the English version is informational.
 
 ================================================================================
 DEUTSCH
 ================================================================================
 
-1. GEGENSTAND
+Diese Bedingungen gelten für die Software „MinePower" samt Quelltext,
+Docker-Images, Dokumentation und Grafiken. Der Quelltext ist einsehbar,
+MinePower ist aber nicht Open Source im Sinne der Open Source Definition.
 
-Diese Bedingungen gelten für die Software „MinePower" einschließlich Quelltext,
-Docker-Images, Dokumentation, Grafiken und Namenszeichen (zusammen „die
-Software"). Die Software ist quelloffen einsehbar, aber nicht Open Source im
-Sinne der Open Source Definition: Es werden ausdrücklich keine Rechte zur
-Veränderung oder Weitergabe eingeräumt.
+ERLAUBT
 
-2. WAS ERLAUBT IST
+  - Herunterladen, Einsehen und Studieren.
+  - Forken, Kopieren und Verändern für eigene Zwecke.
+  - Betreiben auf eigener Hardware oder Infrastruktur — privat wie im eigenen
+    Gewerbe, in unveränderter wie in selbst veränderter Fassung, auch aus dem
+    offiziellen Docker-Image.
+  - Eigene Konfiguration, Einstellungen und Daten.
 
-Ohne gesonderte Zustimmung ist gestattet:
+NICHT ERLAUBT (ohne vorherige schriftliche Zustimmung)
 
-   a) die Software herunterzuladen, einzusehen und zu studieren;
-   b) sie unverändert auf eigener Hardware oder eigener Infrastruktur zu
-      betreiben — privat wie gewerblich im eigenen Betrieb;
-   c) sie unverändert aus dem offiziellen Docker-Image zu betreiben;
-   d) eigene Konfigurationsdateien, Einstellungen und Daten anzulegen und zu
-      verwenden. Konfiguration ist keine Veränderung im Sinne von Ziffer 3.
+  - Weitergabe an Dritte — im Original wie verändert. Dazu zählen
+    Veröffentlichung, Verkauf, Vermietung und Unterlizenzierung.
+  - Bereitstellung für Dritte als Dienstleistung (Hosting, SaaS).
+  - Entfernen oder Verändern von Urheber- und Lizenzhinweisen.
+  - Verwendung des Namens „MinePower" für eigene Angebote.
 
-3. WAS NICHT ERLAUBT IST
+  Plattform-Vorbehalt: Wo die Bedingungen einer Plattform bestimmte Handlungen
+  zwingend gestatten — etwa das Forken öffentlicher Repositories —, gehen sie
+  vor. Weitergehende Rechte werden dadurch nicht eingeräumt.
 
-Ohne vorherige schriftliche Zustimmung des Rechteinhabers ist untersagt:
+RÜCKMELDUNGEN
 
-   a) die Software zu verändern, zu übersetzen, zu bearbeiten, zu dekompilieren
-      oder abgeleitete Werke zu erstellen;
-   b) die Software oder Teile davon weiterzugeben, zu veröffentlichen, zu
-      vermieten, zu verleihen, zu verkaufen oder unterzulizenzieren;
-   c) die Software Dritten als Dienstleistung bereitzustellen (Hosting, SaaS,
-      Managed Service);
-   d) Urheber-, Lizenz- oder Herkunftshinweise zu entfernen oder zu verändern;
-   e) den Namen „MinePower" oder das MinePower-Zeichen für eigene Angebote zu
-      verwenden.
+  Ausdrücklich erwünscht. Wer eine einreicht, räumt dem Rechteinhaber das
+  Recht ein, sie unentgeltlich und ohne Nennungspflicht zu verwenden. Bitte
+  keine Zugangsdaten oder Token mitschicken.
 
-   Hinweis zu Plattformen: Wird die Software über eine Plattform bereitgestellt,
-   deren Nutzungsbedingungen bestimmte Handlungen zwingend gestatten (etwa das
-   Anlegen einer Kopie innerhalb der Plattform), gehen diese Bedingungen insoweit
-   vor. Weitergehende Rechte werden dadurch nicht eingeräumt.
+GEWÄHRLEISTUNG UND HAFTUNG
 
-4. RÜCKMELDUNGEN
+  Die Software wird ohne jede Gewährleistung bereitgestellt. Sie steuert
+  elektrische Verbraucher; der Einsatz erfolgt auf eigene Verantwortung, die
+  Installation gehört in die Hände von Fachpersonal. Haftung nur bei Vorsatz
+  und grober Fahrlässigkeit sowie in Fällen zwingender gesetzlicher Haftung.
 
-Rückmeldungen sind ausdrücklich erwünscht — Fehlerberichte, Messwerte,
-Diagnoseberichte, Verbesserungsvorschläge. Wer eine Rückmeldung einreicht,
-räumt dem Rechteinhaber das unentgeltliche, zeitlich und räumlich unbeschränkte
-Recht ein, sie ohne Vergütung und ohne Nennungspflicht zu verwenden. Eine
-Pflicht zur Umsetzung besteht nicht.
+  Die meisten Geräteanbindungen liefen nie an echter Hardware, sondern wurden
+  nach Herstellerdokumentation erstellt. Welche das sind, steht in der README
+  und in der Oberfläche an jedem Gerät.
 
-Bitte keine Zugangsdaten, Token oder personenbezogenen Daten mitschicken. Die
-eingebaute Diagnosebericht-Funktion schwärzt als Passwort deklarierte Felder
-automatisch, kann aber nicht jedes Feld kennen — bitte vor dem Versenden
-durchsehen.
+FREMDKOMPONENTEN
 
-5. GEWÄHRLEISTUNG UND HAFTUNG
+  Unterliegen ihren eigenen Lizenzen. Einzelheiten in der Datei NOTICE.
 
-DIE SOFTWARE WIRD OHNE JEDE GEWÄHRLEISTUNG BEREITGESTELLT, INSBESONDERE OHNE
-ZUSICHERUNG DER MARKTGÄNGIGKEIT, DER EIGNUNG FÜR EINEN BESTIMMTEN ZWECK ODER
-DER FEHLERFREIHEIT.
+MARKEN UND FREMDSCHNITTSTELLEN
 
-Die Software steuert elektrische Verbraucher. Ihr Einsatz erfolgt auf eigene
-Verantwortung. Die Installation und Absicherung elektrischer Komponenten gehört
-in die Hände von Fachpersonal; einschlägige Normen und die Vorgaben des
-Netzbetreibers sind einzuhalten. Der Rechteinhaber haftet nicht für Sach-,
-Vermögens- oder Folgeschäden, die aus dem Einsatz entstehen — außer bei Vorsatz
-und grober Fahrlässigkeit sowie in Fällen zwingender gesetzlicher Haftung
-(insbesondere Produkthaftungsgesetz, Verletzung von Leben, Körper, Gesundheit).
+  Tesla, Sungrow, my-PV, Fronius, SMA, Huawei, Shelly, go-e, Tibber, aWATTar
+  und alle weiteren genannten Bezeichnungen sind Marken ihrer jeweiligen
+  Inhaber und werden ausschließlich beschreibend verwendet. Es besteht keine
+  Verbindung, Partnerschaft oder Billigung.
 
-Ein erheblicher Teil der Geräteanbindungen wurde nie an echter Hardware
-erprobt, sondern nach Herstellerdokumentation erstellt. Welche das sind, steht
-in der README und in der Oberfläche an jedem Gerät. Registerbelegungen weichen
-in der Praxis regelmäßig ab — vor dem Produktivbetrieb die Live-Werte prüfen.
+  Wer Fremdschnittstellen nutzt (etwa die Tesla Fleet API), schließt dafür ein
+  eigenes Nutzungsverhältnis mit dem Anbieter. Die Software enthält keine
+  Zugangsdaten.
 
-6. FREMDKOMPONENTEN
+SCHLUSS
 
-Die Software nutzt Fremdkomponenten, die ihren eigenen Lizenzen unterliegen.
-Diese Bedingungen ändern daran nichts. Einzelheiten in der Datei NOTICE.
-
-7. MARKEN UND FREMDSCHNITTSTELLEN
-
-Tesla, Sungrow, my-PV, Fronius, SMA, Huawei, Shelly, go-e, KEBA, Tibber,
-aWATTar und alle weiteren genannten Bezeichnungen sind Marken ihrer jeweiligen
-Inhaber. Sie werden ausschließlich beschreibend verwendet, um anzugeben, mit
-welchen Geräten und Diensten die Software zusammenarbeitet. Es besteht keine
-Verbindung zu, Partnerschaft mit oder Billigung durch diese Unternehmen.
-
-Wer Schnittstellen dieser Anbieter nutzt (etwa die Tesla Fleet API), schließt
-dafür ein eigenes Nutzungsverhältnis mit dem jeweiligen Anbieter und ist an
-dessen Bedingungen gebunden. Zugangsdaten und Token bringt die betreibende
-Person selbst mit; die Software enthält keine.
-
-8. SCHLUSSBESTIMMUNGEN
-
-Es gilt deutsches Recht unter Ausschluss des UN-Kaufrechts. Sollte eine
-Bestimmung unwirksam sein, bleibt der übrige Inhalt wirksam.
-
-Anfragen zu abweichender Nutzung, kommerzieller Lizenzierung oder Veränderung:
-über das GitHub-Projekt.
+  Es gilt deutsches Recht. Ist eine Bestimmung unwirksam, bleibt der Rest
+  wirksam. Anfragen zu abweichender Nutzung: über das GitHub-Projekt.
 
 ================================================================================
 ENGLISH (informational translation)
 ================================================================================
 
-1. SUBJECT
-
 These terms cover the software "MinePower" including source code, Docker
-images, documentation, artwork and name marks (together, "the Software"). The
-source is publicly viewable, but the Software is not Open Source as defined by
-the Open Source Definition: no rights to modify or redistribute are granted.
+images, documentation and artwork. The source is publicly viewable, but
+MinePower is not Open Source as defined by the Open Source Definition.
 
-2. PERMITTED
+PERMITTED
 
-Without separate consent you may:
+  - Downloading, viewing and studying.
+  - Forking, copying and modifying for your own purposes.
+  - Running it on your own hardware or infrastructure — private or for your
+    own business, unmodified or with your own changes, including from the
+    official Docker image.
+  - Your own configuration, settings and data.
 
-   a) download, view and study the Software;
-   b) run it unmodified on your own hardware or infrastructure — private or
-      for your own business operations;
-   c) run it unmodified from the official Docker image;
-   d) create and use your own configuration files, settings and data.
-      Configuration is not modification within the meaning of section 3.
+NOT PERMITTED (without prior written consent)
 
-3. NOT PERMITTED
+  - Passing it on to third parties — original or modified. This includes
+    publication, sale, rental and sublicensing.
+  - Providing it to third parties as a service (hosting, SaaS).
+  - Removing or altering copyright and license notices.
+  - Using the name "MinePower" for your own offerings.
 
-Without prior written consent of the copyright holder you may not:
+  Platform proviso: where a platform's terms mandate certain acts — such as
+  forking public repositories — those terms prevail. No further rights are
+  granted thereby.
 
-   a) modify, translate, adapt, decompile or create derivative works;
-   b) redistribute, publish, rent, lend, sell or sublicense the Software or
-      parts of it;
-   c) provide the Software to third parties as a service (hosting, SaaS,
-      managed service);
-   d) remove or alter copyright, license or attribution notices;
-   e) use the name "MinePower" or the MinePower mark for your own offerings.
+FEEDBACK
 
-   Platform note: where the Software is made available through a platform whose
-   terms mandate certain acts (such as creating a copy within that platform),
-   those terms prevail to that extent. No further rights are granted thereby.
+  Expressly welcome. By submitting feedback you grant the copyright holder the
+  right to use it free of charge and without attribution. Please do not
+  include credentials or tokens.
 
-4. FEEDBACK
+WARRANTY AND LIABILITY
 
-Feedback is expressly welcome — bug reports, measurements, diagnostic reports,
-suggestions. By submitting feedback you grant the copyright holder a free,
-perpetual and worldwide right to use it without compensation or attribution.
-There is no obligation to act on it.
+  The software is provided without warranty of any kind. It controls
+  electrical loads; use is at your own risk and installation belongs in the
+  hands of qualified personnel. Liability only for intent, gross negligence,
+  and where mandatory by law.
 
-Please do not include credentials, tokens or personal data. The built-in
-diagnostic report redacts fields declared as passwords automatically, but
-cannot know every field — please review before sending.
+  Most device integrations have never run against real hardware; they were
+  written from vendor documentation. Which ones is stated in the README and in
+  the user interface at each device.
 
-5. WARRANTY AND LIABILITY
+THIRD-PARTY COMPONENTS
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, INCLUDING
-WITHOUT LIMITATION MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, OR
-ABSENCE OF DEFECTS.
+  Governed by their own licenses. Details in the NOTICE file.
 
-The Software controls electrical loads. Use is at your own risk. Installation
-and protection of electrical components belongs in the hands of qualified
-personnel; applicable standards and grid operator requirements must be
-observed. The copyright holder is not liable for property, financial or
-consequential damages arising from its use — except in cases of intent, gross
-negligence, or where liability is mandatory by law.
+TRADEMARKS AND THIRD-PARTY INTERFACES
 
-A substantial share of the device integrations has never been exercised against
-real hardware; they were written from vendor documentation. Which ones is
-stated in the README and in the user interface at each device. Register maps
-regularly deviate in practice — verify the live values before productive use.
+  Tesla, Sungrow, my-PV, Fronius, SMA, Huawei, Shelly, go-e, Tibber, aWATTar
+  and all other names mentioned are trademarks of their respective owners,
+  used purely descriptively. No affiliation, partnership or endorsement.
 
-6. THIRD-PARTY COMPONENTS
+  Anyone using third-party interfaces (such as the Tesla Fleet API) enters
+  into their own relationship with that provider. The software contains no
+  credentials.
 
-The Software uses third-party components under their own licenses. These terms
-do not change that. See the NOTICE file for details.
+FINAL
 
-7. TRADEMARKS AND THIRD-PARTY INTERFACES
-
-Tesla, Sungrow, my-PV, Fronius, SMA, Huawei, Shelly, go-e, KEBA, Tibber,
-aWATTar and all other names mentioned are trademarks of their respective
-owners. They are used purely descriptively to indicate which devices and
-services the Software interoperates with. There is no affiliation with,
-partnership with, or endorsement by these companies.
-
-Anyone using those providers' interfaces (such as the Tesla Fleet API) enters
-into their own relationship with that provider and is bound by its terms.
-Credentials and tokens are supplied by the operator; the Software contains
-none.
-
-8. FINAL PROVISIONS
-
-German law applies, excluding the UN Convention on Contracts for the
-International Sale of Goods. If any provision is invalid, the remainder stays
-in force.
-
-Enquiries regarding different use, commercial licensing or modification: via
-the GitHub project.
+  German law applies. If any provision is invalid, the remainder stays in
+  force. Enquiries regarding different use: via the GitHub project.

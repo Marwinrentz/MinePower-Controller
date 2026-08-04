@@ -26,9 +26,9 @@ werden über eine Plugin-Architektur angebunden; ein neuer Treiber ist eine
 einzelne Python-Datei ohne Änderungen am Kern.
 
 > **Zum Lizenzmodell.** Der Quelltext ist einsehbar, MinePower ist aber nicht
-> Open Source: Herunterladen und unverändert Betreiben ist erlaubt, Verändern
-> und Weitergeben nicht. Rückmeldungen sind ausdrücklich erwünscht — siehe
-> [Lizenz und Rechtliches](#lizenz-und-rechtliches).
+> Open Source: Forken, Verändern und Betreiben für eigene Zwecke ist erlaubt,
+> die Weitergabe an Dritte nicht. Rückmeldungen sind ausdrücklich erwünscht —
+> siehe [Lizenz und Rechtliches](#lizenz-und-rechtliches).
 
 ## Inhalt
 
@@ -272,9 +272,8 @@ Einzelheiten unter [docs/headless.md](docs/headless.md).
 
 ## Entwicklung
 
-Änderungen am Quelltext sind nur mit vorheriger Zustimmung gestattet (siehe
-[Lizenz](LICENSE)). Die folgenden Angaben dienen dem Verständnis des Aufbaus
-und dem Nachvollziehen von Fehlerberichten.
+Eigene Änderungen für den Eigenbedarf sind erlaubt; nur die Weitergabe ist es
+nicht (siehe [Lizenz](LICENSE)).
 
 ```bash
 # Backend (Python 3.12)
@@ -332,12 +331,12 @@ Copyright © 2026 Marwin Rentz. Alle Rechte vorbehalten.
 
 Der Quelltext ist einsehbar, MinePower ist aber **nicht Open Source**:
 
-- **Erlaubt:** Herunterladen, Einsehen und unverändertes Betreiben auf eigener
-  Hardware — privat wie im eigenen Betrieb, auch aus dem offiziellen
-  Docker-Image. Eigene Konfiguration und Einstellungen gelten nicht als
-  Veränderung.
-- **Nicht erlaubt:** Verändern, abgeleitete Werke erstellen, Weitergeben,
-  Verkaufen, Unterlizenzieren oder Dritten als Dienstleistung bereitstellen.
+- **Erlaubt:** Herunterladen, Forken, Verändern und Betreiben für eigene
+  Zwecke — privat wie im eigenen Gewerbe, auch aus dem offiziellen
+  Docker-Image.
+- **Nicht erlaubt:** Weitergabe an Dritte, im Original wie verändert. Also
+  Veröffentlichen, Verkaufen, Vermieten, Unterlizenzieren oder als
+  Dienstleistung bereitstellen.
 
 Vollständiger Text: [LICENSE](LICENSE). Fremdkomponenten und ihre Lizenzen:
 [NOTICE](NOTICE).
@@ -381,9 +380,9 @@ are integrated through a plugin architecture; a new driver is a single Python
 file with no changes to the core.
 
 > **On licensing.** The source is publicly viewable, but MinePower is **not
-> Open Source**: downloading and running it unmodified is permitted, modifying
-> and redistributing it is not. Feedback is expressly welcome — see
-> [License and legal](#license-and-legal).
+> Open Source**: forking, modifying and running it for your own purposes is
+> permitted, passing it on to third parties is not. Feedback is expressly
+> welcome — see [License and legal](#license-and-legal).
 
 ## Contents
 
@@ -622,9 +621,8 @@ Details in [docs/headless.md](docs/headless.md).
 
 ## Development
 
-Modifying the source requires prior consent (see [LICENSE](LICENSE)). The
-notes below are provided to explain the structure and to make bug reports
-easier to follow.
+Your own changes for your own use are permitted; only passing them on is not
+(see [LICENSE](LICENSE)).
 
 ```bash
 # Backend (Python 3.12)
@@ -682,12 +680,12 @@ Copyright © 2026 Marwin Rentz. All rights reserved.
 
 The source is publicly viewable, but MinePower is **not Open Source**:
 
-- **Permitted:** downloading, viewing, and running it unmodified on your own
-  hardware — private or for your own business operations, including from the
-  official Docker image. Your own configuration and settings do not count as
-  modification.
-- **Not permitted:** modifying, creating derivative works, redistributing,
-  selling, sublicensing, or providing it to third parties as a service.
+- **Permitted:** downloading, forking, modifying and running it for your own
+  purposes — private or for your own business, including from the official
+  Docker image.
+- **Not permitted:** passing it on to third parties, original or modified.
+  That is: publishing, selling, renting, sublicensing, or providing it as a
+  service.
 
 Full text: [LICENSE](LICENSE). Third-party components and their licenses:
 [NOTICE](NOTICE).
