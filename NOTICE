@@ -101,10 +101,41 @@ the operator.
   TeslaBleHttpProxy          Eigenständiges Fremdprojekt, das die betreibende
                              Person selbst betreibt. MinePower spricht nur
                              dessen lokale HTTP-Schnittstelle an.
-  Tibber API                 developer.tibber.com
-  aWATTar API                Marktdaten (EPEX Spot)
-  forecast.solar             Ertragsprognose
+  Tibber API                 developer.tibber.com — persönliches Zugriffstoken.
+  aWATTar API                Marktdaten (EPEX Spot). Kostenlos nach dem
+                             Fair-Use-Prinzip, 100 Abfragen pro Tag.
+  forecast.solar             Ertragsprognose. Der Tarif „Public" ist dauerhaft
+                             kostenlos und ohne Schlüssel nutzbar, begrenzt
+                             über ein gleitendes 60-Minuten-Fenster.
   ntfy / Telegram            Benachrichtigungen, optional
+
+  MinePower bleibt in beiden Fällen deutlich innerhalb dieser Grenzen: Der
+  Tarifdienst fragt alle 30 Minuten ab (48 Abfragen pro Tag gegenüber 100
+  erlaubten), die Prognose stündlich (24 pro Tag). Beide Abstände sind so
+  gewählt — Stundenpreise ändern sich nicht häufiger, und eine Prognose
+  ebenfalls nicht.
+
+Protokolle und Standards / Protocols and standards
+
+  Modbus                     Offen veröffentlichte Spezifikation der Modbus
+                             Organization. Keine Lizenz erforderlich.
+  SunSpec                    Offener Standard der SunSpec Alliance. MinePower
+                             ist nicht SunSpec-zertifiziert und behauptet das
+                             nirgends.
+  OCPP 1.6J                  Spezifikation der Open Charge Alliance. Die OCA
+                             betreibt ein eigenes Zertifizierungsprogramm;
+                             MinePower hat es nicht durchlaufen und tritt
+                             deshalb nicht als OCPP-zertifiziert oder
+                             OCPP-konform auf, sondern beschreibt lediglich,
+                             dass die für Überschussladen nötige Teilmenge
+                             umgesetzt ist.
+
+  Registerbelegungen der Modbus-Treiber stammen aus Herstellerdokumentation und
+  Community-Quellen. Übernommen wurden ausschließlich Adressen, Skalierungen
+  und Datentypen — also die Schnittstelle selbst, kein Dokumentationstext.
+  Register maps come from vendor documentation and community sources. Only
+  addresses, scalings and data types were adopted — the interface itself, not
+  any documentation text.
 
 Marken: Tesla, Sungrow, my-PV, Fronius, SMA, Huawei, Shelly, go-e, KEBA,
 Tibber, aWATTar und weitere genannte Bezeichnungen sind Marken ihrer jeweiligen
