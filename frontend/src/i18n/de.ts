@@ -63,6 +63,8 @@ export const de = {
     history: "Verlauf",
     soc: "Ladestand",
     price: "Strompreis",
+    priceCheap: "günstig",
+    priceNormal: "normal",
     paused: "Regelung pausiert",
     pause: "Pausieren",
     resume: "Fortsetzen",

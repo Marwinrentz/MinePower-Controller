@@ -248,6 +248,21 @@ export function Wall() {
               </span>
               <span className="wall-kpi-label">{t("dash.battery")}</span>
             </div>
+            {/* Nur bei konfiguriertem dynamischem Tarif – sonst stünde hier
+                dauerhaft ein Strich und die Kachel wäre verschenkter Platz. */}
+            {snapshot.price_ct != null && (
+              <div className="wall-kpi">
+                <span className="wall-kpi-value num"
+                      style={{ color: snapshot.price_cheap ? "var(--c-pv)" : "var(--text-dim)" }}>
+                  {snapshot.price_ct.toFixed(1)} ct
+                </span>
+                <span className="wall-kpi-label">
+                  {t("dash.price")}
+                  {snapshot.price_cheap != null &&
+                    ` · ${t(snapshot.price_cheap ? "dash.priceCheap" : "dash.priceNormal")}`}
+                </span>
+              </div>
+            )}
           </section>
         </div>
 

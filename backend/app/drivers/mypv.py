@@ -26,7 +26,15 @@ genau das und meldet es im Klartext, statt stumm ins Leere zu regeln.
 """
 from __future__ import annotations
 
-from .base import ConfigField, DeviceCategory, DriverMeta, FieldType, WaterHeaterData, WaterHeaterDriver
+from .base import (
+    ConfigField,
+    DeviceCategory,
+    DriverMeta,
+    FieldType,
+    Maturity,
+    WaterHeaterData,
+    WaterHeaterDriver,
+)
 from .http_util import HttpDevice
 from .modbus_util import ModbusConnection, s16, u16
 from .registry import register
@@ -70,6 +78,8 @@ class MyPvAcThor(WaterHeaterDriver):
                     "Steuerweg wählbar (HTTP oder Modbus TCP). Das Gerät muss in seinem Setup "
                     "auf den passenden externen Steuerungstyp gestellt sein.",
         capabilities={"modulation", "fine_modulation", "temperature", "write_test"},
+        maturity=Maturity.STABLE,
+        notes="An einem AC•THOR über Modbus TCP im Dauerbetrieb erprobt.",
         fields=[
             ConfigField(key="host", label="IP-Adresse", placeholder="192.168.1.70",
                         help="IP des my-PV-Geräts im lokalen Netz."),

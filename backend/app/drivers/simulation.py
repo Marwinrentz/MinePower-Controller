@@ -22,6 +22,7 @@ from .base import (
     FieldType,
     InverterData,
     InverterDriver,
+    Maturity,
     MeterData,
     MeterDriver,
     WallboxData,
@@ -172,6 +173,7 @@ class SimInverter(InverterDriver):
         id="sim_inverter",
         name="Simulation: PV-Wechselrichter",
         category=DeviceCategory.INVERTER,
+        maturity=Maturity.STABLE,
         description="Simulierter Wechselrichter mit realistischer Tageskurve und Wetter-Rauschen.",
         fields=[
             ConfigField(key="kwp", label="Anlagengröße (kWp)", type=FieldType.NUMBER, default=9.8,
@@ -193,6 +195,7 @@ class SimMeter(MeterDriver):
         id="sim_meter",
         name="Simulation: Netzzähler",
         category=DeviceCategory.METER,
+        maturity=Maturity.STABLE,
         description="Simulierter Zähler am Hausanschluss – ergibt sich aus der Energiebilanz der Simulation.",
     )
 
@@ -208,6 +211,7 @@ class SimWallbox(WallboxDriver):
         id="sim_wallbox",
         name="Simulation: Wallbox + E-Auto",
         category=DeviceCategory.WALLBOX,
+        maturity=Maturity.STABLE,
         description="Simulierte 11-kW-Wallbox mit verbundenem Fahrzeug (SoC-Modell, Phasenumschaltung).",
         capabilities={"phase_switch", "soc", "charge_limit"},
         fields=[
@@ -271,6 +275,7 @@ class SimWaterHeater(WaterHeaterDriver):
         id="sim_water_heater",
         name="Simulation: Heizstab / Warmwasser",
         category=DeviceCategory.WATER_HEATER,
+        maturity=Maturity.STABLE,
         description="Simulierter modulierender Heizstab (0–3 kW) mit 180-l-Speicher-Temperaturmodell.",
         capabilities={"modulation", "temperature"},
         fields=[
@@ -299,6 +304,7 @@ class SimBattery(BatteryDriver):
         id="sim_battery",
         name="Simulation: Hausbatterie",
         category=DeviceCategory.BATTERY,
+        maturity=Maturity.STABLE,
         description="Simulierter Speicher mit Eigenverbrauchs-Logik, steuerbar (Zwangsladen/-entladen, Reserve).",
         capabilities={"battery_control"},
         fields=[

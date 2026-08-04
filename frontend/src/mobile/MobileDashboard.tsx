@@ -365,6 +365,27 @@ export function MobileDashboard() {
             </span>
             <span className="m-stat-lab">{t("dash.battery")}</span>
           </div>
+
+          {/* Dynamischer Tarif: nur sichtbar, wenn wirklich einer konfiguriert
+              ist. Über die ganze Breite, weil die Einordnung (günstig/teuer)
+              wichtiger ist als die nackte Zahl. */}
+          {snapshot.price_ct != null && (
+            <div className="m-card m-stat" style={{ gridColumn: "span 2" }}>
+              <span className="row" style={{ alignItems: "baseline", gap: 8 }}>
+                <span className="m-stat-val" style={{
+                  color: snapshot.price_cheap ? "var(--c-pv)" : "var(--m-text)",
+                }}>
+                  {snapshot.price_ct.toFixed(1)} ct
+                </span>
+                {snapshot.price_cheap != null && (
+                  <span className={`m-price-tag ${snapshot.price_cheap ? "cheap" : ""}`}>
+                    {t(snapshot.price_cheap ? "dash.priceCheap" : "dash.priceNormal")}
+                  </span>
+                )}
+              </span>
+              <span className="m-stat-lab">{t("dash.price")}</span>
+            </div>
+          )}
         </div>
       </div>
 

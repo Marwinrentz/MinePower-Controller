@@ -1,10 +1,23 @@
+<img src="frontend/public/logo.svg" width="88" alt="MinePower">
+
 # MinePower
 
+[![License](https://img.shields.io/badge/license-proprietär%20%2F%20proprietary-lightgrey)](LICENSE)
+[![Docker Image](https://img.shields.io/docker/v/marwinrentz1/minepower?sort=semver&label=docker%20hub)](https://hub.docker.com/r/marwinrentz1/minepower)
+[![Build](https://github.com/Marwinrentz/MinePower-Controller/actions/workflows/docker.yml/badge.svg)](https://github.com/Marwinrentz/MinePower-Controller/actions/workflows/docker.yml)
+
+**[Deutsch](#deutsch) · [English](#english)**
+
+---
+
+<a name="deutsch"></a>
+
+# Deutsch
+
 Überschussbasierte Ladesteuerung für E-Auto, Warmwasser und Hausbatterie.
-MinePower liest die Netzeinspeisung und die verfügbaren PV-Überschüsse aus
-und verteilt sie nach einer frei sortierbaren Prioritätskette auf die
-steuerbaren Verbraucher im Haus – mit dem Ziel, die Einspeisung ins
-öffentliche Netz möglichst nahe an 0 W zu halten, ohne Komfort oder
+MinePower liest die Netzleistung und verteilt den verfügbaren PV-Überschuss
+nach einer frei sortierbaren Prioritätskette auf die steuerbaren Verbraucher
+im Haus. Ziel ist eine Einspeisung möglichst nahe an 0 W, ohne Komfort oder
 Anlagensicherheit zu opfern.
 
 Die Anwendung läuft als Docker-Stack (FastAPI-Backend, React-Frontend,
@@ -12,9 +25,10 @@ TimescaleDB), braucht keine Cloud-Anbindung und keinen Smart-Home-Hub. Geräte
 werden über eine Plugin-Architektur angebunden; ein neuer Treiber ist eine
 einzelne Python-Datei ohne Änderungen am Kern.
 
-[![License: proprietary](https://img.shields.io/badge/license-proprietary-lightgrey)](LICENSE)
-[![Docker Image](https://img.shields.io/docker/v/marwinrentz1/minepower?sort=semver&label=docker%20hub)](https://hub.docker.com/r/marwinrentz1/minepower)
-[![Build](https://github.com/Marwinrentz/MinePower-Controller/actions/workflows/docker.yml/badge.svg)](https://github.com/Marwinrentz/MinePower-Controller/actions/workflows/docker.yml)
+> **Zum Lizenzmodell.** Der Quelltext ist einsehbar, MinePower ist aber nicht
+> Open Source: Herunterladen und unverändert Betreiben ist erlaubt, Verändern
+> und Weitergeben nicht. Rückmeldungen sind ausdrücklich erwünscht — siehe
+> [Lizenz und Rechtliches](#lizenz-und-rechtliches).
 
 ## Inhalt
 
@@ -26,133 +40,119 @@ einzelne Python-Datei ohne Änderungen am Kern.
 - [Entwicklung](#entwicklung)
 - [Sicherheit](#sicherheit)
 - [Bekannte Einschränkungen](#bekannte-einschränkungen)
-- [Lizenz](#lizenz)
+- [Lizenz und Rechtliches](#lizenz-und-rechtliches)
 
 ## Funktionsweise des Regelkreises
 
-Der Regelkreis läuft alle zwei bis fünf Sekunden (konfigurierbar). Jeder
-Zyklus liest die Messwerte aller aktivierten Geräte parallel ein, berechnet
-daraus ein Budget und verteilt es entlang der Prioritätskette:
+Der Regelkreis läuft in einem festen Takt und rechnet in jedem Durchgang aus,
+wie viel Leistung den steuerbaren Verbrauchern insgesamt zur Verfügung steht:
 
 ```
 budget = Σ(Leistung aller steuerbaren Lasten) − Netzleistung (geglättet) − Sollwert
 ```
 
-Innerhalb eines Totbands um den Sollwert wird nicht nachgeregelt, um
-Flattern durch Messrauschen zu vermeiden. Das Totband ist adaptiv: Bei
-stabiler Erzeugung wird enger geregelt, bei starkem Wolkenwechsel weiter,
-um unnötige Start-/Stopp-Zyklen zu vermeiden.
+Innerhalb eines Totbands um den Sollwert wird nicht nachgeregelt, um Flattern
+durch Messrauschen zu vermeiden. Das Totband ist adaptiv: Bei stabiler
+Erzeugung wird enger geregelt, bei starkem Wolkenwechsel weiter, um unnötige
+Start-/Stopp-Zyklen zu vermeiden.
 
-Der Hausspeicher hat dabei Vorrang vor allen steuerbaren Lasten. Weder
-seine Lade- noch seine Entladeleistung zählt als Überschuss:
+### Der Hausspeicher hat Vorrang
+
+Weder die Lade- noch die Entladeleistung des Speichers zählt als Überschuss:
 
 ```
 Topf für Auto und Warmwasser = budget − |Batterieleistung|
 ```
 
-Das ist wichtiger, als es aussieht. Die Budgetformel kennt nur den
-Netzpunkt, und dort sieht ein Speicher, der gerade einspringt, wie ein
-ausgeglichenes Haus aus – ohne diesen Abzug würden Auto und Warmwasser den
-Speicher leerziehen, während die Anzeige Überschuss meldet. Umgekehrt gilt:
-Was der Speicher gerade lädt, gehört ihm und wird den Lasten nicht
-angeboten. Den Haushalt versorgt die Batterie davon unberührt weiter –
-geschützt wird nur gegen die *steuerbaren* Lasten.
+Das ist wichtiger, als es aussieht. Die Budgetformel kennt nur den Netzpunkt,
+und dort sieht ein Speicher, der gerade einspringt, wie ein ausgeglichenes
+Haus aus — ohne diesen Abzug würden Auto und Warmwasser den Speicher
+leerziehen, während die Anzeige Überschuss meldet. Umgekehrt gilt: Was der
+Speicher gerade lädt, gehört ihm und wird den Lasten nicht angeboten. Den
+Haushalt versorgt die Batterie davon unberührt weiter — geschützt wird nur
+gegen die *steuerbaren* Lasten.
 
-Batterien werden dabei standardmäßig nicht aktiv angesteuert.
-Hybrid-Wechselrichter (Sungrow SH, Fronius GEN24 Plus, SMA Sunny Boy
-Storage) regeln ihre Batterie bereits selbst auf Nulleinspeisung; MinePower
-liest Ladestand und Leistung nur mit. Aktives Zwangsladen oder eine
-Reserve-SoC-Vorgabe bleiben eine bewusst zu aktivierende Zusatzfunktion für
-Sonderfälle.
+Batterien werden dabei nicht aktiv angesteuert. Hybrid-Wechselrichter regeln
+ihre Batterie bereits selbst auf Nulleinspeisung; MinePower liest Ladestand
+und Leistung nur mit. Aktives Zwangsladen oder eine Reserve-SoC-Vorgabe
+bleiben eine bewusst zu aktivierende Zusatzfunktion für Sonderfälle.
+
+### Ampere-Regelung nach Messung
 
 Der Sollstrom einer Wallbox wird nicht mit dem Nennwert von 230 V je Phase
 gerechnet, sondern mit dem Verhältnis, das sich aus Messung und gesetztem
-Ladestrom tatsächlich ergibt. Reale Netzspannung, Phasenzahl und
-Ladeverluste stecken damit im Umrechnungsfaktor – ein starr gerechneter
-Sollstrom liegt sonst systematisch daneben und erzeugt genau das, was
-vermieden werden soll: Einspeisung oder Bezug aus dem Speicher. Erhöht wird
-in begrenzten Schritten, weil ein Fahrzeug einem neuen Sollstrom erst nach
-einigen Sekunden folgt; gesenkt wird ohne Begrenzung.
+Ladestrom tatsächlich ergibt. Reale Netzspannung, Phasenzahl und Ladeverluste
+stecken damit im Umrechnungsfaktor. Ein starr gerechneter Sollstrom liegt
+sonst systematisch daneben und erzeugt genau das, was vermieden werden soll:
+Einspeisung oder Bezug aus dem Speicher. Erhöht wird in begrenzten Schritten,
+weil ein Fahrzeug einem neuen Sollstrom erst nach einigen Sekunden folgt;
+gesenkt wird ohne Begrenzung.
 
-Drei Mechanismen sollen verhindern, dass Überschuss ungenutzt ins Netz
-geht:
+### Drei Mechanismen gegen verschenkten Strom
 
 **Lückenfüller.** Eine Wallbox kann nur ganze Ampere-Stufen laden; der
-Regler rundet dabei grundsätzlich ab, weil Aufrunden Netzbezug erzeugen
-würde. Der so entstehende Rest – etwa 180 W, während die nächste Last
-mindestens 6 A (1380 W) benötigt – wird nicht verworfen, sondern an eine
-stufenlos modulierbare Last (in der Regel Warmwasser) weitergereicht,
-unabhängig von deren Position in der Prioritätskette.
+abgerundete Rest ginge sonst ins Netz. Kann ihn eine stufenlos modulierbare
+Last aufnehmen — etwa ein my-PV-Heizstab —, bekommt sie ihn, unabhängig von
+ihrem Platz in der Prioritätskette. Die Alternative wäre nicht „später",
+sondern „verschenkt".
 
-**Solarprognose.** Die Anbindung an forecast.solar fließt aktiv in
-Entscheidungen ein statt nur zur Anzeige zu dienen. Bricht die Erzeugung
-kurzzeitig ein, während die Prognose für die nächste halbe Stunde weiter
-hoch ist, wird eine laufende Ladung gehalten statt beendet – ein Neustart
-kostet durch die Start-Hysterese mehr Überschuss, als das Halten an
-Netzstrom zieht. Bei der Zielladung mit Deadline verschiebt sich die
-Sicherheitsreserve vorausschauend, wenn absehbar ist, dass die Sonne bis
-zum gewünschten Zeitpunkt nicht ausreicht.
+**Ehrliche Quantisierung.** Der Regler rundet den Ladestrom immer ab, nie auf,
+und meldet die tatsächlich abgenommene Leistung zurück. Nur so weiß der
+Regelkreis, wie viel wirklich übrig bleibt.
 
-**Kennzahl „verschenkter Solarstrom“.** Einspeisung oberhalb des
-Netz-Sollwerts, die keine steuerbare Last aufgenommen hat, wird als eigene
-Messgröße geführt – live im Dashboard mit Klartext-Begründung, warum der
-Überschuss liegen blieb, und historisch in der Statistik (kWh, Anteil an
-der Erzeugung, Gegenwert in Euro).
+**Aktive Prognose.** Bei einem kurzen Wolkendurchzug mit absehbarer Erholung
+wird eine laufende Ladung gehalten statt abgeschaltet — ein Neustart kostet
+über die Hysterese mehr Überschuss als das Halten. Reicht die vorhergesagte
+Sonne bis zur Deadline einer Zielladung nicht, beginnt die Netzladung früher.
 
-Fällt die Netzmessung aus oder ist die Regelung manuell pausiert, werden
-alle steuerbaren Lasten sicher gestoppt. Dieses Verhalten hat Vorrang vor
-allen genannten Optimierungen und wird durch keine davon aufgeweicht.
+Wie gut das gelingt, ist messbar: Jeder Takt erfasst, wie viel Überschuss über
+dem Netz-Sollwert eingespeist wurde, ohne dass eine Last ihn aufgenommen hat —
+mit Begründung im Klartext.
 
 ## Unterstützte Geräte
 
-Jeder Treiber ist mit einem Reifegrad gekennzeichnet, der im Setup-
-Assistenten als Hinweis erscheint:
+Die letzte Spalte ist die wichtigste. **Nur vier Anbindungen liefen je gegen
+echte Hardware.** Alle übrigen wurden nach Herstellerdokumentation und
+Community-Quellen geschrieben und sind nie an einem physischen Gerät gelaufen.
+Registerbelegungen weichen in der Praxis regelmäßig ab — bei Offsets,
+Skalierung und Vorzeichen. Solche Treiber sind in der Oberfläche als
+*Experimentell* gekennzeichnet und sollten vor dem Dauerbetrieb über
+„Verbindung testen" mit den tatsächlich gelesenen Werten abgeglichen werden.
 
-- **Stabil** – Registerkarte bzw. API an realer Hardware verifiziert.
-- **Beta** – Grundfunktionen geprüft, einzelne Modell- oder
-  Firmware-Varianten können abweichen.
-- **Experimentell** – Registerbelegung aus Herstellerdokumentation oder
-  Community-Quellen, nicht an Hardware verifiziert.
-
-Unabhängig vom Reifegrad meldet jeder Treiber unplausible Werte und nicht
-angenommene Schreibbefehle im Klartext, statt sie stillschweigend zu
-verarbeiten.
-
-| Gerät | Kategorie | Protokoll | Reifegrad |
+| Gerät | Kategorie | Protokoll | An echter Hardware erprobt |
 |---|---|---|---|
-| Sungrow SG-Serie | Wechselrichter | Modbus TCP (WiNet-S) | Stabil |
-| Sungrow SH-Serie | Hybrid-Wechselrichter, inkl. Batterie-Monitoring | Modbus TCP | Stabil |
-| Sungrow DTSU666 | Netzzähler | Modbus TCP (über WR) | Stabil |
-| Sungrow SBR/SBH | Batterie, optional aktiv steuerbar | Modbus TCP | Beta |
-| Sungrow AC007/AC011E | Wallbox | Modbus TCP | Beta |
-| Fronius GEN24 (Plus) | Wechselrichter, inkl. Batterie-Monitoring | Solar API | Stabil |
-| Fronius Smart Meter | Netzzähler | Solar API | Stabil |
-| SMA Sunny Boy / Tripower | Wechselrichter, inkl. Speicher-Monitoring | Modbus TCP | Stabil |
-| SMA Energy Meter / Home Manager | Netzzähler | Modbus TCP | Beta |
-| Kostal Plenticore, GoodWe ET/EH, SolarEdge, Delta, SMA Tripower X | Wechselrichter | SunSpec / Modbus TCP | Beta |
-| SunSpec-Zähler | Netzzähler | SunSpec / Modbus TCP | Beta |
-| Huawei SUN2000 + LUNA2000 | Hybrid-Wechselrichter | Modbus TCP | Experimentell |
-| Generischer Modbus-Zähler (z. B. Eastron SDM630) | Netzzähler | Modbus TCP, frei konfigurierbar | Stabil |
-| Shelly 3EM / Pro 3EM | Netzzähler | HTTP | Stabil |
-| Shelly-Relais | Warmwasser (Ein/Aus) | HTTP | Stabil |
-| my-PV AC·THOR / ELWA-E / ELWA 2 | Warmwasser, stufenlos modulierend | HTTP oder Modbus TCP | Stabil |
-| go-e Charger | Wallbox | HTTP v2 | Stabil |
-| Tesla (beliebiges Modell) | Fahrzeug als Ladepunkt | BLE-Proxy oder Fleet-API | Stabil |
-| Generische Wallbox | Wallbox | OCPP 1.6J | Beta |
+| Sungrow SH-Serie | Hybrid-Wechselrichter, inkl. Batterie-Monitoring | Modbus TCP | **Ja** — SH-RT, Dauerbetrieb |
+| Sungrow DTSU666 (am SH) | Netzzähler | Modbus TCP über WR | **Ja** — Dauerbetrieb |
+| my-PV AC·THOR / ELWA-E / ELWA 2 | Warmwasser, stufenlos modulierend | HTTP oder Modbus TCP | **Ja** — AC·THOR, Modbus TCP |
+| Tesla (beliebiges Modell) | Fahrzeug als Ladepunkt | BLE-Proxy oder Fleet-API | **Ja** — über BLE-Proxy |
+| Sungrow SG-Serie | Wechselrichter | Modbus TCP (WiNet-S) | Nein |
+| Sungrow DTSU666 (am SG) | Netzzähler | Modbus TCP über WR | Nein |
+| Sungrow SBR/SBH | Batterie, optional aktiv steuerbar | Modbus TCP | Nein |
+| Sungrow AC007/AC011E | Wallbox | Modbus TCP | Nein |
+| Fronius GEN24 (Plus) | Wechselrichter, inkl. Batterie-Monitoring | Solar API | Nein |
+| Fronius Smart Meter | Netzzähler | Solar API | Nein |
+| SMA Sunny Boy / Tripower | Wechselrichter, inkl. Speicher-Monitoring | Modbus TCP | Nein |
+| SMA Energy Meter / Home Manager | Netzzähler | Modbus TCP | Nein |
+| Kostal Plenticore, GoodWe ET/EH, SolarEdge, Delta, SMA Tripower X | Wechselrichter | SunSpec / Modbus TCP | Nein |
+| SunSpec-Zähler | Netzzähler | SunSpec / Modbus TCP | Nein |
+| Huawei SUN2000 + LUNA2000 | Hybrid-Wechselrichter | Modbus TCP | Nein |
+| Generischer Modbus-Zähler (z. B. Eastron SDM630) | Netzzähler | Modbus TCP, frei konfigurierbar | Nein |
+| Shelly 3EM / Pro 3EM | Netzzähler | HTTP | Nein |
+| Shelly-Relais | Warmwasser (Ein/Aus) | HTTP | Nein |
+| go-e Charger | Wallbox | HTTP v2 | Nein |
+| Generische Wallbox | Wallbox | OCPP 1.6J | Nein |
 
-Bei SunSpec fragt der Treiber das Gerät beim Verbinden nach seinem
-Registeraufbau ab, statt eine feste Registerkarte vorauszusetzen – das
-macht ihn unempfindlich gegen Firmware-Updates, auf Kosten etwas höherer
-Verbindungszeit beim ersten Scan.
+Zusätzlich gibt es simulierte Geräte für den Demo-Modus, mit denen sich die
+Oberfläche und der Regelkreis ohne jede Hardware ausprobieren lassen.
 
-Ein neuer Treiber erfordert keine Änderung am Regelkern; siehe
-[docs/adding-drivers.md](docs/adding-drivers.md).
+Erfahrungsberichte zu ungetesteten Geräten sind willkommen — ein
+Diagnosebericht aus der laufenden Anlage sagt mehr als jede Fehlerbeschreibung.
 
 ## Installation
 
-Voraussetzung ist Docker mit Compose-Plugin, amd64 oder arm64. Ein
-`.env`-File ist nicht erforderlich – das JWT-Secret wird beim ersten Start
-automatisch erzeugt und in der Datenbank persistiert.
+Voraussetzung ist Docker mit Compose-Plugin, amd64 oder arm64. Eine
+`.env`-Datei ist nicht erforderlich; das JWT-Secret wird beim ersten Start
+erzeugt und in der Datenbank persistiert.
 
 ```bash
 git clone https://github.com/Marwinrentz/MinePower-Controller.git minepower
@@ -161,21 +161,15 @@ docker compose up -d --build
 ```
 
 Danach `http://localhost:8080` öffnen. Beim ersten Zugriff wird das
-Administrator-Konto angelegt, anschließend führt der Setup-Assistent durch
-die Geräte-Einrichtung. Alternativ legt „Demo-Modus starten“ eine
-vollständig simulierte Anlage an, um die Oberfläche ohne Hardware
-kennenzulernen.
+Administrator-Konto angelegt, anschließend führt der Setup-Assistent durch die
+Geräte-Einrichtung. Alternativ legt „Demo-Modus starten" eine vollständig
+simulierte Anlage an.
 
-Ohne lokalen Build lässt sich stattdessen das veröffentlichte Image
-verwenden:
+Ohne lokalen Build lässt sich das veröffentlichte Image verwenden:
 
 ```bash
 docker pull marwinrentz1/minepower:latest
 ```
-
-Verfügbare Tags: `latest` sowie versionierte Releases (`2.0.0` und
-folgende). Eine fertige Compose-Datei für Unraid liegt unter
-[docs/unraid.md](docs/unraid.md).
 
 | Dienst | Port | Zweck |
 |---|---|---|
@@ -183,50 +177,47 @@ folgende). Eine fertige Compose-Datei für Unraid liegt unter
 | `db` | intern 5432 | TimescaleDB, Volume `db_data` |
 | `mqtt` (optional) | 1883 | `docker compose --profile mqtt up -d` |
 
-Für OCPP-Wallboxen zusätzlich den Treiber-Port freigeben (Standard 8887):
-`ports: ["8887:8887"]`. Die Wallbox wird dann auf
-`ws://<server-ip>:8887/<charge-point-id>` als Backend eingerichtet.
-
-Für produktive Installationen empfiehlt sich, `.env.example` nach `.env`
-zu kopieren und ein eigenes `POSTGRES_PASSWORD` zu setzen. Headless-
-Konfiguration über eine gemountete JSON-Datei ist unter
-[docs/headless.md](docs/headless.md) beschrieben.
+Eine fertige Compose-Datei für Unraid liegt unter [docs/unraid.md](docs/unraid.md).
 
 ## Tesla-Anbindung
 
 Tesla-Fahrzeuge werden direkt als Ladepunkt angesteuert, unabhängig von der
-verwendeten Wallbox. Zwei Anbindungswege stehen zur Wahl:
+verwendeten Wallbox. Zwei Wege stehen zur Wahl:
 
 - **BLE-Proxy (cloud-frei).** Voraussetzung ist ein bereits laufender
   [TeslaBleHttpProxy](https://github.com/wimaha/TeslaBleHttpProxy), etwa auf
-  einem Raspberry Pi in Bluetooth-Reichweite des Fahrzeugs. MinePower trägt
-  nur dessen Adresse und die Fahrzeug-VIN ein; die Schlüssel-Kopplung
-  erfolgt im Proxy selbst. Ein Referenz-Compose für den Proxy liegt unter
-  [examples/tesla-ble-proxy](examples/tesla-ble-proxy/docker-compose.yml)
-  und ist bewusst nicht Teil des Haupt-Stacks.
+  einem Raspberry Pi in Bluetooth-Reichweite. MinePower trägt nur dessen
+  Adresse und die Fahrzeug-VIN ein; die Schlüssel-Kopplung erfolgt im Proxy
+  selbst. Ein Referenz-Compose liegt unter
+  [examples/tesla-ble-proxy](examples/tesla-ble-proxy/docker-compose.yml) und
+  ist bewusst nicht Teil des Haupt-Stacks.
 - **Fleet-API (Cloud).** Erfordert ein OAuth-Token von Tesla, liefert dafür
   zuverlässig den Ladestand. Das Polling ist konservativ ausgelegt, um im
   Rate-Limit zu bleiben.
 
+In beiden Fällen bringt die betreibende Person die Zugangsdaten selbst mit;
+MinePower enthält keine. Wer die Fleet-API nutzt, geht damit ein eigenes
+Nutzungsverhältnis mit Tesla ein — siehe
+[Lizenz und Rechtliches](#lizenz-und-rechtliches).
+
 ## Betrieb
 
-**Aktualisieren:**
+**Aktualisieren**
 
 ```bash
 git pull
 docker compose up -d --build
 ```
 
-**Sichern.** Für die Konfiguration (Geräte, Einstellungen, Prioritäten)
-genügt der Export unter Einstellungen → Sicherung als JSON. Für ein
-vollständiges Backup inklusive Messwert-Historie:
+**Sichern.** Für die Konfiguration genügt der Export unter Einstellungen →
+Sicherung als JSON. Für ein vollständiges Backup inklusive Messwert-Historie:
 
 ```bash
 docker compose exec db pg_dump -U minepower -d minepower --no-owner --no-privileges > backup.sql
 ```
 
-**Wiederherstellen.** Konfigurations-JSON über die Oberfläche importieren,
-oder für ein vollständiges Restore:
+**Wiederherstellen.** Konfigurations-JSON über die Oberfläche importieren, oder
+für ein vollständiges Restore:
 
 ```bash
 docker compose up -d db
@@ -236,17 +227,54 @@ docker compose exec -T db psql -U minepower -d minepower -c "SELECT timescaledb_
 docker compose up -d app
 ```
 
-Die App zuletzt starten: Sie legt beim Start nur dann Standardwerte oder
-einen Demo-Zugang an, wenn die Datenbank leer ist.
+Die App zuletzt starten: Sie legt beim Start nur dann Standardwerte an, wenn
+die Datenbank leer ist.
 
 **Logs:** `docker compose logs -f app` (Log-Level über `LOG_LEVEL`).
 
-**Diagnose:** Die Seite Ereignisse → Diagnose zeigt Geräte-Rohwerte, die
-aktuelle Regelgüte (wirksames Totband, Wetterlage) und jede
-Regel-Entscheidung live. Ein Diagnosebericht (JSON) lässt sich dort
-zeitraumbezogen exportieren.
+**Diagnose.** Die Seite Ereignisse → Diagnose zeigt Geräte-Rohwerte, die
+aktuelle Regelgüte und jede Regel-Entscheidung live. Ein Diagnosebericht (JSON)
+lässt sich dort zeitraumbezogen exportieren.
+
+### Abweichende Aufbauten
+
+**Unraid.** Statt des benannten Volumes einen Bind-Mount auf den Cache-Pool
+verwenden — in `docker-compose.yml` beim Dienst `db`:
+
+```yaml
+    volumes:
+      - /mnt/cache/appdata/minepower-db:/var/lib/postgresql/data
+```
+
+**OCPP-Wallboxen.** Den Treiber-Port zusätzlich freigeben — beim Dienst `app`:
+
+```yaml
+    ports:
+      - "${HTTP_PORT:-8080}:8000"
+      - "8887:8887"
+```
+
+Die Wallbox wird dann auf `ws://<server-ip>:8887/<charge-point-id>` als
+Backend eingerichtet.
+
+**Headless-Konfiguration.** Eine JSON-Datei einhängen und `HEADLESS_CONFIG`
+setzen — beim Dienst `app`:
+
+```yaml
+    volumes:
+      - ./minepower.json:/config/minepower.json:ro
+```
+
+Einzelheiten unter [docs/headless.md](docs/headless.md).
+
+**Produktivbetrieb.** `.env.example` nach `.env` kopieren und ein eigenes
+`POSTGRES_PASSWORD` setzen.
 
 ## Entwicklung
+
+Änderungen am Quelltext sind nur mit vorheriger Zustimmung gestattet (siehe
+[Lizenz](LICENSE)). Die folgenden Angaben dienen dem Verständnis des Aufbaus
+und dem Nachvollziehen von Fehlerberichten.
 
 ```bash
 # Backend (Python 3.12)
@@ -262,9 +290,8 @@ npm run dev                         # Dev-Server mit Proxy auf localhost:8000
 ```
 
 Die Regelungslogik (`backend/app/core/regulation.py`) ist als reine,
-hardwareunabhängige Klassenhierarchie implementiert und vollständig über
-eine injizierte Uhr testbar. Neue Verhaltensweisen gehören dort und in die
-zugehörige Testdatei, nicht in den Control-Loop selbst.
+hardwareunabhängige Klassenhierarchie implementiert und über eine injizierte
+Uhr vollständig testbar — ohne Datenbank, ohne Netzwerk, ohne Wartezeit.
 
 Weiterführende Dokumentation:
 
@@ -275,34 +302,411 @@ Weiterführende Dokumentation:
 
 ## Sicherheit
 
-- Authentifizierung über JWT mit bcrypt-gehashten Passwörtern, Rollen
-  (Administrator, Nutzer, Nur-Lesen) werden bis in die API durchgesetzt,
+- Authentifizierung über JWT mit bcrypt-gehashten Passwörtern. Rollen
+  (Administrator, Nutzer, Nur-Lesen) werden bis in die API durchgesetzt, der
   Login ist rate-limitiert.
-- Ein einzelner Geräte-Timeout bringt den Regelkreis nicht zum Absturz.
-  Nach drei aufeinanderfolgenden Fehlversuchen gilt ein Gerät als offline;
-  die Verbindung wird automatisch neu aufgebaut, sobald das Gerät wieder
-  antwortet.
-- Ohne verlässliche Netzmessung werden alle steuerbaren Lasten gestoppt.
+- Ein einzelner Geräte-Timeout bringt den Regelkreis nicht zum Absturz. Nach
+  drei aufeinanderfolgenden Fehlversuchen gilt ein Gerät als offline; die
+  Verbindung wird automatisch neu aufgebaut, sobald es wieder antwortet.
+- **Ohne verlässliche Netzmessung werden alle steuerbaren Lasten gestoppt.**
   Es wird nie ohne Netzmessung geladen oder geheizt.
-- Zugangsdaten werden ausschließlich über Umgebungsvariablen bzw. `.env`
-  konfiguriert. Der Konfigurations-Export enthält Geräte-Zugangsdaten im
-  Klartext und sollte entsprechend sicher aufbewahrt werden.
+- Zugangsdaten werden über Umgebungsvariablen bzw. `.env` konfiguriert. Der
+  Konfigurations-Export enthält Geräte-Zugangsdaten im Klartext und sollte
+  entsprechend sicher aufbewahrt werden. Der *Diagnosebericht* schwärzt als
+  Passwort deklarierte Felder — vor dem Weitergeben trotzdem durchsehen.
 
 ## Bekannte Einschränkungen
 
 - Der OCPP-Treiber deckt die für Überschussladen relevante Teilmenge von
-  OCPP 1.6J ab (SmartCharging-Profil für die Stromvorgabe). Wallboxen ohne
-  SmartCharging-Unterstützung lassen sich nur ein- und ausschalten, nicht
-  stufenlos regeln. OCPP 2.0.1 ist nicht implementiert.
-- Als Beta oder experimentell markierte Treiber (siehe Gerätetabelle oben)
-  sollten vor dem Dauerbetrieb über „Verbindung testen“ mit den tatsächlich
-  gelesenen Werten abgeglichen werden.
-- Statistik-Export steht aktuell als CSV zur Verfügung; ein PDF-Bericht ist
-  nicht enthalten.
+  OCPP 1.6J ab (SmartCharging-Profil). Wallboxen ohne SmartCharging lassen
+  sich nur ein- und ausschalten, nicht stufenlos regeln. OCPP 2.0.1 fehlt.
+- Der überwiegende Teil der Geräteanbindungen ist nie an echter Hardware
+  gelaufen (siehe [Gerätetabelle](#unterstützte-geräte)).
+- Statistik-Export als CSV; ein PDF-Bericht ist nicht enthalten.
+- Die Solarprognose stützt sich auf einen externen Dienst. Fällt er aus,
+  regelt MinePower ohne Prognose weiter — die Halte-Logik entfällt dann.
 
-## Lizenz
+## Lizenz und Rechtliches
 
-Proprietär, Copyright © 2026 Marwin Rentz. Der Betrieb einer eigenen
-Installation über das offizielle Docker-Image ist gestattet;
-Weiterverbreitung, Vermietung oder das Anbieten als Dienstleistung für
-Dritte erfordert eine gesonderte Lizenz. Vollständiger Text: [LICENSE](LICENSE).
+Copyright © 2026 Marwin Rentz. Alle Rechte vorbehalten.
+
+Der Quelltext ist einsehbar, MinePower ist aber **nicht Open Source**:
+
+- **Erlaubt:** Herunterladen, Einsehen und unverändertes Betreiben auf eigener
+  Hardware — privat wie im eigenen Betrieb, auch aus dem offiziellen
+  Docker-Image. Eigene Konfiguration und Einstellungen gelten nicht als
+  Veränderung.
+- **Nicht erlaubt:** Verändern, abgeleitete Werke erstellen, Weitergeben,
+  Verkaufen, Unterlizenzieren oder Dritten als Dienstleistung bereitstellen.
+
+Vollständiger Text: [LICENSE](LICENSE). Fremdkomponenten und ihre Lizenzen:
+[NOTICE](NOTICE).
+
+**Rückmeldungen sind erwünscht.** Fehlerberichte, Messwerte und
+Verbesserungsvorschläge gern über die
+[Issues](https://github.com/Marwinrentz/MinePower-Controller/issues). Wer eine
+Rückmeldung einreicht, räumt dem Rechteinhaber das Recht ein, sie ohne
+Vergütung zu verwenden. Bitte keine Zugangsdaten oder Token mitschicken.
+
+**Marken.** Tesla, Sungrow, my-PV, Fronius, SMA, Huawei, Shelly, go-e, KEBA,
+Tibber, aWATTar und alle weiteren genannten Bezeichnungen sind Marken ihrer
+jeweiligen Inhaber. Sie werden ausschließlich beschreibend verwendet, um
+anzugeben, mit welchen Geräten die Software zusammenarbeitet. Es besteht keine
+Verbindung zu, Partnerschaft mit oder Billigung durch diese Unternehmen.
+
+**Fremdschnittstellen.** Wer die Tesla Fleet API, Tibber, aWATTar oder
+forecast.solar nutzt, schließt dafür ein eigenes Nutzungsverhältnis mit dem
+jeweiligen Anbieter und ist an dessen Bedingungen gebunden. MinePower enthält
+keine Zugangsdaten; diese bringt die betreibende Person selbst mit.
+
+**Haftung.** Die Software steuert elektrische Verbraucher und wird ohne
+Gewährleistung bereitgestellt. Installation und Absicherung elektrischer
+Komponenten gehören in die Hände von Fachpersonal.
+
+---
+
+<a name="english"></a>
+
+# English
+
+Surplus-based charge control for electric vehicles, water heating and home
+batteries. MinePower reads grid power and distributes the available PV surplus
+across the controllable loads in the house along a freely sortable priority
+chain. The goal is grid feed-in as close to 0 W as possible, without
+sacrificing comfort or plant safety.
+
+The application runs as a Docker stack (FastAPI backend, React frontend,
+TimescaleDB). No cloud connection and no smart-home hub are required. Devices
+are integrated through a plugin architecture; a new driver is a single Python
+file with no changes to the core.
+
+> **On licensing.** The source is publicly viewable, but MinePower is **not
+> Open Source**: downloading and running it unmodified is permitted, modifying
+> and redistributing it is not. Feedback is expressly welcome — see
+> [License and legal](#license-and-legal).
+
+## Contents
+
+- [How the control loop works](#how-the-control-loop-works)
+- [Supported devices](#supported-devices)
+- [Installation](#installation-1)
+- [Tesla integration](#tesla-integration)
+- [Operation](#operation)
+- [Development](#development)
+- [Security](#security)
+- [Known limitations](#known-limitations)
+- [License and legal](#license-and-legal)
+
+## How the control loop works
+
+The control loop runs at a fixed interval and calculates, on every pass, how
+much power is available to the controllable loads in total:
+
+```
+budget = Σ(power of all controllable loads) − grid power (smoothed) − setpoint
+```
+
+Within a deadband around the setpoint nothing is adjusted, to avoid chatter
+from measurement noise. The deadband is adaptive: with stable generation the
+loop regulates more tightly, under rapidly changing clouds more loosely, to
+avoid needless start/stop cycles.
+
+### The home battery comes first
+
+Neither the battery's charging nor its discharging power counts as surplus:
+
+```
+pool for car and water heating = budget − |battery power|
+```
+
+This matters more than it looks. The budget formula only knows the grid
+connection point, and there a battery that is covering the shortfall looks
+exactly like a balanced house — without this deduction, car and water heating
+would drain the battery while the display reports surplus. Conversely,
+whatever the battery is currently charging with belongs to the battery and is
+not offered to the loads. The household itself is unaffected: only the
+*controllable* loads are held back.
+
+Batteries are not actively commanded. Hybrid inverters already regulate their
+battery to zero feed-in themselves; MinePower only reads state of charge and
+power. Forced charging and reserve-SoC overrides remain an opt-in extra for
+special cases.
+
+### Ampere control based on measurement
+
+A wallbox setpoint current is not computed from the nominal 230 V per phase,
+but from the ratio that actually results from the measured power and the
+commanded current. Real grid voltage, phase count and charging losses are
+therefore contained in the conversion factor. A rigidly computed setpoint is
+systematically off, and produces precisely what should be avoided: feed-in, or
+draw from the battery. Increases are limited per step, because a vehicle only
+follows a new setpoint after several seconds; decreases are not limited.
+
+### Three mechanisms against wasted surplus
+
+**Gap filler.** A wallbox can only charge in whole ampere steps; the rounded-off
+remainder would otherwise go to the grid. If a continuously modulating load can
+absorb it — such as a my-PV heating element — it gets it, regardless of its
+position in the priority chain. The alternative is not "later" but "wasted".
+
+**Honest quantisation.** The controller always rounds the charging current
+down, never up, and reports the power actually drawn. Only then does the
+control loop know what is really left over.
+
+**Active forecast.** During a brief cloud passage with foreseeable recovery, an
+ongoing charge is held rather than stopped — a restart costs more surplus via
+the hysteresis than holding does. If the forecast sun is not enough to meet a
+target-charge deadline, grid charging starts earlier.
+
+How well this works is measurable: every cycle records how much surplus was fed
+into the grid above the setpoint without any load absorbing it — including a
+plain-language reason.
+
+## Supported devices
+
+The last column is the important one. **Only four integrations have ever run
+against real hardware.** All others were written from vendor documentation and
+community sources and have never talked to a physical device. Register maps
+regularly deviate in practice — in offsets, scaling and sign. Such drivers are
+marked *Experimental* in the user interface and should be cross-checked against
+the actually read values via "Test connection" before productive use.
+
+| Device | Category | Protocol | Verified on real hardware |
+|---|---|---|---|
+| Sungrow SH series | Hybrid inverter, incl. battery monitoring | Modbus TCP | **Yes** — SH-RT, continuous use |
+| Sungrow DTSU666 (on SH) | Grid meter | Modbus TCP via inverter | **Yes** — continuous use |
+| my-PV AC·THOR / ELWA-E / ELWA 2 | Water heating, continuously modulating | HTTP or Modbus TCP | **Yes** — AC·THOR, Modbus TCP |
+| Tesla (any model) | Vehicle as charge point | BLE proxy or Fleet API | **Yes** — via BLE proxy |
+| Sungrow SG series | Inverter | Modbus TCP (WiNet-S) | No |
+| Sungrow DTSU666 (on SG) | Grid meter | Modbus TCP via inverter | No |
+| Sungrow SBR/SBH | Battery, optionally controllable | Modbus TCP | No |
+| Sungrow AC007/AC011E | Wallbox | Modbus TCP | No |
+| Fronius GEN24 (Plus) | Inverter, incl. battery monitoring | Solar API | No |
+| Fronius Smart Meter | Grid meter | Solar API | No |
+| SMA Sunny Boy / Tripower | Inverter, incl. storage monitoring | Modbus TCP | No |
+| SMA Energy Meter / Home Manager | Grid meter | Modbus TCP | No |
+| Kostal Plenticore, GoodWe ET/EH, SolarEdge, Delta, SMA Tripower X | Inverter | SunSpec / Modbus TCP | No |
+| SunSpec meters | Grid meter | SunSpec / Modbus TCP | No |
+| Huawei SUN2000 + LUNA2000 | Hybrid inverter | Modbus TCP | No |
+| Generic Modbus meter (e.g. Eastron SDM630) | Grid meter | Modbus TCP, freely configurable | No |
+| Shelly 3EM / Pro 3EM | Grid meter | HTTP | No |
+| Shelly relay | Water heating (on/off) | HTTP | No |
+| go-e Charger | Wallbox | HTTP v2 | No |
+| Generic wallbox | Wallbox | OCPP 1.6J | No |
+
+Simulated devices are also included for demo mode, so the interface and the
+control loop can be explored without any hardware.
+
+Field reports on untested devices are welcome — a diagnostic report from a
+running installation says more than any description of the symptoms.
+
+## Installation
+
+Requires Docker with the Compose plugin, amd64 or arm64. No `.env` file is
+needed; the JWT secret is generated on first start and persisted in the
+database.
+
+```bash
+git clone https://github.com/Marwinrentz/MinePower-Controller.git minepower
+cd minepower
+docker compose up -d --build
+```
+
+Then open `http://localhost:8080`. The administrator account is created on
+first access, after which the setup wizard guides through device
+configuration. Alternatively, "Start demo mode" creates a fully simulated
+installation.
+
+To use the published image instead of building locally:
+
+```bash
+docker pull marwinrentz1/minepower:latest
+```
+
+| Service | Port | Purpose |
+|---|---|---|
+| `app` | `${HTTP_PORT:-8080}` → 8000 | Web interface, REST API, WebSocket |
+| `db` | internal 5432 | TimescaleDB, volume `db_data` |
+| `mqtt` (optional) | 1883 | `docker compose --profile mqtt up -d` |
+
+A ready-made Compose file for Unraid is in [docs/unraid.md](docs/unraid.md).
+
+## Tesla integration
+
+Tesla vehicles are controlled directly as a charge point, independently of the
+wallbox in use. Two routes are available:
+
+- **BLE proxy (cloud-free).** Requires an already running
+  [TeslaBleHttpProxy](https://github.com/wimaha/TeslaBleHttpProxy), for example
+  on a Raspberry Pi within Bluetooth range. MinePower only stores its address
+  and the vehicle VIN; key pairing happens in the proxy itself. A reference
+  Compose file is in
+  [examples/tesla-ble-proxy](examples/tesla-ble-proxy/docker-compose.yml) and
+  is deliberately not part of the main stack.
+- **Fleet API (cloud).** Requires an OAuth token from Tesla, but reliably
+  provides state of charge. Polling is deliberately conservative to stay within
+  rate limits.
+
+In both cases the operator supplies the credentials; MinePower contains none.
+Using the Fleet API means entering your own relationship with Tesla — see
+[License and legal](#license-and-legal).
+
+## Operation
+
+**Updating**
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+**Backup.** For configuration only, the JSON export under Settings → Backup is
+enough. For a full backup including the measurement history:
+
+```bash
+docker compose exec db pg_dump -U minepower -d minepower --no-owner --no-privileges > backup.sql
+```
+
+**Restore.** Import the configuration JSON through the interface, or for a full
+restore:
+
+```bash
+docker compose up -d db
+docker compose exec -T db psql -U minepower -d minepower -c "SELECT timescaledb_pre_restore();"
+docker compose exec -T db psql -v ON_ERROR_STOP=1 -U minepower -d minepower < backup.sql
+docker compose exec -T db psql -U minepower -d minepower -c "SELECT timescaledb_post_restore();"
+docker compose up -d app
+```
+
+Start the app last: it only seeds defaults when the database is empty.
+
+**Logs:** `docker compose logs -f app` (log level via `LOG_LEVEL`).
+
+**Diagnostics.** Events → Diagnostics shows raw device values, the current
+regulation quality and every control decision live. A diagnostic report (JSON)
+can be exported there for a chosen period.
+
+### Alternative setups
+
+**Unraid.** Use a bind mount onto the cache pool instead of the named volume —
+in `docker-compose.yml` under service `db`:
+
+```yaml
+    volumes:
+      - /mnt/cache/appdata/minepower-db:/var/lib/postgresql/data
+```
+
+**OCPP wallboxes.** Expose the driver port as well — under service `app`:
+
+```yaml
+    ports:
+      - "${HTTP_PORT:-8080}:8000"
+      - "8887:8887"
+```
+
+The wallbox is then configured with `ws://<server-ip>:8887/<charge-point-id>`
+as its backend.
+
+**Headless configuration.** Mount a JSON file and set `HEADLESS_CONFIG` — under
+service `app`:
+
+```yaml
+    volumes:
+      - ./minepower.json:/config/minepower.json:ro
+```
+
+Details in [docs/headless.md](docs/headless.md).
+
+**Production.** Copy `.env.example` to `.env` and set your own
+`POSTGRES_PASSWORD`.
+
+## Development
+
+Modifying the source requires prior consent (see [LICENSE](LICENSE)). The
+notes below are provided to explain the structure and to make bug reports
+easier to follow.
+
+```bash
+# Backend (Python 3.12)
+cd backend
+pip install -r requirements.txt
+uvicorn app.main:app --reload      # requires a running database
+python -m pytest                    # regulation and driver tests, no hardware
+
+# Frontend
+cd frontend
+npm install
+npm run dev                         # dev server proxying to localhost:8000
+```
+
+The regulation logic (`backend/app/core/regulation.py`) is implemented as a
+pure, hardware-independent class hierarchy and is fully testable through an
+injected clock — no database, no network, no waiting.
+
+Further documentation:
+
+- [Architecture overview](docs/architecture.md)
+- [Adding a new driver](docs/adding-drivers.md)
+- [Headless configuration](docs/headless.md)
+- [Installing on Unraid](docs/unraid.md)
+
+## Security
+
+- Authentication via JWT with bcrypt-hashed passwords. Roles (administrator,
+  user, read-only) are enforced all the way into the API, and login is rate
+  limited.
+- A single device timeout never crashes the control loop. After three
+  consecutive failures a device counts as offline; the connection is
+  re-established automatically once it responds again.
+- **Without a reliable grid measurement, all controllable loads are stopped.**
+  Charging or heating never happens without grid metering.
+- Credentials are configured via environment variables or `.env`. The
+  configuration export contains device credentials in clear text and should be
+  stored accordingly. The *diagnostic report* redacts fields declared as
+  passwords — still review it before sharing.
+
+## Known limitations
+
+- The OCPP driver covers the subset of OCPP 1.6J relevant for surplus charging
+  (SmartCharging profile). Wallboxes without SmartCharging can only be switched
+  on and off, not modulated. OCPP 2.0.1 is not implemented.
+- Most device integrations have never run against real hardware (see
+  [supported devices](#supported-devices)).
+- Statistics export is CSV; there is no PDF report.
+- The solar forecast relies on an external service. If it is unavailable,
+  MinePower keeps regulating without it — the hold logic is then inactive.
+
+## License and legal
+
+Copyright © 2026 Marwin Rentz. All rights reserved.
+
+The source is publicly viewable, but MinePower is **not Open Source**:
+
+- **Permitted:** downloading, viewing, and running it unmodified on your own
+  hardware — private or for your own business operations, including from the
+  official Docker image. Your own configuration and settings do not count as
+  modification.
+- **Not permitted:** modifying, creating derivative works, redistributing,
+  selling, sublicensing, or providing it to third parties as a service.
+
+Full text: [LICENSE](LICENSE). Third-party components and their licenses:
+[NOTICE](NOTICE).
+
+**Feedback is welcome.** Bug reports, measurements and suggestions via
+[Issues](https://github.com/Marwinrentz/MinePower-Controller/issues). By
+submitting feedback you grant the copyright holder the right to use it without
+compensation. Please do not include credentials or tokens.
+
+**Trademarks.** Tesla, Sungrow, my-PV, Fronius, SMA, Huawei, Shelly, go-e,
+KEBA, Tibber, aWATTar and all other names mentioned are trademarks of their
+respective owners, used purely descriptively to indicate which devices the
+software interoperates with. There is no affiliation with, partnership with, or
+endorsement by these companies.
+
+**Third-party interfaces.** Anyone using the Tesla Fleet API, Tibber, aWATTar
+or forecast.solar enters into their own relationship with that provider under
+its terms. MinePower contains no credentials; the operator supplies them.
+
+**Liability.** The software controls electrical loads and is provided without
+warranty. Installation and protection of electrical components belongs in the
+hands of qualified personnel.

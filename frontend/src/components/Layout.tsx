@@ -7,6 +7,7 @@
 import { useEffect } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useI18n } from "../i18n";
+import { Logo } from "./Logo";
 import { useAuth } from "../store/auth";
 import { useLive } from "../store/live";
 import { useTheme } from "../store/theme";
@@ -47,7 +48,7 @@ export function Layout() {
     <div className="app-shell">
       <nav className="sidebar" aria-label={t("nav.dashboard")}>
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true">⚡</span>
+          <span className="brand-mark" aria-hidden="true"><Logo size={26} /></span>
           MinePower
         </div>
         {NAV.map((n) => (
@@ -85,7 +86,7 @@ export function Layout() {
       {/* Kopfzeile nur mobil (per CSS eingeblendet) */}
       <header className="topbar">
         <div className="brand" style={{ padding: 0, fontSize: "var(--text-md)" }}>
-          <span className="brand-mark" aria-hidden="true">⚡</span>
+          <span className="brand-mark" aria-hidden="true"><Logo size={22} /></span>
           MinePower
         </div>
         <div className="row tight">

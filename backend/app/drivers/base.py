@@ -52,11 +52,18 @@ class ConfigField(BaseModel):
 
 class Maturity(str, Enum):
     """Reifegrad – wird im GUI als Badge angezeigt, damit sich niemand blind
-    auf ungeprüfte Registerkarten verlässt."""
+    auf ungeprüfte Registerkarten verlässt.
 
-    STABLE = "stable"            # an echter Hardware verifiziert
-    BETA = "beta"                # funktionsfähig, aber nur teilweise verifiziert
-    EXPERIMENTAL = "experimental"  # Registerbelegung aus Doku/Community, ungeprüft
+    Maßstab ist ausschließlich: Lief dieser Treiber schon einmal gegen das
+    echte Gerät? Nicht, wie sorgfältig er geschrieben wurde. Ein Treiber, der
+    sauber nach Herstellerdokumentation gebaut, aber nie angeschlossen war,
+    ist EXPERIMENTAL – Registerbelegungen weichen in der Praxis regelmäßig
+    von der Doku ab (Offsets, Skalierung, Vorzeichen).
+    """
+
+    STABLE = "stable"            # an echter Hardware im Dauerbetrieb erprobt
+    BETA = "beta"                # an echter Hardware getestet, aber nicht dauerhaft
+    EXPERIMENTAL = "experimental"  # nie an echter Hardware gelaufen
 
 
 class DriverMeta(BaseModel):
@@ -68,7 +75,9 @@ class DriverMeta(BaseModel):
     # Fähigkeiten, z. B. {"phase_switch", "soc", "battery_control", "modulation",
     # "battery_monitor", "hybrid", "fine_modulation", "write_test"}
     capabilities: set[str] = Field(default_factory=set)
-    maturity: Maturity = Maturity.STABLE
+    #: Bewusst EXPERIMENTAL als Vorgabe: Ein neuer Treiber hat per Definition
+    #: noch an keiner Anlage gelaufen. Wer STABLE behauptet, muss es hinschreiben.
+    maturity: Maturity = Maturity.EXPERIMENTAL
     #: Kurzer Warnhinweis fürs GUI (z. B. „Register an SH10RT verifiziert,
     #: andere Modelle bitte per Verbindungstest gegenprüfen")
     notes: str | None = None

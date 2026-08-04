@@ -134,7 +134,7 @@ class SmaMeter(_SmaBase, MeterDriver):
                     "Modbus-Register des Wechselrichters (gleiche IP wie der Wechselrichter). "
                     "Bezug und Einspeisung liegen bei SMA in getrennten Registern und werden hier "
                     "zu einer vorzeichenbehafteten Netzleistung zusammengefasst.",
-        maturity=Maturity.BETA,
+        maturity=Maturity.EXPERIMENTAL,
         fields=SMA_FIELDS,
         notes="Nur verfügbar, wenn am Wechselrichter ein SMA Energy Meter / Home Manager "
               "eingebunden ist. Der Verbindungstest zeigt sofort, ob die Register antworten.",

@@ -65,6 +65,8 @@ export const en: Dict = {
     history: "History",
     soc: "State of charge",
     price: "Electricity price",
+    priceCheap: "cheap",
+    priceNormal: "normal",
     paused: "Regulation paused",
     pause: "Pause",
     resume: "Resume",

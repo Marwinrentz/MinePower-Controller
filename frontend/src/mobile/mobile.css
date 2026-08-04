@@ -151,6 +151,12 @@
 /* ---------------------------------------------------------------- Kennzahlen */
 
 .m-stats { display: grid; gap: var(--m-gap); grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.m-price-tag {
+  background: var(--m-fill); border-radius: 999px; color: var(--m-text-2);
+  font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
+  padding: 3px 8px; text-transform: uppercase; white-space: nowrap;
+}
+.m-price-tag.cheap { background: color-mix(in srgb, var(--c-pv) 18%, transparent); color: var(--c-pv); }
 .m-stat { display: flex; flex-direction: column; gap: 2px; padding: 14px var(--m-pad); }
 .m-stat-val {
   font-size: 24px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15;

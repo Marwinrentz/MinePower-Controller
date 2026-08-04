@@ -57,7 +57,7 @@ class SungrowWallbox(SungrowDriverMixin, WallboxDriver):
                     "je nach Firmware und ist deshalb einstellbar; der Verbindungstest findet "
                     "sie automatisch.",
         capabilities={"phase_switch", "write_test"},
-        maturity=Maturity.BETA,
+        maturity=Maturity.EXPERIMENTAL,
         notes="Vor dem Produktivbetrieb bitte „Verbindung testen“ mit Schreibtest ausführen: "
               "Er zeigt, ob die Box den Sollstrom wirklich übernimmt. Tut sie das nicht, "
               "steht sie meist noch im internen Lademodus statt auf externer Ansteuerung.",

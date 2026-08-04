@@ -1,6 +1,7 @@
 /** Login + Erst-Setup (Admin anlegen), je nach /api/system/setup-state. */
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Logo } from "../components/Logo";
 import { Banner, Button, Card, Field } from "../components/ui";
 import { useI18n } from "../i18n";
 import { get, post } from "../lib/api";
@@ -51,7 +52,7 @@ export function Login() {
     <div style={{ display: "grid", placeItems: "center", minHeight: "100vh", padding: 20 }}>
       <Card className="raised" style={{ width: 420, maxWidth: "94vw" }}>
         <div className="brand" style={{ justifyContent: "center", padding: "0 0 var(--s4)" }}>
-          <span className="brand-mark" aria-hidden="true">⚡</span>
+          <span className="brand-mark" aria-hidden="true"><Logo size={34} /></span>
           MinePower
         </div>
         {setupState === null ? (

@@ -172,7 +172,10 @@ export function Dashboard() {
                     value={`${forecast.today_kwh.toFixed(1)} kWh`} />
           )}
           {!isPhone && snapshot.price_ct != null && (
-            <Metric label={t("dash.price")} value={`${snapshot.price_ct.toFixed(1)} ct`} />
+            <Metric label={t("dash.price")}
+                    hint={snapshot.price_cheap == null ? undefined
+                      : t(snapshot.price_cheap ? "dash.priceCheap" : "dash.priceNormal")}
+                    value={`${snapshot.price_ct.toFixed(1)} ct`} />
           )}
         </div>
 

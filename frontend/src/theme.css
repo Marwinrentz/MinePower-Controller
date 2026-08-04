@@ -414,10 +414,10 @@ small, .dim { color: var(--text-dim); font-size: var(--text-sm); }
   font-size: var(--text-lg); font-weight: 750; letter-spacing: -0.02em;
   padding: 0 var(--s3) var(--s5);
 }
+/* Nur noch ausrichten: Verlauf und Eckenradius bringt das Logo selbst mit
+   (components/Logo.tsx). Ein zweiter Verlauf hier würde ihn verdoppeln. */
 .brand-mark {
-  align-items: center; background: linear-gradient(145deg, var(--c-pv), var(--accent));
-  border-radius: 9px; color: #fff; display: flex; font-size: 15px;
-  height: 28px; justify-content: center; width: 28px;
+  align-items: center; display: flex; justify-content: center; line-height: 0;
 }
 .nav-item {
   align-items: center; border-radius: var(--r-md); color: var(--text-dim); cursor: pointer;

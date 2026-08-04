@@ -249,7 +249,7 @@ class OcppWallbox(WallboxDriver):
                     "(Backend-URL in der Wallbox: ws://<server-ip>:<port>/<charge-point-id>). "
                     "Experimentell – Ladestromvorgabe via SmartCharging-Profil.",
         capabilities={"rfid", "write_test"},
-        maturity=Maturity.BETA,
+        maturity=Maturity.EXPERIMENTAL,
         notes="Deckt die für Überschussladen nötige Teilmenge von OCPP 1.6J ab. Der Ladestrom "
               "wird über ein SmartCharging-Profil vorgegeben – Boxen ohne SmartCharging lassen "
               "sich nur ein-/ausschalten. Der Schreibtest im Verbindungstest zeigt das sofort.",

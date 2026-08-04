@@ -14,6 +14,7 @@ from ..base import (
     DeviceCategory,
     DriverMeta,
     FieldType,
+    Maturity,
     WallboxData,
     WallboxDriver,
     WallboxState,
@@ -46,6 +47,8 @@ class TeslaVehicle(WallboxDriver):
                     "läuft z. B. auf einem Raspberry Pi – NICHT Teil dieser App). "
                     "Methode B: Tesla Fleet-API (Cloud, liefert zuverlässig SoC).",
         capabilities={"soc", "charge_limit", "write_test"},
+        maturity=Maturity.STABLE,
+        notes="Über einen BLE-Proxy im Dauerbetrieb erprobt.",
         fields=[
             ConfigField(key="backend", label="Anbindung", type=FieldType.SELECT, default="ble_proxy",
                         options=[{"value": "ble_proxy", "label": "BLE-Proxy (lokal, empfohlen)"},

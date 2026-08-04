@@ -85,7 +85,7 @@ class SungrowBattery(SungrowDriverMixin, BatteryDriver):
                     "liefert Ladestand und Leistung bereits mit. Sinnvoll nur, wenn die Batterie "
                     "in der Prioritätskette einsortiert oder bewusst aktiv gesteuert werden soll.",
         capabilities={"battery_monitor", "battery_control"},
-        maturity=Maturity.BETA,
+        maturity=Maturity.EXPERIMENTAL,
         fields=SUNGROW_COMMON_FIELDS + [ACTIVE_CONTROL_FIELD],
         notes="Aktive Batteriebefehle sind Zusatzfunktion, kein Automatismus: Im Normalbetrieb "
               "bleibt die Batterie unangetastet.",

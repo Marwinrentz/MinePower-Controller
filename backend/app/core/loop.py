@@ -150,7 +150,7 @@ class ControlLoop:
         self.snapshot: dict[str, Any] = {
             "time": None, "pv_power": 0.0, "grid_power": None, "house_power": 0.0,
             "wallbox_power": 0.0, "water_power": 0.0, "battery": None, "surplus": 0.0,
-            "price_ct": None, "safety": None, "paused": False, "waste_w": 0.0,
+            "price_ct": None, "price_cheap": None, "safety": None, "paused": False, "waste_w": 0.0,
             "waste_reason": None, "gap_filled_w": 0.0,
             "deadband_w": self.cfg.deadband_w, "weather": None, "devices": [],
         }
@@ -506,7 +506,7 @@ class ControlLoop:
         waste_w = wasted_power(grid_smoothed, self.cfg)
         await self._publish(
             pv_power, float(grid_power), battery, wb_power, wh_power,
-            budget=budget, price_ct=price_ct,
+            budget=budget, price_ct=price_ct, price_cheap=cheap,
             waste_w=waste_w,
             waste_reason=self._waste_reason(waste_w, blockers, wallboxes + heaters),
             gap_filled_w=filled_w,
@@ -747,6 +747,7 @@ class ControlLoop:
         wh_power: float,
         budget: float,
         price_ct: float | None = None,
+        price_cheap: bool | None = None,
         safety: str | None = None,
         waste_w: float = 0.0,
         waste_reason: str | None = None,
@@ -798,6 +799,10 @@ class ControlLoop:
             "battery": {"soc": battery.soc, "power": battery.power} if battery else None,
             "surplus": round(budget, 1),
             "price_ct": price_ct,
+            # Ob die aktuelle Stunde günstig ist, entscheidet der eingestellte
+            # Grenzwert – das gehört hierher und nicht in die Oberfläche, die
+            # ihn sonst raten müsste.
+            "price_cheap": price_cheap,
             "safety": safety,
             "paused": self.paused,
             # Kennzahl „verschenkter Solarstrom“: Einspeisung über dem

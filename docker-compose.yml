@@ -1,7 +1,10 @@
 # MinePower – Plug & Play: `docker compose up -d` reicht, keine .env nötig.
-# (JWT-Secret wird beim Erststart automatisch erzeugt; die Datenbank ist nur
-# intern erreichbar. Für Produktion trotzdem gern POSTGRES_PASSWORD in einer
-# .env setzen – siehe .env.example.)
+# Das JWT-Secret wird beim Erststart erzeugt, die Datenbank ist nur intern
+# erreichbar. Für den Produktivbetrieb trotzdem POSTGRES_PASSWORD in einer
+# .env setzen – siehe .env.example.
+#
+# Abweichende Aufbauten (Unraid-Bind-Mount, OCPP-Port, Headless-Konfiguration)
+# sind in der README unter „Betrieb" beschrieben.
 name: minepower
 
 services:
@@ -13,8 +16,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-minepower}
       POSTGRES_DB: minepower
     volumes:
-      # Unraid-Tipp: stattdessen Bind-Mount auf den Cache-Pool verwenden,
-      # z. B. /mnt/cache/appdata/minepower-db:/var/lib/postgresql/data
       - db_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U minepower -d minepower"]
@@ -23,8 +24,8 @@ services:
       retries: 10
 
   app:
-    # Lokaler Build als Default; fertiges Image via MINEPOWER_IMAGE übersteuerbar,
-    # z. B. MINEPOWER_IMAGE=deinusername/minepower:latest
+    # Lokaler Build als Vorgabe; ein fertiges Image lässt sich über
+    # MINEPOWER_IMAGE übersteuern.
     image: ${MINEPOWER_IMAGE:-marwinrentz1/minepower:latest}
     build: .
     restart: unless-stopped
@@ -33,8 +34,6 @@ services:
         condition: service_healthy
     ports:
       - "${HTTP_PORT:-8080}:8000"
-      # Für OCPP-Wallboxen zusätzlich freigeben:
-      # - "8887:8887"
     environment:
       DATABASE_URL: postgresql+asyncpg://minepower:${POSTGRES_PASSWORD:-minepower}@db:5432/minepower
       JWT_SECRET: ${JWT_SECRET:-}          # leer = automatisch erzeugen & persistieren
@@ -43,9 +42,6 @@ services:
       DEMO_MODE: ${DEMO_MODE:-false}
       HEADLESS_CONFIG: ${HEADLESS_CONFIG:-}
       MQTT_URL: ${MQTT_URL:-}
-    # Für Headless-Konfiguration eine Datei einhängen und HEADLESS_CONFIG setzen:
-    # volumes:
-    #   - ./minepower.json:/config/minepower.json:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/system/health',timeout=5).status==200 else 1)"]
       interval: 15s

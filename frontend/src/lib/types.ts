@@ -95,6 +95,9 @@ export type Snapshot = {
   battery: { soc: number; power: number } | null;
   surplus: number;
   price_ct: number | null;
+  /** Liegt der aktuelle Preis unter dem eingestellten Günstig-Grenzwert?
+   *  Kommt aus dem Backend, damit die Oberfläche den Grenzwert nicht raten muss. */
+  price_cheap: boolean | null;
   safety: string | null;
   paused: boolean;
   /** Verschenkter Solarstrom: Einspeisung über dem Netz-Sollwert, die keine

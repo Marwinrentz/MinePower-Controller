@@ -13,7 +13,15 @@ sauberere Wahl, wenn der Zähler die Führungsgröße der Regelung sein soll.
 """
 from __future__ import annotations
 
-from ..base import ConfigField, DeviceCategory, DriverMeta, FieldType, MeterData, MeterDriver
+from ..base import (
+    ConfigField,
+    DeviceCategory,
+    DriverMeta,
+    FieldType,
+    Maturity,
+    MeterData,
+    MeterDriver,
+)
 from ..modbus_util import s32
 from ..registry import register
 from ..validation import checked
@@ -37,6 +45,9 @@ class SungrowMeter(SungrowDriverMixin, MeterDriver):
                                  {"value": "sg", "label": "SG-Serie (String)"}],
                         help="Bestimmt die Registeradresse der Netzmessung: SH liest 13010, SG liest 5083."),
         ],
+        maturity=Maturity.STABLE,
+        notes="An einem DTSU666 hinter einem SH-Wechselrichter im Dauerbetrieb erprobt. "
+              "Die SG-Variante (Register 5083) ist nicht an echter Hardware getestet.",
     )
 
     def __init__(self, config: dict) -> None:

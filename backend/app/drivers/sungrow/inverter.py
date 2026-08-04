@@ -22,7 +22,7 @@ MinePower liest sie nur mit.
 """
 from __future__ import annotations
 
-from ..base import DeviceCategory, DriverMeta, InverterData, InverterDriver
+from ..base import DeviceCategory, DriverMeta, InverterData, InverterDriver, Maturity
 from ..modbus_util import s16, s32, u16, u32
 from ..registry import register
 from ..validation import checked, sanitized
@@ -101,8 +101,10 @@ class SungrowSHInverter(_SungrowInverterBase):
                     "Wechselrichter regelt seine Batterie selbst.",
         capabilities={"hybrid", "battery_monitor", "grid_meter"},
         fields=SUNGROW_COMMON_FIELDS,
-        notes="Registerkarte an SH-RT-Modellen erprobt. Weicht ein Firmware-Stand ab, "
-              "melden die Live-Werte im Verbindungstest das sofort als unplausibel.",
+        maturity=Maturity.STABLE,
+        notes="Registerkarte an einem SH-RT-Modell im Dauerbetrieb erprobt. Weicht ein "
+              "Firmware-Stand ab, melden die Live-Werte im Verbindungstest das sofort "
+              "als unplausibel.",
     )
 
     async def read_data(self) -> InverterData:

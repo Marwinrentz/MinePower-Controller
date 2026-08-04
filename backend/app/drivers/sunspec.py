@@ -199,7 +199,7 @@ class SunSpecInverter(_SunSpecBase, InverterDriver):
                     "unempfindlich gegen Firmware-Updates. Passt für Kostal Plenticore, GoodWe "
                     "ET/EH, SolarEdge, Delta, SMA Tripower X und viele weitere.",
         capabilities={"battery_monitor"},
-        maturity=Maturity.BETA,
+        maturity=Maturity.EXPERIMENTAL,
         fields=COMMON_FIELDS,
         notes="Der Verbindungstest zeigt Hersteller, Modell und die gefundenen SunSpec-Modelle. "
               "Erscheint dort das erwartete Gerät, stimmt die Anbindung.",
@@ -264,7 +264,7 @@ class SunSpecMeter(_SunSpecBase, MeterDriver):
         description="Netzzähler über den SunSpec-Standard – entweder ein eigenständiger Zähler "
                     "oder der am Wechselrichter angeschlossene (dann dieselbe IP eintragen). "
                     "Vorzeichen: positiv = Netzbezug.",
-        maturity=Maturity.BETA,
+        maturity=Maturity.EXPERIMENTAL,
         fields=COMMON_FIELDS + [
             ConfigField(key="invert", label="Richtung invertieren", type=FieldType.BOOLEAN,
                         default=False, required=False,
