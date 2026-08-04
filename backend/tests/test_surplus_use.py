@@ -652,3 +652,66 @@ def test_current_may_drop_immediately():
     clock = FakeClock()
     wb = running_wallbox(clock)  # steht bei 13 A
     assert wb.decide(1380, charging(3000), ctx()).current_a == 6
+
+
+def test_measured_voltage_beats_estimation():
+    """Meldet das Gerät Spannung und Phasenzahl, wird gerechnet statt
+    geschätzt – das ist exakt und braucht keine Einschwingzeit."""
+    clock = FakeClock()
+    wb = running_wallbox(clock)
+    wb.decide(3000, WallboxData(state=WallboxState.CHARGING, power=2400,
+                                current_set=10, phases_active=1, voltage=241.0), ctx())
+    assert wb.watts_per_amp() == pytest.approx(241.0)
+
+
+def test_coarse_power_reading_cannot_inflate_the_start_threshold():
+    """Der gemeldete Fall: Tesla liefert charger_power als ganzzahligen
+    kW-Wert. 2 kW geteilt durch 5 A Sollstrom ergibt 400 W/A statt 230.
+
+    Da der Faktor über die Mindestleistung in die Startschwelle eingeht, stieg
+    diese damit von 1,4 kW auf 6 A × 400 W = 2,4 kW – das Fahrzeug lud erst
+    bei fast doppeltem Überschuss los."""
+    clock = FakeClock()
+    wb = running_wallbox(clock)  # 6 A Mindeststrom, einphasig
+    grob = WallboxData(state=WallboxState.CHARGING, power=2000, current_set=5)
+    for _ in range(5):
+        wb.decide(2000, grob, ctx())
+    assert wb.watts_per_amp() <= 230 * 1.35      # nicht 400
+    assert wb._min_power() < 1500                 # nicht 2400
+
+
+def test_vehicle_that_draws_nothing_is_recognised_as_absent():
+    """Der gemeldete Fall: Das Auto steht nicht am Kabel, meldet aber
+    „verbunden". Bisher reservierte die Prioritätskette dafür Leistung, die
+    nie abgerufen wurde – das Warmwasser bekam nur den Rest.
+
+    Der Zustand wird deshalb nicht geglaubt, sondern gemessen."""
+    clock = FakeClock()
+    wb = running_wallbox(clock, idle_confirm_ticks=3)
+    for _ in range(3):
+        d = wb.decide(3000, connected(power=0), ctx())
+    assert not d.enable
+    assert "keine Leistung" in d.reason
+    # Danach wird eine Weile nicht erneut probiert.
+    assert not wb.decide(5000, connected(power=0), ctx()).enable
+
+
+def test_absent_vehicle_detection_does_not_fire_while_charging():
+    """Gegenprobe: Fließt Strom, bleibt alles wie gehabt."""
+    clock = FakeClock()
+    wb = running_wallbox(clock, idle_confirm_ticks=3)
+    for _ in range(6):
+        d = wb.decide(3000, charging(2500), ctx())
+    assert d.enable
+
+
+def test_manual_override_clears_the_absence_lock():
+    """Der Nutzer sieht das Kabel, die Software nicht. Ein manueller Eingriff
+    hebt die Sperre deshalb sofort auf."""
+    clock = FakeClock()
+    wb = running_wallbox(clock, idle_confirm_ticks=2)
+    for _ in range(2):
+        wb.decide(3000, connected(power=0), ctx())
+    assert not wb.decide(3000, connected(power=0), ctx()).enable
+    wb.override = "fast"
+    assert wb.decide(3000, connected(power=0), ctx()).enable

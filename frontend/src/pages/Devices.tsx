@@ -11,6 +11,7 @@ import { useI18n } from "../i18n";
 import { del, get, patch } from "../lib/api";
 import type { Device, DeviceCategory, SnapshotDevice } from "../lib/types";
 import { useLive } from "../store/live";
+import { Icon } from "../components/icons";
 
 const CATEGORIES: DeviceCategory[] = ["inverter", "meter", "wallbox", "water_heater", "battery"];
 
@@ -80,7 +81,7 @@ export function Devices() {
                 ? `${t("common.edit")}: ${editing.name}`
                 : `${t("device.addTitle")}: ${t(`device.categories.${adding}`)}`}
             </h2>
-            <Button small variant="ghost" onClick={closeForm} title={t("common.close")}>✕</Button>
+            <Button small variant="ghost" onClick={closeForm} title={t("common.close")}><Icon name="close" size={14} /></Button>
           </div>
           <DeviceForm
             category={editing ? editing.category : adding!}
@@ -108,7 +109,7 @@ export function Devices() {
 
       {devices.length === 0 && !adding && (
         <Card>
-          <Empty icon="🔌" title={t("dash.noDevices")}>{t("wizard.welcomeText")}</Empty>
+          <Empty icon={<Icon name="devices" size={30} />} title={t("dash.noDevices")}>{t("wizard.welcomeText")}</Empty>
         </Card>
       )}
     </div>

@@ -99,8 +99,13 @@ class TeslaHttpClient:
         url = f"{self.base}/api/1/vehicles/{self.tag}/vehicle_data"
         try:
             async with self._http().get(url, params={"endpoints": endpoints}) as resp:
-                if resp.status == 408:
-                    raise TimeoutError("Fahrzeug schläft (408) – wake_up nötig")
+                # 408 = Fahrzeug schläft. 503/504 = der BLE-Proxy erreicht es
+                # gerade nicht (außer Reichweite, Funk belegt, Proxy neu
+                # gestartet). Beides heißt „jetzt keine Auskunft", nicht
+                # „defekt" – sonst flattert das Gerät im Minutentakt zwischen
+                # online und offline und fällt dabei aus der Regelung.
+                if resp.status in (408, 502, 503, 504):
+                    raise TimeoutError(f"Fahrzeug nicht erreichbar ({resp.status})")
                 if resp.status in (401, 403):
                     raise ConnectionError(
                         "Tesla verweigert den Zugriff. BLE-Proxy: Schlüssel-Kopplung mit dem "

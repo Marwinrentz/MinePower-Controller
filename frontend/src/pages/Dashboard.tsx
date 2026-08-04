@@ -21,6 +21,7 @@ import { get, post } from "../lib/api";
 import { fmtW } from "../lib/format";
 import type { Snapshot, Statistics } from "../lib/types";
 import { useLive } from "../store/live";
+import { Icon } from "../components/icons";
 
 const RANGES = ["6h", "24h", "7d", "30d"] as const;
 const TILE_ORDER: Record<string, number> = {
@@ -111,7 +112,7 @@ export function Dashboard() {
       {/* 1 – Was gerade nicht stimmt, zuerst. */}
       {snapshot.paused && (
         <Banner tone="warn" title={t("dash.paused")}
-                action={<Button small onClick={togglePause} disabled={busy}>▶ {t("dash.resume")}</Button>}>
+                action={<Button small onClick={togglePause} disabled={busy}><Icon name="play" size={14} /> {t("dash.resume")}</Button>}>
           {t("dash.statePausedSub")}
         </Banner>
       )}
@@ -181,11 +182,12 @@ export function Dashboard() {
 
         <div className="row tight">
           <Button small variant={snapshot.paused ? "primary" : ""} onClick={togglePause} disabled={busy}>
-            {snapshot.paused ? `▶ ${t("dash.resume")}` : `⏸ ${t("dash.pause")}`}
+            <><Icon name={snapshot.paused ? "play" : "pause"} size={14} />{" "}
+            {snapshot.paused ? t("dash.resume") : t("dash.pause")}</>
           </Button>
           {!isPhone && (
             <Button small variant="ghost" onClick={() => navigate("/wall")} title={t("wall.openHelp")}>
-              ⛶ {t("wall.open")}
+              <Icon name="fullscreen" size={14} /> {t("wall.open")}
             </Button>
           )}
         </div>
@@ -227,7 +229,7 @@ export function Dashboard() {
           ))}
           {tiles.length === 0 && (
             <Card>
-              <Empty icon="🔌" title={t("dash.noDevices")}>{t("dash.noDevicesSub")}</Empty>
+              <Empty icon={<Icon name="devices" size={30} />} title={t("dash.noDevices")}>{t("dash.noDevicesSub")}</Empty>
             </Card>
           )}
         </div>

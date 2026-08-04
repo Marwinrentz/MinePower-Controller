@@ -7,13 +7,14 @@ import { Outlet, NavLink } from "react-router-dom";
 import { useEffect } from "react";
 import { useI18n } from "../i18n";
 import { useLive } from "../store/live";
+import { Icon, type IconName } from "../components/icons";
 
-const TABS = [
-  { to: "/", icon: "◈", key: "dashboard" },
-  { to: "/devices", icon: "🔌", key: "devices" },
-  { to: "/statistics", icon: "📊", key: "statistics" },
-  { to: "/settings", icon: "⚙️", key: "settings" },
-  { to: "/events", icon: "☰", key: "events" },
+const TABS: { to: string; icon: IconName; key: string }[] = [
+  { to: "/", icon: "dashboard", key: "dashboard" },
+  { to: "/devices", icon: "devices", key: "devices" },
+  { to: "/statistics", icon: "statistics", key: "statistics" },
+  { to: "/settings", icon: "settings", key: "settings" },
+  { to: "/events", icon: "events", key: "events" },
 ];
 
 export function MobileShell() {
@@ -33,7 +34,7 @@ export function MobileShell() {
         {TABS.map((tab) => (
           <NavLink key={tab.to} to={tab.to} end={tab.to === "/"}
                    className={({ isActive }) => `m-tab ${isActive ? "on" : ""}`}>
-            <span className="m-tab-icon" aria-hidden="true">{tab.icon}</span>
+            <span className="m-tab-icon"><Icon name={tab.icon} size={22} /></span>
             {t(`nav.${tab.key}`)}
           </NavLink>
         ))}

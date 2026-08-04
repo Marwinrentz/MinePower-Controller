@@ -13,6 +13,7 @@ import { useI18n } from "../i18n";
 import { fmtW } from "../lib/format";
 import type { Snapshot } from "../lib/types";
 import { useAnimatedNumber, useFlashOnChange } from "./ui";
+import { Icon, type IconName } from "./icons";
 
 const NODES = {
   pv: { x: 330, y: 62 },
@@ -71,7 +72,7 @@ function Edge({ from, to, power, reverse = false, color, curve = 0, label }: Edg
 }
 
 function Node({ x, y, icon, label, value, sub, accent, muted = false, highlight = false }: {
-  x: number; y: number; icon: string; label: string; value: React.ReactNode;
+  x: number; y: number; icon: IconName; label: string; value: React.ReactNode;
   sub?: string; accent: string; muted?: boolean; highlight?: boolean;
 }) {
   return (
@@ -89,7 +90,9 @@ function Node({ x, y, icon, label, value, sub, accent, muted = false, highlight 
         strokeOpacity={muted ? 0.2 : 0.55} strokeWidth="1.5"
         style={{ transition: "stroke-opacity var(--t-slow) var(--ease)" }}
       />
-      <text x={x} y={y - 15} textAnchor="middle" fontSize="17">{icon}</text>
+      <g transform={`translate(${x - 10}, ${y - 28})`} color={accent}>
+        <Icon name={icon} size={20} />
+      </g>
       <text x={x} y={y + 5} textAnchor="middle" className="flow-node-value num" fill="var(--text-strong)">
         {value}
       </text>
@@ -158,22 +161,22 @@ export function EnergyFlow({ snapshot }: { snapshot: Snapshot }) {
       <Edge from={NODES.house} to={NODES.water} power={snapshot.water_power}
             color="var(--c-water)" curve={30} label={t("dash.water")} />
 
-      <Node x={NODES.pv.x} y={NODES.pv.y} icon="☀️" label={t("dash.pv")}
+      <Node x={NODES.pv.x} y={NODES.pv.y} icon="sun" label={t("dash.pv")}
             value={<FlowValue watts={snapshot.pv_power} />} accent="var(--c-pv)" />
-      <Node x={NODES.grid.x} y={NODES.grid.y} icon="🏭" label={t("dash.grid")}
+      <Node x={NODES.grid.x} y={NODES.grid.y} icon="grid" label={t("dash.grid")}
             value={<FlowValue watts={Math.abs(grid)} />}
             sub={importing ? t("dash.import") : grid < -ACTIVE_W ? t("dash.export") : undefined}
             accent={gridColor} highlight={gridFlash} />
-      <Node x={NODES.house.x} y={NODES.house.y} icon="🏠" label={t("dash.house")}
+      <Node x={NODES.house.x} y={NODES.house.y} icon="house" label={t("dash.house")}
             value={<FlowValue watts={snapshot.house_power} />} accent="var(--c-house)" />
-      <Node x={NODES.battery.x} y={NODES.battery.y} icon="🔋" label={t("dash.battery")}
+      <Node x={NODES.battery.x} y={NODES.battery.y} icon="battery" label={t("dash.battery")}
             value={hasBattery ? `${Math.round(snapshot.battery!.soc)} %` : "–"}
             sub={batterySub} accent="var(--c-battery)"
             muted={!hasBattery} highlight={batFlash} />
-      <Node x={NODES.car.x} y={NODES.car.y} icon="🚗" label={t("dash.car")}
+      <Node x={NODES.car.x} y={NODES.car.y} icon="car" label={t("dash.car")}
             value={<FlowValue watts={snapshot.wallbox_power} />} accent="var(--c-car)"
             muted={!hasCar} highlight={carFlash} />
-      <Node x={NODES.water.x} y={NODES.water.y} icon="💧" label={t("dash.water")}
+      <Node x={NODES.water.x} y={NODES.water.y} icon="water" label={t("dash.water")}
             value={<FlowValue watts={snapshot.water_power} />} accent="var(--c-water)"
             muted={!hasWater} highlight={waterFlash} />
     </svg>

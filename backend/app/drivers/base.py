@@ -124,6 +124,11 @@ class WallboxData(BaseModel):
     power: float = 0.0               # W, aktuelle Ladeleistung
     current_set: float | None = None # A, aktuell gesetzter Sollstrom
     phases_active: int | None = None # 1 oder 3
+    #: Gemessene Ladespannung je Phase in V, falls das Gerät sie meldet.
+    #: Zusammen mit phases_active ergibt das den exakten Umrechnungsfaktor
+    #: Ampere → Watt. Ohne diese Angabe muss der Regler mit 230 V rechnen,
+    #: und das liegt je nach Netz und Ladeverlusten spürbar daneben.
+    voltage: float | None = None
     energy_session_kwh: float | None = None
     soc: float | None = None         # % Fahrzeug-SoC, falls verfügbar (Best-Effort)
     #: Im Fahrzeug hinterlegte Ladegrenze in % (nur Fahrzeug-Treiber).

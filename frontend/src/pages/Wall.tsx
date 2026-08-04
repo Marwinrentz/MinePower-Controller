@@ -29,6 +29,7 @@ import { useI18n } from "../i18n";
 import { fmtW } from "../lib/format";
 import type { Snapshot, SnapshotDevice } from "../lib/types";
 import { useLive } from "../store/live";
+import { Icon, CATEGORY_ICON } from "../components/icons";
 
 /** Bildschirm wach halten, solange die Wand-Ansicht offen ist.
  *  Ohne das schaltet sich ein Tablet nach zwei Minuten ab – und ein
@@ -112,9 +113,6 @@ function overallState(s: Snapshot, t: (k: string) => string) {
 
 function WallTile({ device, t }: { device: SnapshotDevice; t: (k: string) => string }) {
   const data = device.data ?? {};
-  const icons: Record<string, string> = {
-    wallbox: "🚗", water_heater: "💧", battery: "🔋", inverter: "☀", meter: "⚡",
-  };
   const colors: Record<string, string> = {
     wallbox: "var(--c-car)", water_heater: "var(--c-water)", battery: "var(--c-battery)",
     inverter: "var(--c-pv)", meter: "var(--c-house)",
@@ -132,7 +130,7 @@ function WallTile({ device, t }: { device: SnapshotDevice; t: (k: string) => str
   return (
     <div className={`wall-tile ${active ? "active" : ""} ${device.online ? "" : "offline"}`}>
       <div className="wall-tile-top">
-        <span className="wall-tile-icon" aria-hidden="true">{icons[device.category] ?? "⚙"}</span>
+        <span className="wall-tile-icon"><Icon name={CATEGORY_ICON[device.category] ?? "settings"} size={22} /></span>
         <span className="wall-tile-name">{device.name}</span>
       </div>
 
@@ -214,9 +212,9 @@ export function Wall() {
         <div className="wall-head-side">
           <span className="wall-clock num">{clock}</span>
           <div className="wall-actions">
-            {!connected && <span className="wall-warn">⚠ {t("dash.disconnected")}</span>}
-            <button className="wall-btn" onClick={toggleFullscreen} title={t("wall.fullscreen")}>⛶</button>
-            <button className="wall-btn" onClick={() => navigate("/")} title={t("wall.exit")}>✕</button>
+            {!connected && <span className="wall-warn"><Icon name="warning" size={15} /> {t("dash.disconnected")}</span>}
+            <button className="wall-btn" onClick={toggleFullscreen} title={t("wall.fullscreen")}><Icon name="fullscreen" size={17} /></button>
+            <button className="wall-btn" onClick={() => navigate("/")} title={t("wall.exit")}><Icon name="close" size={17} /></button>
           </div>
         </div>
       </header>

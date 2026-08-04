@@ -231,6 +231,11 @@ class WallboxSettings:
     #: Um wie viel Ampere der Sollstrom je Takt höchstens steigen darf.
     #: Nach unten wird nicht begrenzt – Schutz vor Batteriebezug geht vor.
     ramp_up_step_a: float = 3.0
+    #: Nach wie vielen Takten mit gesendetem Ladestrom, aber ohne gemessene
+    #: Leistung, das Fahrzeug als nicht ladebereit gilt (siehe _responding).
+    idle_confirm_ticks: int = 6
+    #: Wie lange danach nicht erneut versucht wird.
+    idle_retry_s: float = 600.0
     # --- Prognose ---
     use_forecast: bool = True
     #: Wie lange eine Ladung bei absehbarer Erholung höchstens gehalten wird.
@@ -245,8 +250,9 @@ class WallboxSettings:
 #: Plausible Spanne für „Leistung je Ampere“: einphasig ≈ 230 W, dreiphasig
 #: ≈ 690 W. Alles außerhalb stammt aus einer Messung während des Hochrampens
 #: oder ist schlicht falsch – daraus wird nicht gelernt.
-WATTS_PER_AMP_MIN = 150.0
-WATTS_PER_AMP_MAX = 800.0
+#: Wie weit der gemessene Faktor vom Nennwert abweichen darf. Eng gefasst,
+#: weil er über die Mindestleistung in die Startschwelle eingeht.
+WATTS_PER_AMP_TOLERANCE = (0.8, 1.35)
 
 
 @dataclass
@@ -277,43 +283,79 @@ class WallboxController:
         self._forecast_hold_since: float | None = None
         self.override: str | None = None   # None|"fast"|"stop" (manueller Override)
         #: Gemessene Leistung je Ampere (siehe observe). None = noch nichts
-        #: gelernt, dann gilt der Nennwert aus Phasenzahl × 230 V.
+        #: gemessen, dann gilt der Nennwert aus Phasenzahl × 230 V.
         self._watts_per_amp: float | None = None
+        #: Vom Gerät gemeldete Phasenzahl. Maßgeblich für den Nennwert, denn
+        #: ein Fahrzeug kann dreiphasig laden, obwohl „1-phasig" eingestellt
+        #: ist – dann wäre der konfigurierte Wert der falsche Bezug.
+        self._phases_seen: int | None = None
         #: Zuletzt entschiedener Sollstrom – Basis für die Anstiegsbegrenzung.
         self._last_current_a = 0.0
+        #: Takte in Folge, in denen Strom kommandiert wurde, aber keine
+        #: Leistung floss (siehe _responding).
+        self._silent_ticks = 0
+        #: Bis wann nicht erneut versucht wird, nachdem das Fahrzeug als
+        #: nicht ladebereit erkannt wurde.
+        self._idle_until: float = -1e9
 
     # ------------------------------------------------------------ Helpers
 
     def observe(self, data: WallboxData) -> None:
-        """Aus der Messung lernen, wie viel Leistung ein Ampere wirklich bringt.
+        """Umrechnungsfaktor Ampere → Watt bestimmen.
 
-        Der Umrechnungsfaktor A → W ist keine Konstante: Die Netzspannung liegt
-        real bei 230–245 V, ein Fahrzeug lädt je nach Kabel und Standort ein-
-        oder dreiphasig, und Ladeverluste kommen obendrauf. Rechnet der Regler
-        starr mit 230 V je Phase, liegt der Sollstrom systematisch daneben –
-        zu hoch heißt Batteriebezug, zu niedrig heißt Einspeisung. Genau das
-        soll die Ampere-Regelung ja vermeiden.
+        Der Faktor ist keine Konstante: Die Netzspannung liegt real bei
+        230–245 V, und ein Fahrzeug lädt je nach Kabel und Standort ein- oder
+        dreiphasig. Ein starr gerechneter Sollstrom liegt deshalb systematisch
+        daneben – zu hoch heißt Bezug aus dem Speicher, zu niedrig heißt
+        Einspeisung.
 
-        Gelernt wird nur aus eindeutigen Messungen (Fahrzeug lädt wirklich,
-        Sollstrom bekannt, Ergebnis physikalisch plausibel) und dann geglättet,
-        damit ein einzelner Ausreißer die Regelung nicht verzieht.
+        **Gemessen schlägt geschätzt.** Meldet das Gerät Spannung und
+        Phasenzahl, ergibt sich der Faktor exakt aus beiden. Nur wenn diese
+        Angaben fehlen, wird er aus Leistung und Sollstrom geschätzt – und
+        dann eng um den Nennwert begrenzt.
+
+        Die Begrenzung ist nicht theoretisch: Tesla meldet ``charger_power``
+        als **ganzzahligen kW-Wert**. Bei 2 kW und 5 A Sollstrom ergibt die
+        Division 400 W/A statt 230. Da der Faktor auch in die Mindestleistung
+        eingeht, stieg damit die Startschwelle von 1,4 kW auf über 2,4 kW –
+        das Fahrzeug lud erst bei doppeltem Überschuss los.
         """
+        if data.phases_active in (1, 3):
+            self._phases_seen = data.phases_active
+        # 1. Exakter Weg: Spannung × Phasen direkt vom Gerät.
+        if data.voltage and data.phases_active:
+            self._watts_per_amp = data.voltage * data.phases_active
+            return
+        # 2. Schätzung nur als Rückfall, und nur aus eindeutigen Messungen.
         if data.state != WallboxState.CHARGING:
             return
         amps = data.current_set
         if not amps or amps < 1.0 or data.power < 200.0:
             return
         measured = data.power / amps
-        if not (WATTS_PER_AMP_MIN <= measured <= WATTS_PER_AMP_MAX):
-            return  # unplausibel (Messfehler, Fahrzeug rampt gerade hoch)
+        nominal = self._nominal_watts_per_amp()
+        if not (nominal * WATTS_PER_AMP_TOLERANCE[0] <= measured <= nominal * WATTS_PER_AMP_TOLERANCE[1]):
+            return  # zu grob aufgelöst oder unplausibel – nicht übernehmen
         self._watts_per_amp = (
             measured if self._watts_per_amp is None
             else 0.7 * self._watts_per_amp + 0.3 * measured
         )
 
+    def _nominal_watts_per_amp(self) -> float:
+        """Nennwert als Bezug für die Plausibilitätsgrenzen. Die vom Gerät
+        gemeldete Phasenzahl schlägt die konfigurierte – sie ist die
+        Wirklichkeit."""
+        return (self._phases_seen or self.phases) * VOLTAGE
+
     def watts_per_amp(self) -> float:
-        """Aktueller Umrechnungsfaktor A → W (gelernt, sonst Nennwert)."""
-        return self._watts_per_amp or (self.phases * VOLTAGE)
+        """Aktueller Umrechnungsfaktor A → W (gemessen, sonst Nennwert)."""
+        nominal = self._nominal_watts_per_amp()
+        if not self._watts_per_amp:
+            return nominal
+        # Harte Schranke: Der Faktor geht über _min_power in die Startschwelle
+        # ein. Ein Ausreißer darf sie nicht verdoppeln.
+        return max(nominal * WATTS_PER_AMP_TOLERANCE[0],
+                   min(self._watts_per_amp, nominal * WATTS_PER_AMP_TOLERANCE[1]))
 
     def _min_power(self) -> float:
         return self.s.min_current * self.watts_per_amp()
@@ -425,17 +467,53 @@ class WallboxController:
         self._last_current_a = 0.0
         return WallboxDecision(enable=False, current_a=0, reason=reason)
 
+    def _responding(self, data: WallboxData) -> bool:
+        """Nimmt das Fahrzeug den gesendeten Ladestrom überhaupt an?
+
+        Der gemeldete Zustand allein ist keine verlässliche Auskunft: Ein
+        Fahrzeug, das per Funk nicht erreichbar ist oder gar nicht am Kabel
+        hängt, meldet je nach Anbindung trotzdem „verbunden". Die
+        Prioritätskette reserviert dann Leistung, die nie abgerufen wird –
+        und alles dahinter bekommt zu wenig.
+
+        Deshalb wird nicht geglaubt, sondern gemessen: Fließt über mehrere
+        Takte kein Strom, obwohl welcher kommandiert ist, gilt das Fahrzeug
+        als nicht ladebereit. Danach eine Weile Ruhe, damit nicht im
+        Sekundentakt weitergeprobt wird."""
+        if not self.charging or self._last_current_a <= 0:
+            self._silent_ticks = 0
+            return True
+        if data.power > 100.0:
+            self._silent_ticks = 0
+            return True
+        self._silent_ticks += 1
+        if self._silent_ticks < self.s.idle_confirm_ticks:
+            return True
+        self._idle_until = self.clock() + self.s.idle_retry_s
+        self._silent_ticks = 0
+        return False
+
     def decide(self, budget_w: float, data: WallboxData, ctx: ChargeContext) -> WallboxDecision:
         s = self.s
         mode = self._effective_mode(ctx)
-        # Zuerst aus der Messung lernen – die Entscheidung unten rechnet dann
-        # schon mit dem realen Watt-je-Ampere dieser Installation.
+        # Zuerst messen – die Entscheidung unten rechnet dann schon mit dem
+        # realen Watt-je-Ampere dieser Installation.
         self.observe(data)
 
         if data.state in (WallboxState.IDLE, WallboxState.ERROR, WallboxState.COMPLETE):
             self.start_timer.reset()
             self.stop_timer.reset()
             return self._stop(f"state={data.state.value}")
+
+        # Ein manueller Eingriff hebt die Sperre sofort auf – der Nutzer weiß
+        # besser als wir, ob das Kabel steckt.
+        if self.override is not None:
+            self._idle_until = -1e9
+        if not self._responding(data):
+            self.start_timer.reset()
+            return self._stop("Fahrzeug nimmt keine Leistung auf – nicht angesteckt?")
+        if self.clock() < self._idle_until:
+            return self._stop("Fahrzeug nicht ladebereit – nächster Versuch später")
 
         if mode == "off":
             return self._stop("manuell gestoppt")

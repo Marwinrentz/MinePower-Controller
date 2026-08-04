@@ -14,12 +14,11 @@ import { post } from "../lib/api";
 import { fmtW } from "../lib/format";
 import type { Snapshot, SnapshotDevice } from "../lib/types";
 import { useLive } from "../store/live";
+import { Icon, CATEGORY_ICON, type IconName } from "../components/icons";
 
 const SCALE_STEPS = [1000, 2000, 3000, 5000, 8000, 12000, 20000, 30000];
 
-const ICON: Record<string, string> = {
-  wallbox: "🚗", water_heater: "💧", battery: "🔋", inverter: "☀️", meter: "⚡",
-};
+
 const COLOR: Record<string, string> = {
   wallbox: "var(--c-car)", water_heater: "var(--c-water)", battery: "var(--c-battery)",
   inverter: "var(--c-pv)", meter: "var(--c-house)",
@@ -62,9 +61,9 @@ function Balance({ snapshot, t }: { snapshot: Snapshot; t: (k: string) => string
       </div>
 
       <div className="m-balance-scale">
-        <span>◄ {t("dash.export")}</span>
+        <span>{t("dash.export")}</span>
         <span>0</span>
-        <span>{t("dash.import")} ►</span>
+        <span>{t("dash.import")}</span>
       </div>
     </div>
   );
@@ -72,7 +71,7 @@ function Balance({ snapshot, t }: { snapshot: Snapshot; t: (k: string) => string
 
 /* ------------------------------------------------------------- Flussleiste */
 
-type Seg = { key: string; icon: string; watts: number; color: string; label: string };
+type Seg = { key: string; icon: IconName; watts: number; color: string; label: string };
 
 function FlowRow({ tag, items, scale }: { tag: string; items: Seg[]; scale: number }) {
   return (
@@ -86,7 +85,7 @@ function FlowRow({ tag, items, scale }: { tag: string; items: Seg[]; scale: numb
             <div key={s.key} className="m-flow-seg"
                  style={{ width: `${Math.max(share, 0.08) * 100}%`, background: s.color }}
                  title={`${s.label}: ${fmtW(s.watts)}`}>
-              <span aria-hidden="true">{s.icon}</span>
+              <Icon name={s.icon} size={14} />
               {share > 0.22 && <span>{fmtW(s.watts)}</span>}
             </div>
           );
@@ -99,18 +98,18 @@ function FlowRow({ tag, items, scale }: { tag: string; items: Seg[]; scale: numb
 function Flow({ snapshot, t }: { snapshot: Snapshot; t: (k: string) => string }) {
   const grid = snapshot.grid_power ?? 0;
   const bat = snapshot.battery?.power ?? 0;
-  const sources: Seg[] = [
-    { key: "pv", icon: "☀", watts: snapshot.pv_power, color: "var(--c-pv)", label: t("dash.pv") },
-    { key: "imp", icon: "⚡", watts: Math.max(0, grid), color: "var(--c-grid-import)", label: t("dash.import") },
-    { key: "bo", icon: "🔋", watts: Math.max(0, -bat), color: "var(--c-battery)", label: t("dash.battery") },
-  ].filter((s) => s.watts > 20);
-  const loads: Seg[] = [
-    { key: "h", icon: "⌂", watts: snapshot.house_power, color: "var(--c-house)", label: t("dash.house") },
-    { key: "c", icon: "🚗", watts: snapshot.wallbox_power, color: "var(--c-car)", label: t("dash.car") },
-    { key: "w", icon: "💧", watts: snapshot.water_power, color: "var(--c-water)", label: t("dash.water") },
-    { key: "bi", icon: "🔋", watts: Math.max(0, bat), color: "var(--c-battery)", label: t("dash.battery") },
-    { key: "e", icon: "↗", watts: Math.max(0, -grid), color: "var(--c-grid-export)", label: t("dash.export") },
-  ].filter((s) => s.watts > 20);
+  const sources: Seg[] = ([
+    { key: "pv", icon: "sun", watts: snapshot.pv_power, color: "var(--c-pv)", label: t("dash.pv") },
+    { key: "imp", icon: "grid", watts: Math.max(0, grid), color: "var(--c-grid-import)", label: t("dash.import") },
+    { key: "bo", icon: "battery", watts: Math.max(0, -bat), color: "var(--c-battery)", label: t("dash.battery") },
+  ] as Seg[]).filter((s) => s.watts > 20);
+  const loads: Seg[] = ([
+    { key: "h", icon: "house", watts: snapshot.house_power, color: "var(--c-house)", label: t("dash.house") },
+    { key: "c", icon: "car", watts: snapshot.wallbox_power, color: "var(--c-car)", label: t("dash.car") },
+    { key: "w", icon: "water", watts: snapshot.water_power, color: "var(--c-water)", label: t("dash.water") },
+    { key: "bi", icon: "battery", watts: Math.max(0, bat), color: "var(--c-battery)", label: t("dash.battery") },
+    { key: "e", icon: "export", watts: Math.max(0, -grid), color: "var(--c-grid-export)", label: t("dash.export") },
+  ] as Seg[]).filter((s) => s.watts > 20);
 
   const scale = Math.max(
     sources.reduce((a, s) => a + s.watts, 0),
@@ -173,7 +172,7 @@ function DeviceRow({ device, t }: { device: SnapshotDevice; t: (k: string) => st
     <div className="m-dev">
       <button className="m-dev-head" onClick={() => controllable && setOpen(!open)}
               aria-expanded={controllable ? open : undefined}>
-        <span className="m-dev-icon" aria-hidden="true">{ICON[device.category] ?? "⚙️"}</span>
+        <span className="m-dev-icon"><Icon name={CATEGORY_ICON[device.category] ?? "settings"} size={20} /></span>
         <span className="m-dev-main">
           <span className="m-dev-name">{device.name}</span>
           <span className="m-dev-sub" style={!device.online ? { color: "var(--err)" } : undefined}>{sub}</span>
@@ -208,16 +207,16 @@ function DeviceRow({ device, t }: { device: SnapshotDevice; t: (k: string) => st
               {device.category === "wallbox" ? (
                 <div className="m-btnrow">
                   <button className={`m-btn ${device.override === "fast" ? "on" : ""}`} disabled={busy}
-                          onClick={() => act("fast")}>⚡ {t("device.overrideFastShort")}</button>
+                          onClick={() => act("fast")}><Icon name="bolt" size={14} /> {t("device.overrideFastShort")}</button>
                   <button className={`m-btn ${device.override === "stop" ? "on" : ""}`} disabled={busy}
-                          onClick={() => act("stop")}>⏹ {t("device.overrideStopShort")}</button>
+                          onClick={() => act("stop")}><Icon name="stop" size={14} /> {t("device.overrideStopShort")}</button>
                   <button className={`m-btn ${!device.override ? "on" : ""}`} disabled={busy}
-                          onClick={() => act("auto")}>🤖 {t("device.overrideAutoShort")}</button>
+                          onClick={() => act("auto")}><Icon name="auto" size={14} /> {t("device.overrideAutoShort")}</button>
                 </div>
               ) : (
                 <button className={`m-btn ${device.boost ? "on" : ""}`} disabled={busy}
                         onClick={() => act(device.boost ? "boost_off" : "boost")}>
-                  🔥 {device.boost ? t("device.boostOff") : t("device.boost")}
+                  <Icon name="boost" size={14} /> {device.boost ? t("device.boostOff") : t("device.boost")}
                 </button>
               )}
 
@@ -301,7 +300,7 @@ export function MobileDashboard() {
       <div className="m-stagger" style={{ display: "flex", flexDirection: "column", gap: "var(--m-gap)" }}>
         {snapshot.paused && (
           <div className="m-note warn">
-            <span aria-hidden="true">⏸</span>
+            <Icon name="pause" size={16} />
             <span className="m-note-txt">
               <strong>{t("dash.paused")}</strong>
               <span>{t("dash.statePausedSub")}</span>
@@ -310,7 +309,7 @@ export function MobileDashboard() {
         )}
         {!snapshot.paused && snapshot.safety && (
           <div className="m-note err">
-            <span aria-hidden="true">⚠</span>
+            <Icon name="warning" size={16} />
             <span className="m-note-txt">
               <strong>{t("dash.safetyTitle")}</strong>
               <span>{snapshot.safety}</span>
@@ -319,24 +318,24 @@ export function MobileDashboard() {
         )}
         {failing.length > 0 && !dismissed.includes(failingKey) && (
           <div className="m-note err">
-            <span aria-hidden="true">✕</span>
+            <Icon name="close" size={16} />
             <span className="m-note-txt">
               <strong>{t("dash.commandFailed")}</strong>
               <span>{failing.map((d) => `${d.name}: ${d.command_error}`).join(" · ")}</span>
             </span>
             <button className="m-note-close" onClick={() => hide(failingKey)}
-                    aria-label={t("common.close")}>✕</button>
+                    aria-label={t("common.close")}><Icon name="close" size={14} /></button>
           </div>
         )}
         {offline.length > 0 && !dismissed.includes(offlineKey) && (
           <div className="m-note warn">
-            <span aria-hidden="true">⚠</span>
+            <Icon name="warning" size={16} />
             <span className="m-note-txt">
               <strong>{t("dash.deviceOffline")}</strong>
               <span>{offline.map((d) => d.name).join(", ")}</span>
             </span>
             <button className="m-note-close" onClick={() => hide(offlineKey)}
-                    aria-label={t("common.close")}>✕</button>
+                    aria-label={t("common.close")}><Icon name="close" size={14} /></button>
           </div>
         )}
 
@@ -413,7 +412,8 @@ export function MobileDashboard() {
 
       <div className="m-section">{t("dash.pause")}</div>
       <button className="m-btn" style={{ width: "100%", minHeight: 48 }} disabled={busy} onClick={togglePause}>
-        {snapshot.paused ? `▶ ${t("dash.resume")}` : `⏸ ${t("dash.pause")}`}
+        <><Icon name={snapshot.paused ? "play" : "pause"} size={14} />{" "}
+            {snapshot.paused ? t("dash.resume") : t("dash.pause")}</>
       </button>
     </div>
   );

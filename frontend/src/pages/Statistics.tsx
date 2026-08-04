@@ -13,6 +13,7 @@ import { get } from "../lib/api";
 import { fmtTime } from "../lib/format";
 import type { ChargeSession, Statistics as Stats } from "../lib/types";
 import { useAuth } from "../store/auth";
+import { Icon } from "../components/icons";
 
 const RANGES = ["24h", "7d", "30d", "365d"] as const;
 
@@ -86,7 +87,7 @@ export function Statistics() {
           {isAdmin && (
             <Button small onClick={downloadDiagnosticReport} disabled={reportBusy}
                     title={t("stats.diagnosticReportHelp")}>
-              ⬇ {t("stats.diagnosticReport")}
+              {t("stats.diagnosticReport")}
             </Button>
           )}
         </div>
@@ -135,10 +136,10 @@ export function Statistics() {
       <Card>
         <div className="card-head">
           <h2>{t("stats.sessions")}</h2>
-          <Button small onClick={downloadCsv}>⬇ {t("stats.downloadCsv")}</Button>
+          <Button small onClick={downloadCsv}>{t("stats.downloadCsv")}</Button>
         </div>
         {sessions.length === 0 ? (
-          <Empty icon="🚗" title={t("stats.noSessions")} />
+          <Empty icon={<Icon name="car" size={30} />} title={t("stats.noSessions")} />
         ) : (
           <div className="table-scroll">
             <table className="table">

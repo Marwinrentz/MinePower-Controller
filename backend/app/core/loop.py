@@ -723,10 +723,20 @@ class ControlLoop:
                         if not charging and data.state in (WallboxState.IDLE, WallboxState.COMPLETE, WallboxState.CONNECTED):
                             cs.ended_at = datetime.now(timezone.utc)
                             dev.session_id = None
-                            await log_event(
-                                f"Ladevorgang beendet: {dev.name} ({cs.energy_kwh:.1f} kWh, davon Solar {cs.solar_kwh:.1f} kWh)",
-                                category="control",
-                            )
+                            # Eine Ladung, bei der nie nennenswert Energie
+                            # geflossen ist, war keine. Sie entsteht, wenn ein
+                            # Fahrzeug kurz „lädt" meldet und sofort wieder
+                            # abbricht – das Protokoll lief damit voll mit
+                            # „0.0 kWh"-Paaren, die nichts aussagen und die
+                            # echten Vorgänge zudecken.
+                            if cs.energy_kwh < 0.05:
+                                await session.delete(cs)
+                            else:
+                                await log_event(
+                                    f"Ladevorgang beendet: {dev.name} ({cs.energy_kwh:.1f} kWh, "
+                                    f"davon Solar {cs.solar_kwh:.1f} kWh)",
+                                    category="control",
+                                )
                             if self.notifier:
                                 await self.notifier.send(
                                     f"🔋 Ladung beendet an {dev.name}: {cs.energy_kwh:.1f} kWh "

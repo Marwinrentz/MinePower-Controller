@@ -35,6 +35,11 @@ CHARGING_STATES = {
 # BLE-Proxy nicht fluten: Fahrzeugdaten höchstens alle X Sekunden frisch holen
 MIN_POLL_INTERVAL_S = 20.0
 
+#: Wie lange ein per Funk bestätigter Zustand ohne neue Antwort weiter gilt.
+#: Danach gilt das Fahrzeug als abwesend – lieber kein Budget reservieren als
+#: eines für ein Auto, das gar nicht mehr da ist.
+STATE_TRUST_S = 1800.0
+
 
 @register
 class TeslaVehicle(WallboxDriver):
@@ -99,6 +104,8 @@ class TeslaVehicle(WallboxDriver):
         #: „verbunden“ springen und dauerhaft Budget in der Prioritätskette
         #: blockieren, das nie abgerufen wird.
         self._last_known_state = WallboxState.IDLE
+        #: Wann der Zustand zuletzt durch eine echte Antwort bestätigt wurde.
+        self._state_confirmed_at = 0.0
         # Fleet-API konservativer pollen (Rate-Limits)
         self._poll_interval = 60.0 if config.get("backend") == "fleet" else MIN_POLL_INTERVAL_S
 
@@ -116,14 +123,22 @@ class TeslaVehicle(WallboxDriver):
             data = await self.client.vehicle_data("charge_state")
         except TimeoutError:
             # Nicht erreichbar heißt entweder „schläft, aber noch angesteckt“
-            # oder schlicht „gar nicht verbunden“ – per BLE nicht unterscheidbar,
-            # ohne das Fahrzeug regelmäßig zu wecken (Vampir-Drain). Wir nehmen
-            # daher den zuletzt bestätigten Zustand an, statt pauschal
-            # „verbunden“ zu unterstellen: Ein Fahrzeug, das nie angesteckt war,
-            # bleibt so korrekt „idle“ und blockiert kein Budget in der
-            # Prioritätskette, das nie abgerufen würde.
-            self._cache = WallboxData(state=self._last_known_state, power=0.0,
-                                      extra={"Fahrzeug": "nicht erreichbar (schläft oder nicht verbunden)",
+            # oder schlicht „gar nicht verbunden“ – per BLE nicht
+            # unterscheidbar, ohne das Fahrzeug regelmäßig zu wecken
+            # (Vampir-Drain). Kurzzeitig gilt daher der zuletzt bestätigte
+            # Zustand weiter.
+            #
+            # Aber nur kurzzeitig: Wer stundenlang nichts hört, weiß es
+            # schlicht nicht mehr. Dann auf „kein Fahrzeug“ zurückfallen,
+            # damit die Prioritätskette kein Budget für ein Auto reserviert,
+            # das längst weggefahren ist.
+            stale = (now - self._state_confirmed_at) > STATE_TRUST_S
+            state = WallboxState.IDLE if stale else self._last_known_state
+            hint = ("nicht erreichbar – Zustand seit über "
+                    f"{STATE_TRUST_S / 60:.0f} min unbestätigt" if stale
+                    else "nicht erreichbar (schläft oder nicht verbunden)")
+            self._cache = WallboxData(state=state, power=0.0,
+                                      extra={"Fahrzeug": hint,
                                              "capacity_kwh": self.config.get("capacity_kwh")})
             self._cache_time = now
             return self._cache
@@ -136,6 +151,7 @@ class TeslaVehicle(WallboxDriver):
             )
         state = CHARGING_STATES.get(str(charge.get("charging_state")), WallboxState.CONNECTED)
         self._last_known_state = state
+        self._state_confirmed_at = now
         amps = _f(charge.get("charger_actual_current"))
         volts = _f(charge.get("charger_voltage")) or 230.0
         phases = int(_f(charge.get("charger_phases")) or 1)
@@ -146,6 +162,10 @@ class TeslaVehicle(WallboxDriver):
             power=checked("wallbox_power", power, source="Tesla charger_power"),
             current_set=sanitized("wallbox_current", _f(charge.get("charge_amps")), zero_is_none=True),
             phases_active=phases if phases in (1, 3) else None,
+            # Gemessene Spannung durchreichen. Der Regler rechnet damit exakt
+            # von Ampere in Watt, statt sie aus charger_power zu schätzen –
+            # das ist bei Tesla ein ganzzahliger kW-Wert und dafür viel zu grob.
+            voltage=volts if 180.0 <= volts <= 260.0 else None,
             energy_session_kwh=sanitized("energy_kwh", _f(charge.get("charge_energy_added")), zero_is_none=True),
             soc=sanitized("vehicle_soc", charge.get("battery_level")),
             charge_limit_soc=sanitized("vehicle_soc", charge.get("charge_limit_soc")),

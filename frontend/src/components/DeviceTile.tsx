@@ -11,13 +11,11 @@ import { post } from "../lib/api";
 import { fmtW } from "../lib/format";
 import type { SnapshotDevice } from "../lib/types";
 import { AnimatedValue, Bar, Badge, Segment, StatusDot, useFlashOnChange, useIsPhone } from "./ui";
+import { Icon, CATEGORY_ICON } from "./icons";
 
 const WALLBOX_MODES = ["pv_only", "min_pv", "fast", "target", "price"] as const;
 const HEATER_MODES = ["pv_only", "schedule", "off"] as const;
 
-const ICONS: Record<string, string> = {
-  wallbox: "🚗", water_heater: "💧", battery: "🔋", inverter: "☀️", meter: "🏭",
-};
 
 /** Ladegrenze des Fahrzeugs (nicht der Wallbox).
  *
@@ -130,7 +128,7 @@ export function DeviceTile({ device }: { device: SnapshotDevice }) {
     <div className={classes}>
       <div className="tile-head">
         <div className="tile-title">
-          <span className="tile-icon" aria-hidden="true">{ICONS[device.category] ?? "⚙️"}</span>
+          <span className="tile-icon"><Icon name={CATEGORY_ICON[device.category] ?? "settings"} size={20} /></span>
           <span className="tile-name">{device.name}</span>
         </div>
         <StatusDot
@@ -155,7 +153,7 @@ export function DeviceTile({ device }: { device: SnapshotDevice }) {
             <span className="tile-meta">
               {t(`device.state.${String(data.state ?? "idle")}`)}
               {data.current_set ? ` · ${Number(data.current_set).toFixed(0)} A` : ""}
-              {data.phases_active ? ` · ${data.phases_active}⏦` : ""}
+              {data.phases_active ? ` · ${data.phases_active}~` : ""}
             </span>
           </div>
           {data.soc != null && (
@@ -180,17 +178,17 @@ export function DeviceTile({ device }: { device: SnapshotDevice }) {
               <button className={`btn small ${override === "fast" ? "pressed" : ""}`}
                       title={t("device.overrideFast")}
                       onClick={() => action("fast")}>
-                ⚡ {isPhone ? t("device.overrideFastShort") : t("device.overrideFast")}
+                <Icon name="bolt" size={14} /> {isPhone ? t("device.overrideFastShort") : t("device.overrideFast")}
               </button>
               <button className={`btn small ${override === "stop" ? "pressed" : ""}`}
                       title={t("device.overrideStop")}
                       onClick={() => action("stop")}>
-                ⏹ {t("device.overrideStopShort")}
+                <Icon name="stop" size={14} /> {t("device.overrideStopShort")}
               </button>
               <button className={`btn small ${!override ? "pressed" : ""}`}
                       title={t("device.overrideAuto")}
                       onClick={() => action("auto")}>
-                🤖 {isPhone ? t("device.overrideAutoShort") : t("device.overrideAuto")}
+                <Icon name="auto" size={14} /> {isPhone ? t("device.overrideAutoShort") : t("device.overrideAuto")}
               </button>
             </div>
             {(device.capabilities ?? []).includes("charge_limit") && (
@@ -225,7 +223,7 @@ export function DeviceTile({ device }: { device: SnapshotDevice }) {
             />
             <button className={`btn small ${boost ? "pressed" : ""}`}
                     onClick={() => action(boost ? "boost_off" : "boost")}>
-              🔥 {boost ? t("device.boostOff") : t("device.boost")}
+              <Icon name="boost" size={14} /> {boost ? t("device.boostOff") : t("device.boost")}
             </button>
           </div>
         </>

@@ -80,7 +80,7 @@ export function Settings() {
       <div className="card-head">
         <h1>{t("nav.settings")}</h1>
         <div className="row tight">
-          {saved && <span className="badge ok">✓ {t("common.save")}</span>}
+          {saved && <span className="badge ok">{t("common.save")}</span>}
           <Button variant="primary" onClick={save}>{t("common.save")}</Button>
         </div>
       </div>
@@ -152,9 +152,9 @@ export function Settings() {
           <div className="row wrap">
             <Segment<ThemeMode>
               options={[
-                { value: "light", label: `☀️ ${t("settings.themeLight")}` },
-                { value: "dark", label: `🌙 ${t("settings.themeDark")}` },
-                { value: "system", label: `🖥️ ${t("settings.themeSystem")}` },
+                { value: "light", label: t("settings.themeLight") },
+                { value: "dark", label: t("settings.themeDark") },
+                { value: "system", label: t("settings.themeSystem") },
               ]}
               value={mode}
               onChange={setMode}
@@ -235,8 +235,8 @@ export function Settings() {
           <h2 style={{ marginTop: 20 }}>{t("settings.backup")}</h2>
           <p className="dim">{t("settings.backupText")}</p>
           <div className="row wrap">
-            <Button onClick={exportConfig}>⬇ {t("common.export")}</Button>
-            <Button onClick={() => fileRef.current?.click()}>⬆ {t("common.import")}</Button>
+            <Button onClick={exportConfig}>{t("common.export")}</Button>
+            <Button onClick={() => fileRef.current?.click()}>{t("common.import")}</Button>
             <input ref={fileRef} type="file" accept=".json" style={{ display: "none" }}
                    onChange={(e) => e.target.files?.[0] && importConfig(e.target.files[0])} />
           </div>

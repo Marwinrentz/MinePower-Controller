@@ -11,6 +11,7 @@ import { useI18n } from "../i18n";
 import { get } from "../lib/api";
 import { fmtTime } from "../lib/format";
 import type { AppEvent } from "../lib/types";
+import { Icon } from "../components/icons";
 
 type Diagnostics = {
   deadband_effective_w?: number;
@@ -68,7 +69,7 @@ export function Events() {
         <div className="row tight">
           <Button small onClick={load} title={t("common.loading")}>⟳</Button>
           <Button small pressed={diag != null} onClick={() => (diag ? setDiag(null) : loadDiag())}>
-            🔬 {t("events.diagnostics")}
+            <Icon name="flask" size={14} /> {t("events.diagnostics")}
           </Button>
         </div>
       </div>
@@ -135,7 +136,7 @@ export function Events() {
 
       <Card>
         {events.length === 0 ? (
-          <Empty icon="☰" title={t("events.title")} />
+          <Empty icon={<Icon name="events" size={30} />} title={t("events.title")} />
         ) : (
           <div className="table-scroll">
             <table className="table">

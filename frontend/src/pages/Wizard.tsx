@@ -72,7 +72,7 @@ export function Wizard() {
       <div className="wizard-steps" style={{ justifyContent: "center" }}>
         {STEPS.map((s, i) => (
           <span key={s.key} className={`wizard-step ${i === stepIndex ? "current" : i < stepIndex ? "done" : ""}`}>
-            {i < stepIndex ? "✓ " : ""}{t(`wizard.${s.key === "welcome" ? "welcome" : s.key}`)}
+            {i < stepIndex ? "" : ""}{t(`wizard.${s.key === "welcome" ? "welcome" : s.key}`)}
           </span>
         ))}
       </div>
@@ -84,7 +84,7 @@ export function Wizard() {
             <p>{t("wizard.welcomeText")}</p>
             <div className="panel">
               <p style={{ margin: "0 0 var(--s3)" }}>{t("wizard.demoText")}</p>
-              <Button onClick={startDemo}>🧪 {t("wizard.demoButton")}</Button>
+              <Button onClick={startDemo}>{t("wizard.demoButton")}</Button>
             </div>
             <div className="row" style={{ justifyContent: "flex-end" }}>
               <Button variant="primary" onClick={next}>{t("common.next")} →</Button>
@@ -110,7 +110,7 @@ export function Wizard() {
 
             {inCategory.map((d) => (
               <div key={d.id} className="panel row between">
-                <strong style={{ color: "var(--text-strong)" }}>✓ {d.name}</strong>
+                <strong style={{ color: "var(--text-strong)" }}>{d.name}</strong>
                 <small>{d.driver_id}</small>
               </div>
             ))}
@@ -118,7 +118,7 @@ export function Wizard() {
             {!savedInStep && (
               <DeviceForm category={step.category} onSaved={() => { setSavedInStep(true); loadDevices(); }} />
             )}
-            {savedInStep && <Badge tone="ok">✓ {t("common.save")}</Badge>}
+            {savedInStep && <Badge tone="ok">{t("common.save")}</Badge>}
 
             <div className="row between">
               <Button onClick={back}>← {t("common.back")}</Button>
@@ -146,7 +146,7 @@ export function Wizard() {
 
         {step.key === "stepDone" && (
           <div className="col" style={{ textAlign: "center", alignItems: "center" }}>
-            <span style={{ fontSize: 40 }} aria-hidden="true">🎉</span>
+            <span style={{ fontSize: 40 }} aria-hidden="true"></span>
             <h2>{t("wizard.stepDone")}</h2>
             <p>{t("wizard.doneText")}</p>
             <Button variant="primary" onClick={() => navigate("/")}>{t("wizard.toDashboard")} →</Button>

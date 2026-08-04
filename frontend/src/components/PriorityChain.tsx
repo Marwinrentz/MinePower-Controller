@@ -8,8 +8,8 @@
 import { useState } from "react";
 import { useI18n } from "../i18n";
 import type { Device } from "../lib/types";
+import { Icon, CATEGORY_ICON } from "./icons";
 
-const ICONS: Record<string, string> = { wallbox: "🚗", water_heater: "💧", battery: "🔋" };
 
 export function PriorityChain({ devices, order, onChange }: {
   devices: Device[];
@@ -69,7 +69,7 @@ export function PriorityChain({ devices, order, onChange }: {
         >
           <span className="prio-grip" aria-hidden="true">⠿</span>
           <span className="prio-rank">{i + 1}</span>
-          <span style={{ fontSize: 16 }} aria-hidden="true">{ICONS[d.category] ?? "⚙️"}</span>
+          <Icon name={CATEGORY_ICON[d.category] ?? "settings"} size={17} />
           <div className="col" style={{ gap: 0, minWidth: 0 }}>
             <strong style={{ color: "var(--text-strong)" }}>{d.name}</strong>
             <small>{t(`device.categories.${d.category}`)}</small>
@@ -77,9 +77,9 @@ export function PriorityChain({ devices, order, onChange }: {
           <div className="spacer" />
           <div className="prio-move">
             <button onClick={() => shift(i, -1)} disabled={i === 0}
-                    title={t("common.back")} aria-label={`${d.name} ${t("common.back")}`}>▲</button>
+                    title={t("common.back")} aria-label={`${d.name} ${t("common.back")}`}>&#9650;</button>
             <button onClick={() => shift(i, 1)} disabled={i === sorted.length - 1}
-                    title={t("common.next")} aria-label={`${d.name} ${t("common.next")}`}>▼</button>
+                    title={t("common.next")} aria-label={`${d.name} ${t("common.next")}`}>&#9660;</button>
           </div>
         </div>
       ))}

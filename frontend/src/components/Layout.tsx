@@ -7,17 +7,18 @@
 import { useEffect } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useI18n } from "../i18n";
+import { Icon, type IconName } from "./icons";
 import { Logo } from "./Logo";
 import { useAuth } from "../store/auth";
 import { useLive } from "../store/live";
 import { useTheme } from "../store/theme";
 
-const NAV = [
-  { to: "/", icon: "◈", key: "dashboard" },
-  { to: "/devices", icon: "🔌", key: "devices" },
-  { to: "/statistics", icon: "📊", key: "statistics" },
-  { to: "/settings", icon: "⚙", key: "settings" },
-  { to: "/events", icon: "☰", key: "events" },
+const NAV: { to: string; icon: IconName; key: string }[] = [
+  { to: "/", icon: "dashboard", key: "dashboard" },
+  { to: "/devices", icon: "devices", key: "devices" },
+  { to: "/statistics", icon: "statistics", key: "statistics" },
+  { to: "/settings", icon: "settings", key: "settings" },
+  { to: "/events", icon: "events", key: "events" },
 ];
 
 function LiveIndicator({ connected, label }: { connected: boolean; label: string }) {
@@ -41,7 +42,7 @@ export function Layout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const themeIcon = mode === "dark" ? "🌙" : mode === "light" ? "☀️" : "🖥️";
+  const themeIcon: IconName = mode === "dark" ? "moon" : mode === "light" ? "sun" : "display";
   const cycleTheme = () => setMode(mode === "dark" ? "light" : mode === "light" ? "system" : "dark");
 
   return (
@@ -58,7 +59,7 @@ export function Layout() {
             end={n.to === "/"}
             className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
           >
-            <span className="nav-icon" aria-hidden="true">{n.icon}</span>
+            <span className="nav-icon"><Icon name={n.icon} size={18} /></span>
             {t(`nav.${n.key}`)}
           </NavLink>
         ))}
@@ -67,7 +68,7 @@ export function Layout() {
 
         <div className="row tight" style={{ padding: "0 var(--s3)" }}>
           <button className="btn small icon" onClick={cycleTheme} title={t("settings.theme")}>
-            {themeIcon}
+            <Icon name={themeIcon} size={16} />
           </button>
           <button className="btn small" onClick={() => setLang(lang === "de" ? "en" : "de")}
                   title={t("settings.language")}>
@@ -76,7 +77,7 @@ export function Layout() {
         </div>
         <div className="nav-item" onClick={logout} title={user?.email} role="button" tabIndex={0}
              onKeyDown={(e) => e.key === "Enter" && logout()}>
-          <span className="nav-icon" aria-hidden="true">⏻</span> {t("nav.logout")}
+          <span className="nav-icon"><Icon name="power" size={18} /></span> {t("nav.logout")}
         </div>
         <div style={{ padding: "var(--s2) var(--s3) 0" }}>
           <LiveIndicator connected={connected} label={t("common.connecting")} />
@@ -92,9 +93,9 @@ export function Layout() {
         <div className="row tight">
           <LiveIndicator connected={connected} label={t("common.connecting")} />
           <button className="btn small icon ghost" onClick={cycleTheme} title={t("settings.theme")}>
-            {themeIcon}
+            <Icon name={themeIcon} size={16} />
           </button>
-          <button className="btn small icon ghost" onClick={logout} title={t("nav.logout")}>⏻</button>
+          <button className="btn small icon ghost" onClick={logout} title={t("nav.logout")}><Icon name="power" size={16} /></button>
         </div>
       </header>
 
@@ -106,7 +107,7 @@ export function Layout() {
         {NAV.map((n) => (
           <NavLink key={n.to} to={n.to} end={n.to === "/"}
                    className={({ isActive }) => `tab-item ${isActive ? "active" : ""}`}>
-            <span className="nav-icon" aria-hidden="true">{n.icon}</span>
+            <span className="nav-icon"><Icon name={n.icon} size={18} /></span>
             {t(`nav.${n.key}`)}
           </NavLink>
         ))}

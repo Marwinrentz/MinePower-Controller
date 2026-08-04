@@ -4,7 +4,7 @@
  *  sondern: *Stehe ich am Netzpunkt auf null?* Genau das beantwortet die
  *  Waage oben, und zwar ohne dass man eine Zahl lesen muss:
  *
- *      Einspeisung ◄────────────┼────────────► Bezug
+ *      Einspeisung ────────────┼──────────── Bezug
  *                          ▓▓▓▓▓│
  *                        └── Zielband ──┘
  *
@@ -28,6 +28,7 @@
 import { fmtW } from "../lib/format";
 import type { Snapshot } from "../lib/types";
 import { useAnimatedNumber } from "./ui";
+import { Icon, type IconName } from "./icons";
 
 /* ------------------------------------------------------------------ Waage */
 
@@ -93,9 +94,9 @@ export function BalanceMeter({ snapshot, t, size = "md" }: {
       </div>
 
       <div className="bal-scale">
-        <span>◄ {t("dash.export")}</span>
+        <span>{t("dash.export")}</span>
         <span className="bal-scale-mid">0</span>
-        <span>{t("dash.import")} ►</span>
+        <span>{t("dash.import")}</span>
       </div>
     </div>
   );
@@ -103,7 +104,7 @@ export function BalanceMeter({ snapshot, t, size = "md" }: {
 
 /* ------------------------------------------------ Verteilung (zwei Zeilen) */
 
-type Seg = { key: string; label: string; icon: string; watts: number; color: string };
+type Seg = { key: string; label: string; icon: IconName; watts: number; color: string };
 
 const MIN_SHARE = 0.05;
 
@@ -112,16 +113,16 @@ function buildSegments(s: Snapshot, t: (k: string) => string) {
   const bat = s.battery?.power ?? 0;
 
   const sources: Seg[] = [
-    { key: "pv", label: t("dash.pv"), icon: "☀", watts: s.pv_power, color: "var(--c-pv)" },
-    { key: "imp", label: t("dash.import"), icon: "⚡", watts: Math.max(0, grid), color: "var(--c-grid-import)" },
-    { key: "bout", label: t("dash.battery"), icon: "🔋", watts: Math.max(0, -bat), color: "var(--c-battery)" },
+    { key: "pv", label: t("dash.pv"), icon: "sun", watts: s.pv_power, color: "var(--c-pv)" },
+    { key: "imp", label: t("dash.import"), icon: "grid", watts: Math.max(0, grid), color: "var(--c-grid-import)" },
+    { key: "bout", label: t("dash.battery"), icon: "battery", watts: Math.max(0, -bat), color: "var(--c-battery)" },
   ];
   const loads: Seg[] = [
-    { key: "house", label: t("dash.house"), icon: "⌂", watts: s.house_power, color: "var(--c-house)" },
-    { key: "car", label: t("dash.car"), icon: "🚗", watts: s.wallbox_power, color: "var(--c-car)" },
-    { key: "water", label: t("dash.water"), icon: "💧", watts: s.water_power, color: "var(--c-water)" },
-    { key: "bin", label: t("dash.battery"), icon: "🔋", watts: Math.max(0, bat), color: "var(--c-battery)" },
-    { key: "exp", label: t("dash.export"), icon: "↗", watts: Math.max(0, -grid), color: "var(--c-grid-export)" },
+    { key: "house", label: t("dash.house"), icon: "house", watts: s.house_power, color: "var(--c-house)" },
+    { key: "car", label: t("dash.car"), icon: "car", watts: s.wallbox_power, color: "var(--c-car)" },
+    { key: "water", label: t("dash.water"), icon: "water", watts: s.water_power, color: "var(--c-water)" },
+    { key: "bin", label: t("dash.battery"), icon: "battery", watts: Math.max(0, bat), color: "var(--c-battery)" },
+    { key: "exp", label: t("dash.export"), icon: "export", watts: Math.max(0, -grid), color: "var(--c-grid-export)" },
   ];
   return { sources: sources.filter((x) => x.watts > 20), loads: loads.filter((x) => x.watts > 20) };
 }
@@ -140,7 +141,7 @@ function BarRow({ items, scale, label }: { items: Seg[]; scale: number; label: s
                  style={{ width: `${width}%`, background: seg.color }}
                  title={`${seg.label}: ${fmtW(seg.watts)}`}>
               <span className="fbar-seg-inner">
-                <span aria-hidden="true">{seg.icon}</span>
+                <Icon name={seg.icon} size={14} />
                 {share > 0.14 && <span className="num">{fmtW(seg.watts)}</span>}
               </span>
             </div>

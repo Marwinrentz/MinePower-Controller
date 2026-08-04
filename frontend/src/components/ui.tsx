@@ -5,6 +5,7 @@
  *  Stilbruch zwischen Dashboard, Assistent und Einstellungen entsteht.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Icon, type IconName } from "./icons";
 
 /* ------------------------------------------------------------------ Flächen */
 
@@ -143,10 +144,10 @@ export function Banner({ tone = "warn", title, children, action, onDismiss, dism
   onDismiss?: () => void;
   dismissLabel?: string;
 }) {
-  const icon = { ok: "✓", warn: "⚠", err: "✕", info: "ℹ" }[tone];
+  const icon: IconName = { ok: "check", warn: "warning", err: "close", info: "events" }[tone] as IconName;
   return (
     <div className={`banner ${tone}`} role={tone === "err" ? "alert" : "status"}>
-      <span className="banner-icon" aria-hidden="true">{icon}</span>
+      <span className="banner-icon"><Icon name={icon} size={16} /></span>
       <div className="banner-text">
         <strong>{title}</strong>
         {children && <span>{children}</span>}
@@ -155,7 +156,7 @@ export function Banner({ tone = "warn", title, children, action, onDismiss, dism
       {action}
       {onDismiss && (
         <button className="banner-close" onClick={onDismiss}
-                title={dismissLabel} aria-label={dismissLabel}>✕</button>
+                title={dismissLabel} aria-label={dismissLabel}><Icon name="close" size={14} /></button>
       )}
     </div>
   );
@@ -179,12 +180,12 @@ export function Bar({ value, max, color, label }: {
   );
 }
 
-export function Empty({ icon = "◌", title, children }: {
-  icon?: string; title: string; children?: ReactNode;
+export function Empty({ icon, title, children }: {
+  icon?: ReactNode; title: string; children?: ReactNode;
 }) {
   return (
     <div className="empty">
-      <span className="empty-icon" aria-hidden="true">{icon}</span>
+      {icon && <span className="empty-icon" aria-hidden="true">{icon}</span>}
       <strong style={{ color: "var(--text-strong)" }}>{title}</strong>
       {children && <span style={{ maxWidth: 440 }}>{children}</span>}
     </div>
