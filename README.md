@@ -58,19 +58,37 @@ Start-/Stopp-Zyklen zu vermeiden.
 
 ### Der Hausspeicher hat Vorrang
 
-Weder die Lade- noch die Entladeleistung des Speichers zählt als Überschuss:
-
 ```
-Topf für Auto und Warmwasser = budget − |Batterieleistung|
+Topf für Auto und Warmwasser = budget − Entladeleistung
 ```
 
-Das ist wichtiger, als es aussieht. Die Budgetformel kennt nur den Netzpunkt,
-und dort sieht ein Speicher, der gerade einspringt, wie ein ausgeglichenes
-Haus aus — ohne diesen Abzug würden Auto und Warmwasser den Speicher
-leerziehen, während die Anzeige Überschuss meldet. Umgekehrt gilt: Was der
-Speicher gerade lädt, gehört ihm und wird den Lasten nicht angeboten. Den
-Haushalt versorgt die Batterie davon unberührt weiter — geschützt wird nur
+Die Korrektur ist bewusst **einseitig**, und das ist der entscheidende Punkt.
+Die Budgetformel kennt nur den Netzpunkt, und dort steht eine Bilanz:
+
+* Was der Speicher **entlädt**, steckt voll im Budget, kommt aber nicht aus
+  der Sonne. Ein Speicher, der gerade einspringt, sieht am Netzpunkt aus wie
+  ein ausgeglichenes Haus. Ohne diesen Abzug würden Auto und Warmwasser ihn
+  leerziehen, während die Anzeige Überschuss meldet. → abziehen.
+* Was der Speicher **lädt**, ist am Netzpunkt bereits verbraucht und taucht im
+  Budget gar nicht mehr auf. → nichts abziehen; es gehört ihm ohnehin schon.
+
+Ein zweiter Abzug der Ladeleistung ist deshalb kein zusätzlicher Schutz,
+sondern ein Rechenfehler mit Rückkopplung: Je weniger die Lasten nehmen, desto
+mehr lädt der Speicher, desto größer der Abzug. Bei 6 kW Sonne, 0,7 kW Haus
+und einem Speicher, der nur 2 kW aufnimmt, blieb dem Auto am Ende nichts — die
+freien 3,3 kW gingen vollständig ins Netz.
+
+Den Haushalt versorgt die Batterie davon unberührt weiter — geschützt wird nur
 gegen die *steuerbaren* Lasten.
+
+**Abregeln statt abschalten.** Eine kleine Entladung beendet keine laufende
+Ladung. Sie wird vom Budget abgezogen, die Last regelt herunter — mehr nicht.
+Erst ab `battery_drain_limit_w` (Standard 250 W), und erst nach 30 s
+Bestätigung, wird hart gestoppt. Ein Nothalt kostet danach die volle
+Startschwelle und eine Minute Startverzögerung; er ist um ein Vielfaches
+teurer als die paar Wattstunden, die er spart. Mit einem Schwellwert von
+50 W ohne Bestätigungszeit beendete jede Lastspitze im Haus die Ladung, und
+der Regler taktete sich im Minutenrhythmus selbst aus.
 
 Batterien werden dabei nicht aktiv angesteuert. Hybrid-Wechselrichter regeln
 ihre Batterie bereits selbst auf Nulleinspeisung; MinePower liest Ladestand
@@ -87,6 +105,36 @@ sonst systematisch daneben und erzeugt genau das, was vermieden werden soll:
 Einspeisung oder Bezug aus dem Speicher. Erhöht wird in begrenzten Schritten,
 weil ein Fahrzeug einem neuen Sollstrom erst nach einigen Sekunden folgt;
 gesenkt wird ohne Begrenzung.
+
+Dafür muss die *gemessene* Leistung fein genug aufgelöst sein. Tesla meldet
+`charger_power` als **ganzzahligen kW-Wert**: 6 A einphasig sind real 1380 W,
+gemeldet wird „1". Dieser Wert ging bisher in die Budgetrechnung ein — ein
+Fehler von bis zu ±500 W, der in beide teuren Richtungen wirkt. Gerechnet wird
+deshalb aus `charger_actual_current × charger_voltage × Phasen`; der kW-Wert
+bleibt nur Rückfall, wenn kein Strom gemeldet wird.
+
+Zwei weitere Fallen stecken in derselben Rechnung:
+
+* **Phasenzahl.** Tesla meldet in Europa `charger_phases = 2` für
+  dreiphasiges Laden — zweiphasig gibt es nicht, gemeint ist „mehrphasig".
+  Ungeprüft übernommen fehlt in jeder Leistungsrechnung ein Drittel, und der
+  Regler fordert das Dreifache an, was die Sonne hergibt.
+* **Mindeststrom der Hardware.** Ein Tesla nimmt erst ab 5 A an, viele
+  Wallboxen erst ab 6 A. Wird weniger kommandiert, klemmt das Gerät nach oben
+  und zieht mehr, als zugeteilt war. Der Regler übernimmt den Mindest- und
+  Höchststrom deshalb vom Treiber und rechnet mit den echten Grenzen. Konkret
+  heißt das auch: Dreiphasig sind 6 A keine 1,38 kW, sondern 4,14 kW — so viel
+  Überschuss muss vorliegen, bevor überhaupt gestartet wird.
+
+Gemessen wird dabei **nur im eingeschwungenen Zustand**: erst wenn derselbe
+Sollstrom 45 Sekunden unverändert anliegt. Wer während der Rampe misst, teilt
+eine noch kleine Leistung durch den schon großen Sollstrom und lernt einen zu
+kleinen Faktor. Genau der ist teuer — der Regler fordert daraufhin zu viele
+Ampere an, das Fahrzeug zieht mehr als die Sonne hergibt, der Speicher deckt
+die Lücke, und der Batterie-Schutz beendet die Ladung. Plausibilitätsgrenzen
+allein reichen dagegen nicht, weil ein Rampenmesswert oft noch innerhalb der
+Toleranz liegt. Nach unten begrenzt zusätzlich die Netzspannung nach EN 50160
+(230 V ±10 %) — weniger kann eine echte Messung nicht ergeben.
 
 ### Drei Mechanismen gegen verschenkten Strom
 

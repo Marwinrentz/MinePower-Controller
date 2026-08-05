@@ -207,10 +207,17 @@ export const de = {
     houseLimitHelp: "Schutz: Gesamtstrom aller Wallboxen wird unter diesem Limit gehalten.",
     batteryPriority: "Hausspeicher hat Vorrang",
     batteryPriorityHelp:
-      "Empfohlen. Was der Speicher lädt oder entlädt, gilt nicht als Überschuss – " +
-      "Auto und Warmwasser bekommen nur, was darüber hinaus übrig ist. Den Haushalt " +
-      "versorgt der Speicher weiterhin ganz normal. Ausschalten nur, wenn die Lasten " +
-      "ab einem bestimmten Ladestand auf den Speicher zugreifen dürfen sollen.",
+      "Empfohlen. Der Speicher behält seine Ladeleistung, und was er entlädt, gilt " +
+      "nicht als Überschuss – Auto und Warmwasser bekommen nur, was darüber hinaus " +
+      "übrig ist. Den Haushalt versorgt der Speicher weiterhin ganz normal. " +
+      "Ausschalten nur, wenn die Lasten ab einem bestimmten Ladestand auf den " +
+      "Speicher zugreifen dürfen sollen.",
+    batteryDrainLimit: "Nothalt ab Entladung (W)",
+    batteryDrainLimitHelp:
+      "Bis zu dieser Entladeleistung wird eine laufende Ladung nur heruntergeregelt, " +
+      "darüber sofort gestoppt. Zu klein eingestellt beendet jede kurze Lastspitze im " +
+      "Haus die Ladung, und der Regler taktet sich selbst aus – das kostet mehr " +
+      "Solarstrom, als es an Speicher spart. 0 = jede Entladung stoppt sofort.",
     batteryReserve: "Batterie-Reserve (% SoC)",
     batteryReserveHelp: "Unter diesem Ladestand behält der Speicher seine Ladeleistung für sich.",
     evLock: "EV-Batteriesperre (% SoC)",

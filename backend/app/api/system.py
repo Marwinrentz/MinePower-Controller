@@ -245,9 +245,13 @@ async def diagnostics(_: User = Depends(get_current_user)):
         # Batterie-Schutz sichtbar machen: Greift er? Wie viel wird
         # abgezogen? Und mit welchem Ladestand wurde gerechnet?
         "battery": snapshot.get("battery"),
+        # Entladung, die nicht als Überschuss gilt …
         "battery_guard_w": round(loop.battery_guard_w, 1),
-        "battery_claim_w": round(loop.battery_claim_w, 1),
-        "battery_reserved_w": round(loop.battery_reserved_w, 1),
+        # … und Ladeleistung, die die Lasten dem Speicher abnehmen dürfen
+        # (nur ohne Batterie-Vorrang, sonst immer 0).
+        "battery_release_w": round(loop.battery_release_w, 1),
+        # Greift der harte Schutz gerade? Erst nach bestätigter Entladung.
+        "battery_protected": loop.battery_protected,
         "battery_priority": loop.cfg.battery_priority,
         "ev_lock_soc": loop.cfg.ev_lock_soc,
         "battery_reserve_soc": loop.cfg.battery_reserve_soc,

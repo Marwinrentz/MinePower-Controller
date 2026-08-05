@@ -28,6 +28,10 @@ DEFAULT_SETTINGS: dict[str, dict] = {
         "battery_priority": True,
         "battery_reserve_soc": 20,
         "ev_lock_soc": 30,
+        # Ab wie viel Entladeleistung eine laufende Last hart abschaltet.
+        # Darunter wird nur abgeregelt – sonst beendet jede kleine Lastspitze
+        # im Haus die Ladung und der Regler taktet sich selbst aus.
+        "battery_drain_limit_w": 250,
         # Weniger verschenken (siehe core/regulation.py)
         "adaptive_deadband": True,
         "deadband_min_w": 40,

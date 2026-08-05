@@ -205,10 +205,16 @@ export const en: Dict = {
     houseLimitHelp: "Protection: total wallbox current is kept below this limit.",
     batteryPriority: "Home battery comes first",
     batteryPriorityHelp:
-      "Recommended. Whatever the battery charges or discharges does not count as surplus – " +
-      "car and water heating only get what is left beyond that. The battery still powers " +
-      "the household as usual. Turn this off only if loads should be allowed to draw from " +
-      "the battery above a given state of charge.",
+      "Recommended. The battery keeps its charging power, and whatever it discharges does " +
+      "not count as surplus – car and water heating only get what is left beyond that. " +
+      "The battery still powers the household as usual. Turn this off only if loads " +
+      "should be allowed to draw from the battery above a given state of charge.",
+    batteryDrainLimit: "Emergency stop above discharge (W)",
+    batteryDrainLimitHelp:
+      "Up to this discharge power an active charge is only throttled down; above it, it " +
+      "stops immediately. Set too low, every short household load spike ends the charge " +
+      "and the controller cycles itself off – costing more solar energy than it saves " +
+      "battery. 0 = any discharge stops the charge at once.",
     batteryReserve: "Battery reserve (% SoC)",
     batteryReserveHelp: "Below this level the battery keeps its charging power to itself.",
     evLock: "EV battery lock (% SoC)",

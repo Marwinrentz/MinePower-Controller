@@ -10,21 +10,33 @@ Ladung ergibt also budget = 4500 W → so viel PV-Überschuss steht den
 steuerbaren Lasten insgesamt zur Verfügung.
 
 Batterie (Standard: `battery_priority = True`):
-    Der Hausspeicher hat **immer** Vorrang vor allen steuerbaren Lasten.
-    Weder seine Lade- noch seine Entladeleistung gilt als Überschuss:
+    Entscheidend ist, was in `budget` schon steckt. Die Netzleistung ist eine
+    *Bilanz*: Was der Speicher gerade lädt, ist am Netzpunkt bereits
+    verbraucht und taucht in `budget` gar nicht mehr auf. Was er entlädt,
+    steckt umgekehrt voll darin, obwohl es nicht aus der Sonne kommt.
+    Deshalb ist die Korrektur einseitig:
 
-      pool = budget − |P_batterie|
+      pool = budget − Entladeleistung + freigegebene Ladeleistung
 
-    Lädt der Speicher mit 2 kW, stehen die 2 kW den Lasten nicht zur
-    Verfügung. Entlädt er sich, sinkt das Budget um genau diesen Betrag –
-    sonst würden Auto und Warmwasser aus dem Speicher gefüttert, während der
-    Netzpunkt weiterhin ausgeglichen aussieht.
+    * **Entladen** wird abgezogen. Sonst würden Auto und Warmwasser aus dem
+      Speicher gefüttert, während der Netzpunkt ausgeglichen aussieht.
+    * **Laden** wird *nicht* abgezogen. Es steht schon nicht mehr im Budget;
+      ein zweiter Abzug würde dieselbe Leistung doppelt wegrechnen. Der
+      Speicher behält seine Ladeleistung damit trotzdem – niemand nimmt sie
+      ihm weg, sie war nie Teil des verteilbaren Topfes.
+
+    Genau hier lag ein Fehler mit sichtbaren Folgen: Mit dem doppelten Abzug
+    schrumpfte der Topf bei jedem Takt weiter, in dem der Speicher lud. Bei
+    6 kW Sonne, 0,7 kW Haus und einem Speicher, der nur 2 kW aufnehmen kann,
+    bekam das Auto am Ende **nichts** – die restlichen 3,3 kW gingen ins Netz.
+    Siehe :func:`releasable_battery_charge`.
 
     Der Hausverbrauch bleibt unberührt: Geschützt wird nur gegen die
     *steuerbaren* Lasten, den Haushalt darf der Speicher weiter versorgen.
 
     Nur wenn `battery_priority` bewusst abgeschaltet wird, greifen wieder die
-    alten SoC-Schwellen (`ev_lock_soc`, `battery_reserve_soc`).
+    alten SoC-Schwellen (`ev_lock_soc`, `battery_reserve_soc`) – oberhalb der
+    Reserve dürfen die Lasten dem Speicher seine Ladeleistung dann abnehmen.
 
 Drei Mechanismen sorgen dafür, dass möglichst wenig Überschuss ins Netz geht:
 
@@ -166,6 +178,21 @@ class RegulationConfig:
     #: Nur wirksam, wenn `battery_priority` abgeschaltet ist: Ab diesem
     #: Ladestand darf die Entladung als Überschuss verwendet werden.
     ev_lock_soc: float = 30.0
+    #: Ab welcher **bestätigten** Entladeleistung laufende Lasten hart
+    #: abgeschaltet werden (statt nur abzuregeln).
+    #:
+    #: Die Entladung wird immer vollständig vom Budget abgezogen – der
+    #: Sollwert ist also in jedem Fall ehrlich. Diese Schwelle entscheidet nur
+    #: über das Nothalt-Verhalten, und dafür war „jede Entladung über 50 W"
+    #: viel zu scharf: Ein Hybrid-Wechselrichter deckt jede kleine Lücke aus
+    #: dem Speicher, bevor er sie ans Netz weitergibt. Im Diagnosebericht
+    #: beendete eine Entladung von 102 W eine laufende Ladung – bei einem
+    #: Überschuss, der nur 5 W unter dem Mindeststrom lag. Die Ladung setzte
+    #: danach acht Minuten aus, in denen 1,6 kW ins Netz gingen.
+    #:
+    #: 250 W entspricht der Größenordnung von `stop_threshold_w`: So viel
+    #: Unterdeckung wird auf Mindeststrom ausgesessen, mehr nicht.
+    battery_drain_limit_w: float = 250.0
     # --- Verschenkte Energie minimieren ---
     adaptive_deadband: bool = True  # Totband an die Wetterlage anpassen
     deadband_min_w: float = 40.0
@@ -231,6 +258,11 @@ class WallboxSettings:
     #: Um wie viel Ampere der Sollstrom je Takt höchstens steigen darf.
     #: Nach unten wird nicht begrenzt – Schutz vor Batteriebezug geht vor.
     ramp_up_step_a: float = 3.0
+    #: Wie lange derselbe Sollstrom anliegen muss, bevor aus Leistung und
+    #: Strom ein Umrechnungsfaktor gelernt wird (siehe observe). Ein Fahrzeug
+    #: folgt einem neuen Sollwert erst nach etlichen Sekunden; wer währenddessen
+    #: misst, lernt einen zu kleinen Faktor.
+    measure_settle_s: float = 45.0
     #: Nach wie vielen Takten mit gesendetem Ladestrom, aber ohne gemessene
     #: Leistung, das Fahrzeug als nicht ladebereit gilt (siehe _responding).
     idle_confirm_ticks: int = 6
@@ -250,9 +282,21 @@ class WallboxSettings:
 #: Plausible Spanne für „Leistung je Ampere“: einphasig ≈ 230 W, dreiphasig
 #: ≈ 690 W. Alles außerhalb stammt aus einer Messung während des Hochrampens
 #: oder ist schlicht falsch – daraus wird nicht gelernt.
-#: Wie weit der gemessene Faktor vom Nennwert abweichen darf. Eng gefasst,
-#: weil er über die Mindestleistung in die Startschwelle eingeht.
-WATTS_PER_AMP_TOLERANCE = (0.8, 1.35)
+#:
+#: Die Grenzen sind **asymmetrisch**, weil die beiden Irrtümer verschieden
+#: teuer sind:
+#:
+#: * Zu **niedrig** geschätzt ist der gefährliche Fall: Der Regler rechnet
+#:   dann zu viele Ampere aus demselben Budget, das Fahrzeug zieht mehr als
+#:   die Sonne hergibt, und die Differenz kommt aus dem Hausspeicher. Genau
+#:   das löst anschließend den Batterie-Schutz aus und beendet die Ladung.
+#: * Zu **hoch** geschätzt kostet nur Ertrag: Es wird etwas zu wenig
+#:   angefordert, und der Rest geht an den Lückenfüller.
+#:
+#: Nach unten gilt deshalb die Netzspannung nach EN 50160 (230 V ±10 %) als
+#: harte Schranke – weniger kann eine echte Messung nicht ergeben. Nach oben
+#: bleibt etwas mehr Luft.
+WATTS_PER_AMP_TOLERANCE = (0.9, 1.15)
 
 
 @dataclass
@@ -297,6 +341,10 @@ class WallboxController:
         #: Bis wann nicht erneut versucht wird, nachdem das Fahrzeug als
         #: nicht ladebereit erkannt wurde.
         self._idle_until: float = -1e9
+        #: Zuletzt vom Gerät gemeldeter Sollstrom und seit wann er unverändert
+        #: anliegt – die Einschwingsperre für :meth:`observe`.
+        self._setpoint_seen: float | None = None
+        self._setpoint_stable_since: float = 0.0
 
     # ------------------------------------------------------------ Helpers
 
@@ -319,10 +367,25 @@ class WallboxController:
         Division 400 W/A statt 230. Da der Faktor auch in die Mindestleistung
         eingeht, stieg damit die Startschwelle von 1,4 kW auf über 2,4 kW –
         das Fahrzeug lud erst bei doppeltem Überschuss los.
+
+        **Nur im eingeschwungenen Zustand messen.** Ein Fahrzeug folgt einem
+        neuen Sollstrom erst nach etlichen Sekunden. Wer währenddessen misst,
+        teilt eine noch kleine Leistung durch den schon großen Sollstrom und
+        lernt einen systematisch **zu kleinen** Faktor – und ein zu kleiner
+        Faktor ist genau der teure Irrtum: Der Regler fordert daraufhin zu
+        viele Ampere an, das Fahrzeug zieht mehr als die Sonne hergibt, der
+        Hausspeicher deckt die Lücke, und der Batterie-Schutz beendet die
+        Ladung. Danach beginnt dasselbe Spiel von vorn.
+
+        Deshalb wird erst gelernt, wenn derselbe Sollstrom `measure_settle_s`
+        lang unverändert anliegt. Die Plausibilitätsgrenzen allein reichten
+        nicht: Ein Ramp-Messwert liegt oft noch innerhalb der Toleranz.
         """
         if data.phases_active in (1, 3):
             self._phases_seen = data.phases_active
-        # 1. Exakter Weg: Spannung × Phasen direkt vom Gerät.
+        self._track_setpoint(data)
+        # 1. Exakter Weg: Spannung × Phasen direkt vom Gerät. Das ist eine
+        #    Messung, keine Schätzung – sie braucht keine Einschwingzeit.
         if data.voltage and data.phases_active:
             self._watts_per_amp = data.voltage * data.phases_active
             return
@@ -332,6 +395,8 @@ class WallboxController:
         amps = data.current_set
         if not amps or amps < 1.0 or data.power < 200.0:
             return
+        if (self.clock() - self._setpoint_stable_since) < self.s.measure_settle_s:
+            return  # Fahrzeug rampt noch – die Messung wäre zu niedrig
         measured = data.power / amps
         nominal = self._nominal_watts_per_amp()
         if not (nominal * WATTS_PER_AMP_TOLERANCE[0] <= measured <= nominal * WATTS_PER_AMP_TOLERANCE[1]):
@@ -340,6 +405,17 @@ class WallboxController:
             measured if self._watts_per_amp is None
             else 0.7 * self._watts_per_amp + 0.3 * measured
         )
+
+    def _track_setpoint(self, data: WallboxData) -> None:
+        """Seit wann liegt derselbe Sollstrom unverändert an?
+
+        Maßgeblich ist der vom Gerät *gemeldete* Sollstrom, nicht der zuletzt
+        gesendete: Zwischen „Befehl abgesetzt“ und „Fahrzeug hat übernommen“
+        liegt bei einer Funkanbindung noch einmal Zeit."""
+        amps = float(data.current_set or 0.0)
+        if self._setpoint_seen is None or abs(amps - self._setpoint_seen) >= 0.5:
+            self._setpoint_seen = amps
+            self._setpoint_stable_since = self.clock()
 
     def _nominal_watts_per_amp(self) -> float:
         """Nennwert als Bezug für die Plausibilitätsgrenzen. Die vom Gerät
@@ -833,6 +909,43 @@ def compute_budget(
 BATTERY_IDLE_W = 50.0
 
 
+def battery_drain_alarm(battery_guard_w: float, cfg: RegulationConfig) -> bool:
+    """Ist die Entladung so groß, dass laufende Lasten hart abschalten müssen?
+
+    Zwei getrennte Fragen, die vorher eine einzige waren:
+
+    * *Wie viel Budget haben die Lasten?* → immer um die volle Entladung
+      gekürzt (:func:`protected_battery_discharge`). Der Sollwert bleibt
+      dadurch ehrlich, die Lasten regeln ab.
+    * *Muss sofort abgeschaltet werden?* → nur bei nennenswerter Entladung.
+
+    Das Zusammenwerfen beider Fragen war der Grund für das Takten: Jede
+    Entladung über 50 W löste einen Nothalt aus, obwohl Abregeln genügt hätte.
+    Ein Nothalt kostet anschließend die volle Startschwelle plus Startzeit –
+    er ist um ein Vielfaches teurer als die paar Wattstunden, die er spart.
+    """
+    return battery_guard_w > cfg.battery_drain_limit_w
+
+
+#: Wie lange der Speicher ununterbrochen über `battery_drain_limit_w` entladen
+#: muss, bevor laufende Lasten hart abgeschaltet werden.
+#:
+#: Der Schutz greift sofort, sobald die Entladung erkannt ist – aber „erkannt“
+#: braucht mehr als einen Messwert. Ohne diese Bestätigungszeit beendete jede
+#: kurze Lastspitze im Haus (Wasserkocher, Wärmepumpen-Anlauf) und jeder
+#: Regel-Überschwinger die Ladung sofort, ohne Stopp-Verzögerung. Danach
+#: brauchte es wieder die volle Startschwelle für 60 s – der Regler taktete
+#: sich im Minutenrhythmus selbst aus. Im Diagnosebericht waren das drei
+#: Ladevorgänge in 17 Minuten bei 30 % verschenktem Solarstrom.
+#:
+#: Die Rechnung dahinter: 30 s Mindeststrom kosten den Speicher rund 12 Wh.
+#: Ein vermiedener Fehlstopp bringt ein Vielfaches davon zurück, weil die
+#: Ladung sonst minutenlang aussetzt, während die Sonne weiter scheint.
+#: Erst *ansteigend* verzögert, *fallend* sofort – Schutz aufheben darf man
+#: ohne Zögern, Schutz auslösen nicht.
+BATTERY_PROTECT_CONFIRM_S = 30.0
+
+
 def protected_battery_discharge(
     battery_soc: float | None, battery_power: float, cfg: RegulationConfig
 ) -> float:
@@ -865,27 +978,45 @@ def protected_battery_discharge(
     return discharge
 
 
-def reserved_battery_charge(
+def releasable_battery_charge(
     battery_soc: float | None, battery_power: float, cfg: RegulationConfig
 ) -> float:
-    """Ladeleistung, die dem Speicher vorbehalten bleibt.
+    """Ladeleistung des Speichers, die steuerbare Lasten ihm abnehmen dürfen.
 
-    Gegenstück zum bisherigen Modell: Bislang durften Lasten, die in der Kette
-    **vor** der Batterie stehen, deren Ladeleistung mitnutzen – es gab aber
-    keinen Weg, der Batterie umgekehrt Vorrang zu geben. Ein Auto konnte damit
-    auf 16 A stehen bleiben, während der Speicher nur noch den Rest bekam.
+    Gegenstück zu :func:`protected_battery_discharge` – aber mit einer
+    wichtigen Asymmetrie, die vorher übersehen wurde.
 
-    Mit `battery_priority` (Standard) bleibt die gesamte Ladeleistung dem
-    Speicher vorbehalten – er lädt zuerst voll, die Lasten bekommen nur, was
-    darüber hinaus übrig ist. Ohne die Einstellung gilt wieder die alte
-    Schwelle `battery_reserve_soc`.
+    Die Ladeleistung des Speichers ist am Netzpunkt **schon verbraucht**:
+    ``budget = P_pv − P_haus − P_laden``. Sie steht also gar nicht im Topf und
+    muss auch nicht daraus entfernt werden. Wer sie trotzdem abzieht, rechnet
+    dieselben Watt zweimal weg. Das war messbar:
+
+        6 kW Sonne, 0,7 kW Haus, Speicher nimmt max. 2 kW.
+        budget = 6000 − 700 − 2000 = 3300 W  ← so viel ist wirklich frei
+        alt:  pool = 3300 − 2000 = 1300 W → Auto startet nie (braucht 1380 W),
+              Speicher bleibt bei 2 kW, **3,3 kW gehen ins Netz**
+        neu:  pool = 3300 W → Auto lädt mit 14 A, Netz bleibt bei null
+
+    Die Rückkopplung machte es schlimmer: Je weniger die Lasten nahmen, desto
+    mehr lud der Speicher, desto größer der Abzug – bis die Lasten bei null
+    standen und der Überschuss vollständig verschenkt wurde.
+
+    Vorrang des Speichers heißt deshalb schlicht: **null**. Seine Ladeleistung
+    wird ihm nicht weggenommen, aber auch nicht doppelt verbucht. (So lösen es
+    auch etablierte Überschussregler: Der Batterieanteil wird bei aktivem
+    Vorrang auf 0 gesetzt, nicht subtrahiert.)
+
+    Ohne `battery_priority` gilt wieder die Schwelle `battery_reserve_soc`:
+    Oberhalb davon darf die Kette dem Speicher seine Ladeleistung abnehmen –
+    dann wird sie dem Topf *zugeschlagen*, denn dafür muss der Speicher
+    zurückstecken.
     """
     if battery_power <= BATTERY_IDLE_W:
         return 0.0  # lädt nicht
     if cfg.battery_priority:
-        return battery_power
-    if battery_soc is None or battery_soc >= cfg.battery_reserve_soc:
-        return 0.0
+        return 0.0  # der Speicher behält, was er nimmt
+    if battery_soc is None or battery_soc < cfg.battery_reserve_soc:
+        return 0.0  # unter der Reserve bleibt der Speicher unangetastet
     return battery_power
 
 

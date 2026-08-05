@@ -3,9 +3,11 @@
 Ablauf je Tick (Default alle 3 s, konfigurierbar):
   1. Messwerte aller aktivierten Geräte parallel lesen (mit Timeout).
   2. Überschuss-Budget berechnen (geglättete Netzleistung, adaptives Totband).
-  3. Was dem Hausspeicher gehört, abziehen (er hat Vorrang – Laden wie
-     Entladen), den Rest entlang der Prioritätskette auf die steuerbaren
-     Lasten verteilen.
+  3. Die Entladeleistung des Hausspeichers abziehen (sie ist kein
+     Solarüberschuss), den Rest entlang der Prioritätskette auf die
+     steuerbaren Lasten verteilen. Seine *Lade*leistung wird nicht abgezogen –
+     sie steht am Netzpunkt schon nicht mehr im Budget (siehe
+     `regulation.releasable_battery_charge`).
   4. **Lückenfüller:** Was danach übrig bleibt und für die nächste grob
      gestufte Last zu klein wäre, geht an eine fein modulierbare Last –
      unabhängig von deren Platz in der Kette.
@@ -54,7 +56,9 @@ from ..services.audit import log_event
 from ..services.measurements import MeasurementBuffer
 from ..services.ws import ws_manager
 from .regulation import (
+    BATTERY_PROTECT_CONFIRM_S,
     ChargeContext,
+    DelayTimer,
     RegulationConfig,
     Smoother,
     VolatilityTracker,
@@ -64,9 +68,10 @@ from .regulation import (
     WaterHeaterController,
     WaterHeaterDecision,
     WaterHeaterSettings,
+    battery_drain_alarm,
     compute_budget,
     protected_battery_discharge,
-    reserved_battery_charge,
+    releasable_battery_charge,
     wasted_power,
 )
 from .schedules import any_window_active
@@ -104,7 +109,7 @@ class ManagedDevice:
         # Controller nur für steuerbare Kategorien
         self.controller: WallboxController | WaterHeaterController | None = None
         if self.category == DeviceCategory.WALLBOX.value:
-            self.controller = WallboxController(WallboxSettings.from_dict(self.settings))
+            self.controller = WallboxController(self._wallbox_settings())
         elif self.category == DeviceCategory.WATER_HEATER.value:
             self.controller = WaterHeaterController(WaterHeaterSettings.from_dict(self.settings))
 
@@ -126,6 +131,35 @@ class ManagedDevice:
         self.session_cost = 0.0
         self._last_integrate = time.monotonic()
 
+    def _wallbox_settings(self) -> WallboxSettings:
+        """Regler-Einstellungen, angehoben auf die Grenzen der Hardware.
+
+        Ein Ladepunkt hat einen Mindeststrom, unter den er physisch nicht
+        geht: Ein Tesla nimmt erst ab 5 A an, viele Wallboxen ab 6 A. Wird
+        weniger kommandiert, klemmt der Treiber den Wert nach oben – das
+        Fahrzeug zieht dann **mehr**, als der Regler zugeteilt hat, und die
+        Differenz kommt aus Speicher oder Netz. Genau die Lücke, die
+        „Nulleinspeisung" unmöglich macht.
+
+        Der Regler muss deshalb mit dem echten Mindeststrom rechnen, nicht mit
+        dem gewünschten. Dasselbe für den Höchststrom: Was das Gerät nicht
+        kann, darf auch nicht ins Budget eingeplant werden.
+        """
+        settings = WallboxSettings.from_dict(self.settings)
+        floor = float(getattr(self.driver, "min_current", 0.0) or 0.0)
+        if floor > settings.min_current:
+            log.info(
+                "%s: Mindeststrom auf %.0f A angehoben – das Gerät kann nicht weniger",
+                self.name, floor,
+            )
+            settings.min_current = floor
+        ceiling = float(getattr(self.driver, "max_current", 0.0) or 0.0)
+        if ceiling:
+            settings.max_current = min(settings.max_current, ceiling)
+        if settings.min_pv_current < settings.min_current:
+            settings.min_pv_current = settings.min_current
+        return settings
+
     def fingerprint(self) -> tuple:
         import json
 
@@ -138,11 +172,17 @@ class ControlLoop:
         self.priority: list[int] = []
         self.devices: dict[int, ManagedDevice] = {}
         self.grid_smoother = Smoother(self.cfg.smoothing_samples)
+        # Die Batterieleistung wird genauso geglättet wie die Netzleistung.
+        # Sie steuert eine Abschaltung – ein einzelner Ausreißer darf das
+        # nicht auslösen, und ein Hybrid-Wechselrichter regelt seine Batterie
+        # ständig um die Null herum.
+        self.battery_smoother = Smoother(self.cfg.smoothing_samples)
+        self.battery_protect_timer = DelayTimer(BATTERY_PROTECT_CONFIRM_S)
         self.volatility = VolatilityTracker()
         self.deadband_effective = self.cfg.deadband_w
         self.battery_guard_w = 0.0
-        self.battery_claim_w = 0.0
-        self.battery_reserved_w = 0.0
+        self.battery_release_w = 0.0
+        self.battery_protected = False
         self.buffer = MeasurementBuffer()
         # Vollständig vorbelegt: Das Frontend bekommt beim allerersten Abruf
         # (vor dem ersten Tick) dieselbe Struktur wie später – sonst müsste es
@@ -223,6 +263,7 @@ class ControlLoop:
             battery_reserve_soc=float(reg.get("battery_reserve_soc", 20)),
             ev_lock_soc=float(reg.get("ev_lock_soc", 30)),
             battery_priority=bool(reg.get("battery_priority", True)),
+            battery_drain_limit_w=float(reg.get("battery_drain_limit_w", 250)),
             adaptive_deadband=bool(reg.get("adaptive_deadband", True)),
             deadband_min_w=float(reg.get("deadband_min_w", 40)),
             deadband_max_w=float(reg.get("deadband_max_w", 400)),
@@ -231,6 +272,7 @@ class ControlLoop:
         )
         if self.grid_smoother.values.maxlen != max(1, self.cfg.smoothing_samples):
             self.grid_smoother = Smoother(self.cfg.smoothing_samples)
+            self.battery_smoother = Smoother(self.cfg.smoothing_samples)
         self.priority = list(settings.get("priority", {}).get("order", []))
 
         new_devices: dict[int, ManagedDevice] = {}
@@ -371,6 +413,12 @@ class ControlLoop:
             # Auch während des Sicherheits-Stopps wird Überschuss verschenkt –
             # das gehört ehrlich in die Kennzahl, sofern eine Netzmessung
             # überhaupt vorliegt (beim Ausfall wissen wir es schlicht nicht).
+            # Die Integrationsuhr muss auch hier weiterlaufen. Sonst rechnet
+            # der nächste reguläre Takt die dann gemessene Leistung über die
+            # gesamte Ausfallzeit hoch. Lädt das Fahrzeug während des Ausfalls
+            # weiter, gehört diese Energie ohnehin ehrlich in die Bilanz.
+            for dev in wallboxes:
+                await self._track_session(dev, float(grid_power or 0.0), None)
             waste = wasted_power(self.grid_smoother.value, self.cfg) if grid_ok else 0.0
             await self._publish(
                 pv_power, grid_power, battery, wb_power, wh_power, budget=0.0,
@@ -387,35 +435,48 @@ class ControlLoop:
         budget = compute_budget(grid_smoothed, controllable, self.cfg, deadband_w=deadband)
 
         # --- Batterie schonen ------------------------------------------
+        # Geglättet, weil hieran eine Abschaltung hängt: Ein Hybrid-
+        # Wechselrichter regelt seine Batterie ständig um die Null herum, und
+        # ein einzelner Ausreißer darf keine laufende Ladung beenden.
+        bat_power_s = self.battery_smoother.add(bat_power)
         # Entlädt sich der Speicher, ist diese Leistung kein Solarüberschuss.
         # Ohne den Abzug würde die Batterie Auto und Warmwasser versorgen, bis
         # sie leer ist – am Netzpunkt sähe alles nach „ausgeglichen" aus.
         battery_guard = protected_battery_discharge(
-            battery.soc if battery else None, bat_power, self.cfg
+            battery.soc if battery else None, bat_power_s, self.cfg
         )
-        # Umgekehrter Fall: Unterhalb der Reserve hat das Laden des Speichers
-        # Vorrang vor Auto und Warmwasser.
-        battery_claim = reserved_battery_charge(
-            battery.soc if battery else None, bat_power, self.cfg
+        # Umgekehrter Fall – und hier steckte der teuerste Fehler der bisherigen
+        # Fassung: Die LADEleistung wurde ebenfalls abgezogen. Sie ist am
+        # Netzpunkt aber längst verbraucht und damit gar nicht im Budget; der
+        # zweite Abzug rechnete dieselben Watt doppelt weg und ließ den Topf
+        # bei ladendem Speicher gegen null laufen. Jetzt wird sie nur noch
+        # *freigegeben*, wenn der Nutzer den Vorrang abgeschaltet hat – dann
+        # darf die Kette dem Speicher etwas abnehmen, und das kommt hinzu.
+        battery_release = releasable_battery_charge(
+            battery.soc if battery else None, bat_power_s, self.cfg
         )
         # Für Snapshot und Diagnose festhalten: Ob der Schutz greift, muss
         # ablesbar sein – sonst bleibt bei „das Auto zieht aus der Batterie"
         # nur Raten übrig.
         self.battery_guard_w = battery_guard
-        self.battery_claim_w = battery_claim
-        # Laden und Entladen schließen sich aus; die Summe ist immer genau der
-        # eine Betrag, der dem Speicher gehört.
-        battery_reserved = battery_guard + battery_claim
-        self.battery_reserved_w = battery_reserved
+        self.battery_release_w = battery_release
+        # Abschalten erst bei nennenswerter *und* bestätigter Entladung,
+        # Freigeben sofort. Abgeregelt wird davon unabhängig immer – dafür
+        # sorgt der Abzug von `battery_guard` weiter unten im Topf.
+        battery_protected = self.battery_protect_timer.check(
+            battery_drain_alarm(battery_guard, self.cfg)
+        )
+        self.battery_protected = battery_protected
 
         # --- Überschuss-Topf & Prioritätskette -------------------------
         # Ein einziger Topf. Früher waren es zwei (PV + Batterie-Ladeleistung
         # für Lasten „vor der Batterie“), was von der Reihenfolge in der Kette
         # abhing und dadurch schwer vorhersagbar war: Dieselbe Wetterlage
-        # führte je nach Sortierung zu anderem Verhalten. Mit dem Vorrang des
-        # Speichers ist die zweite Quelle ohnehin gegenstandslos.
+        # führte je nach Sortierung zu anderem Verhalten. Jetzt entscheidet
+        # allein die Einstellung, ob die Ladeleistung freigegeben wird – für
+        # alle Lasten gleich.
         order = self._priority_order(wallboxes, heaters, battery_devs)
-        pool = max(0.0, budget - battery_reserved)
+        pool = max(0.0, budget - battery_guard + battery_release)
 
         price_ct = cheap = None
         if self.tariff:
@@ -429,9 +490,9 @@ class ControlLoop:
         fine_loads: list[tuple[ManagedDevice, WaterHeaterDecision]] = []
         #: Warum blieb Überschuss liegen? (für die Kennzahl „verschenkt“)
         blockers: list[str] = []
-        if battery_claim > 0:
+        if self.cfg.battery_priority and bat_power_s > 0:
             blockers.append(
-                f"Batterie lädt mit {battery_claim:.0f} W – Vorrang vor steuerbaren Lasten"
+                f"Batterie lädt mit {bat_power_s:.0f} W – sie hat Vorrang"
             )
         if battery_guard > 0:
             blockers.append(
@@ -454,17 +515,18 @@ class ControlLoop:
                 cheap_hour=bool(cheap),
                 schedule_active=any_window_active(dev.schedules),
                 battery_soc=battery.soc if battery else None,
-                battery_power=bat_power,
+                battery_power=bat_power_s,
                 house_current_a=house_power / (3 * VOLTAGE),
                 other_wallbox_current_a=other_wb_current,
                 house_limit_a=self.cfg.house_limit_a,
                 solar_recovery_expected=recovery,
                 forecast_surplus_kwh=forecast_surplus,
                 battery_handled_globally=True,
-                # „Geschont“ heißt: Der Speicher entlädt sich gerade und ist
-                # geschützt. Nur dann müssen laufende Lasten sofort abregeln –
-                # beim Laden reicht es, ihnen den Topf zu kürzen.
-                battery_protected=battery_guard > 0,
+                # „Geschont“ heißt: Der Speicher entlädt sich seit mindestens
+                # BATTERY_PROTECT_CONFIRM_S. Nur dann müssen laufende Lasten
+                # sofort abregeln. Beim Laden gibt es nichts abzuregeln – seine
+                # Ladeleistung stand nie im Topf.
+                battery_protected=battery_protected,
             )
 
             if isinstance(dev.controller, WallboxController):
@@ -640,7 +702,11 @@ class ControlLoop:
             await self._send(dev, "enable", False, lambda: driver.stop_charging())
             await self._send(dev, "phases", d.phases, lambda: driver.set_phases(d.phases))
         if d.enable:
-            amps = round(d.current_a)
+            # Abrunden, nicht runden: `d.power_w` – und damit die gesamte
+            # Topf-Rechnung der Prioritätskette – gilt für genau diesen Strom.
+            # Ein kaufmännisch aufgerundetes Ampere wären einphasig 230 W, die
+            # niemand zugeteilt hat und die aus Speicher oder Netz kämen.
+            amps = math.floor(d.current_a + 1e-9)
             if abs(float(dev.sent.get("current", -1)) - amps) >= 1:
                 await self._send(dev, "current", amps, lambda: driver.set_current(amps))
             await self._send(dev, "enable", True, lambda: driver.start_charging())
@@ -690,7 +756,14 @@ class ControlLoop:
         if not isinstance(data, WallboxData):
             return
         now = time.monotonic()
-        dt_h = min(now - dev._last_integrate, 60.0) / 3600.0
+        # Obergrenze am Takt statt an einer festen Minute: Fällt ein Takt aus,
+        # darf die aktuelle Leistung nicht über die gesamte Lücke hochgerechnet
+        # werden. Mit den alten 60 s blähte ein einzelner Aussetzer bei 15 s
+        # Takt die Sessionenergie auf das Vierfache auf – im Diagnosebericht
+        # standen 1,1 kWh für sechs Minuten Ladung, also fast 10 kW an einem
+        # einphasigen 16-A-Anschluss, der höchstens 3,7 kW kann.
+        max_gap = max(2.5 * self.cfg.interval_s, 10.0)
+        dt_h = min(now - dev._last_integrate, max_gap) / 3600.0
         dev._last_integrate = now
         charging = data.state == WallboxState.CHARGING and data.power > 100
 

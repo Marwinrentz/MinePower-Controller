@@ -18,9 +18,10 @@ from app.core.regulation import (
     WaterHeaterController,
     WaterHeaterDecision,
     WaterHeaterSettings,
+    battery_drain_alarm,
     compute_budget,
     protected_battery_discharge,
-    reserved_battery_charge,
+    releasable_battery_charge,
     wasted_power,
 )
 from app.drivers.base import WallboxData, WallboxState, WaterHeaterData
@@ -489,28 +490,29 @@ def test_forecast_hold_still_works_without_battery_drain():
 # Rest bekam. Ursache: Es gab bislang nur den Weg, der Batterie Ladeleistung
 # wegzunehmen – aber keinen, ihr Vorrang zu geben.
 
-def test_charging_battery_is_reserved_below_reserve_soc():
-    cfg = RegulationConfig(battery_reserve_soc=80)
-    assert reserved_battery_charge(45, 4000, cfg) == 4000
+def test_charging_battery_below_reserve_stays_untouched():
+    """Unter der Reserve nimmt ihm niemand etwas ab."""
+    cfg = RegulationConfig(battery_priority=False, battery_reserve_soc=80)
+    assert releasable_battery_charge(45, 4000, cfg) == 0
 
 
 def test_full_enough_battery_does_not_block_the_car():
     """Nur mit abgeschaltetem Batterie-Vorrang: Ein fast voller Speicher
-    soll das Auto nicht ausbremsen."""
+    soll das Auto nicht ausbremsen – seine Ladeleistung wird freigegeben."""
     cfg = RegulationConfig(battery_priority=False, battery_reserve_soc=80)
-    assert reserved_battery_charge(85, 4000, cfg) == 0
+    assert releasable_battery_charge(85, 4000, cfg) == 4000
 
 
-def test_discharging_battery_is_not_a_charge_claim():
-    cfg = RegulationConfig(battery_reserve_soc=80)
-    assert reserved_battery_charge(45, -2000, cfg) == 0
+def test_discharging_battery_releases_nothing():
+    cfg = RegulationConfig(battery_priority=False, battery_reserve_soc=80)
+    assert releasable_battery_charge(45, -2000, cfg) == 0
 
 
 def test_reserve_threshold_applies_only_without_priority():
     """Ohne Batterie-Vorrang gilt wieder die alte Schwelle: Oberhalb von
     20 % darf die Ladeleistung an die Lasten weitergereicht werden."""
     cfg = RegulationConfig(battery_priority=False)
-    assert reserved_battery_charge(55, 4000, cfg) == 0
+    assert releasable_battery_charge(55, 4000, cfg) == 4000
 
 
 def test_lock_at_100_also_holds_at_exactly_full():
@@ -549,11 +551,13 @@ def test_battery_priority_protects_discharge_at_any_soc():
         assert protected_battery_discharge(soc, -2000, cfg) == 2000
 
 
-def test_battery_priority_reserves_charge_at_any_soc():
-    """Auch die Ladeleistung gehört dem Speicher – nicht erst unter 20 %."""
+def test_battery_priority_never_releases_charge():
+    """Auch die Ladeleistung gehört dem Speicher – bei jedem Ladestand.
+    „Gehört ihm" heißt: Sie wird nicht freigegeben. Abgezogen werden muss sie
+    nicht, denn im Budget steht sie ohnehin nicht mehr."""
     cfg = RegulationConfig()
     for soc in (0.0, 20.0, 55.0, 99.9, 100.0, None):
-        assert reserved_battery_charge(soc, 4000, cfg) == 4000
+        assert releasable_battery_charge(soc, 4000, cfg) == 0
 
 
 def test_almost_full_lock_no_longer_backfires():
@@ -564,13 +568,75 @@ def test_almost_full_lock_no_longer_backfires():
     assert protected_battery_discharge(100.0, -3000, cfg) == 3000
 
 
-def test_pool_excludes_everything_the_battery_uses():
-    """Rechenprobe zum gemeldeten Fall: 9 kW Überschuss, davon lädt der
-    Speicher 4 kW. Für Auto und Warmwasser bleiben 5 kW – nicht 9."""
+def _pool(budget: float, soc, bat_power: float, cfg: RegulationConfig) -> float:
+    """Die Topf-Rechnung des Control-Loops, isoliert nachgebaut."""
+    guard = protected_battery_discharge(soc, bat_power, cfg)
+    release = releasable_battery_charge(soc, bat_power, cfg)
+    return max(0.0, budget - guard + release)
+
+
+def test_charging_battery_is_not_subtracted_from_the_pool():
+    """Der teuerste Fehler der bisherigen Fassung, als Rechenprobe.
+
+    6 kW Sonne, 0,7 kW Haus, der Speicher nimmt maximal 2 kW auf. Am Netzpunkt
+    bleiben damit 3,3 kW übrig – die Ladeleistung des Speichers ist dort schon
+    abgezogen, sie steckt gar nicht mehr im Budget.
+
+    Wer sie ein zweites Mal abzieht, kommt auf 1,3 kW. Das liegt unter dem
+    Mindeststrom einer Wallbox (6 A ≈ 1,38 kW): Das Auto startet nie, und die
+    vollen 3,3 kW gehen ins Netz."""
     cfg = RegulationConfig()
-    guard = protected_battery_discharge(95.0, 4000, cfg)
-    claim = reserved_battery_charge(95.0, 4000, cfg)
-    assert max(0.0, 9000 - guard - claim) == 5000
+    budget = 6000 - 700 - 2000          # = 3300 W, so misst es der Zähler
+    assert _pool(budget, 95.0, +2000, cfg) == 3300
+
+
+def test_pool_excludes_the_discharge():
+    """Gegenprobe: Entladung *muss* abgezogen werden – sie steckt im Budget,
+    kommt aber nicht aus der Sonne."""
+    cfg = RegulationConfig()
+    assert _pool(9000, 95.0, -4000, cfg) == 5000
+
+
+def test_released_charge_is_added_to_the_pool():
+    """Ohne Batterie-Vorrang und über der Reserve: Was der Speicher lädt, darf
+    die Kette ihm abnehmen – dafür muss es dem Topf zugeschlagen werden, denn
+    im Budget fehlt es ja gerade deshalb."""
+    cfg = RegulationConfig(battery_priority=False, battery_reserve_soc=20)
+    assert _pool(3300, 95.0, +2000, cfg) == 5300
+
+
+# ------------------------------------ Abregeln statt abschalten
+# Der Kern des im Diagnosebericht sichtbaren Taktens: Jede Entladung über 50 W
+# löste einen Nothalt aus. Abregeln hätte genügt – ein Nothalt kostet danach
+# die volle Startschwelle und eine Minute Startverzögerung.
+
+def test_small_drain_does_not_trigger_a_hard_stop():
+    """Der gemeldete Fall: 102 W aus dem Speicher, während der Überschuss nur
+    5 W unter dem Mindeststrom lag. Die Ladung wurde beendet und setzte danach
+    acht Minuten aus – in denen 1,6 kW ins Netz gingen."""
+    cfg = RegulationConfig()
+    assert not battery_drain_alarm(102.0, cfg)
+
+
+def test_substantial_drain_still_triggers():
+    """Gegenprobe: Zieht die Last den Speicher wirklich leer, wird gestoppt."""
+    cfg = RegulationConfig()
+    assert battery_drain_alarm(1380.0, cfg)
+
+
+def test_drain_limit_is_configurable():
+    """Wer gar keine Entladung dulden will, stellt die Schwelle auf 0."""
+    cfg = RegulationConfig(battery_drain_limit_w=0)
+    assert battery_drain_alarm(60.0, cfg)
+
+
+def test_small_drain_is_still_subtracted_from_the_budget():
+    """Wichtig: Geduldet heißt nicht ignoriert. Die Entladung wird weiterhin
+    vollständig vom Budget abgezogen – die Last regelt also ab, sie läuft nur
+    nicht in den Nothalt."""
+    cfg = RegulationConfig()
+    assert protected_battery_discharge(95.0, -102.0, cfg) == 102.0
+    assert _pool(1500, 95.0, -102.0, cfg) == 1398
 
 
 def test_wallbox_stops_at_once_when_battery_is_protected():
@@ -613,6 +679,8 @@ def test_learned_watts_per_amp_prevents_overdraw():
     clock = FakeClock()
     wb = running_wallbox(clock)
     measured = WallboxData(state=WallboxState.CHARGING, power=2500, current_set=10)
+    wb.decide(2500, measured, ctx())          # Sollstrom das erste Mal gesehen
+    clock.advance(46)                          # eingeschwungen
     wb.decide(2500, measured, ctx())
     assert wb.watts_per_amp() == pytest.approx(250.0)
 
@@ -628,7 +696,65 @@ def test_implausible_measurement_is_not_learned():
     wb = running_wallbox(clock)
     ramping = WallboxData(state=WallboxState.CHARGING, power=300, current_set=16)
     wb.decide(3000, ramping, ctx())
+    clock.advance(46)
+    wb.decide(3000, ramping, ctx())
     assert wb.watts_per_amp() == pytest.approx(230.0)  # Nennwert bleibt
+
+
+# --------------------------------------------- Nur eingeschwungen messen
+# Aus dem Diagnosebericht: Die Ladung brach alle paar Minuten ab. Ursache war
+# eine Kettenreaktion – während des Hochrampens gemessen, Faktor zu klein
+# gelernt, daraufhin zu viele Ampere angefordert, Speicher deckt die Lücke,
+# Batterie-Schutz beendet die Ladung.
+
+def test_ramp_measurement_is_ignored_even_inside_tolerance():
+    """Der gemeldete Fall: Das Fahrzeug steht auf 10 A, zieht aber erst
+    2100 W statt 2300 W. 210 W/A liegt noch in der Plausibilitätsspanne – aus
+    einer Rampenmessung darf trotzdem nicht gelernt werden."""
+    clock = FakeClock()
+    wb = running_wallbox(clock)
+    ramping = WallboxData(state=WallboxState.CHARGING, power=2100, current_set=10)
+    for _ in range(5):                 # fünf Takte, aber ohne Zeit dazwischen
+        wb.decide(2300, ramping, ctx())
+    assert wb.watts_per_amp() == pytest.approx(230.0)
+
+
+def test_settled_measurement_is_learned():
+    """Gegenprobe: Liegt derselbe Sollstrom lange genug an, wird gelernt."""
+    clock = FakeClock()
+    wb = running_wallbox(clock)
+    settled = WallboxData(state=WallboxState.CHARGING, power=2100, current_set=10)
+    wb.decide(2300, settled, ctx())
+    clock.advance(46)
+    wb.decide(2300, settled, ctx())
+    assert wb.watts_per_amp() == pytest.approx(210.0)
+
+
+def test_setpoint_change_restarts_the_settling_time():
+    """Ein neuer Sollstrom heißt: von vorn einschwingen."""
+    clock = FakeClock()
+    wb = running_wallbox(clock)
+    wb.decide(2300, WallboxData(state=WallboxState.CHARGING, power=2100, current_set=10), ctx())
+    clock.advance(40)
+    # Sollstrom wechselt auf 12 A – die Uhr beginnt neu
+    ramping = WallboxData(state=WallboxState.CHARGING, power=2100, current_set=12)
+    wb.decide(2760, ramping, ctx())
+    clock.advance(20)                  # 60 s seit dem ersten, aber erst 20 s seit dem Wechsel
+    wb.decide(2760, ramping, ctx())
+    assert wb.watts_per_amp() == pytest.approx(230.0)
+
+
+def test_underestimated_factor_cannot_cause_overdraw():
+    """Die Schranke nach unten ist die wichtige: Ein zu kleiner Faktor lässt
+    den Regler zu viele Ampere anfordern. 230 V ±10 % (EN 50160) ist das
+    Äußerste, was eine echte Messung ergeben kann."""
+    clock = FakeClock()
+    wb = running_wallbox(clock)
+    absurd = WallboxData(state=WallboxState.CHARGING, power=1000, current_set=10)
+    wb.decide(2300, absurd, ctx())
+    clock.advance(46)
+    wb.decide(2300, absurd, ctx())
+    assert wb.watts_per_amp() >= 230 * 0.9
 
 
 def test_current_rises_gradually():
@@ -715,3 +841,108 @@ def test_manual_override_clears_the_absence_lock():
     assert not wb.decide(3000, connected(power=0), ctx()).enable
     wb.override = "fast"
     assert wb.decide(3000, connected(power=0), ctx()).enable
+
+
+# ------------------------------- Der Regler muss die Hardware-Grenzen kennen
+# Aus dem Diagnosebericht: Ein Tesla nimmt erst ab 5 A an, viele Wallboxen erst
+# ab 6 A. Kommandiert der Regler weniger, klemmt der Treiber nach oben – das
+# Fahrzeug zieht dann mehr, als zugeteilt war, und die Differenz kommt aus
+# Speicher oder Netz. Der Regler muss deshalb mit dem echten Mindeststrom
+# rechnen, nicht mit dem gewünschten.
+
+class _StubRow:
+    def __init__(self, **kw):
+        self.id = kw.get("id", 1)
+        self.name = kw.get("name", "Auto")
+        self.category = "wallbox"
+        self.driver_id = kw.get("driver_id", "simulation_wallbox")
+        self.config = kw.get("config", {})
+        self.settings = kw.get("settings", {})
+        self.enabled = True
+
+
+def _managed(settings: dict, driver_floor: float, driver_ceiling: float = 0.0):
+    from app.core.loop import ManagedDevice
+
+    dev = ManagedDevice.__new__(ManagedDevice)
+    dev.name = "Auto"
+    dev.settings = settings
+    dev.driver = type("D", (), {"min_current": driver_floor, "max_current": driver_ceiling})()
+    return dev._wallbox_settings()
+
+
+def test_driver_floor_raises_the_configured_minimum():
+    """5 A eingestellt, aber die Box kann erst 6 A: Es gilt 6 A."""
+    s = _managed({"min_current": 5, "max_current": 16}, driver_floor=6.0)
+    assert s.min_current == 6.0
+
+
+def test_configured_minimum_is_kept_when_it_is_higher():
+    """Gegenprobe: Ein bewusst höherer Mindeststrom bleibt stehen."""
+    s = _managed({"min_current": 8, "max_current": 16}, driver_floor=5.0)
+    assert s.min_current == 8.0
+
+
+def test_driver_ceiling_caps_the_configured_maximum():
+    """Was das Gerät nicht kann, darf nicht ins Budget eingeplant werden."""
+    s = _managed({"min_current": 6, "max_current": 32}, driver_floor=5.0, driver_ceiling=16.0)
+    assert s.max_current == 16.0
+
+
+def test_guaranteed_current_follows_the_raised_minimum():
+    """Der Garantie-Strom im Modus min_pv darf nicht unter der Hardware
+    liegen – sonst zieht das Fahrzeug im Zweifel mehr als garantiert."""
+    s = _managed({"min_current": 5, "min_pv_current": 5, "max_current": 16}, driver_floor=6.0)
+    assert s.min_pv_current == 6.0
+
+
+def test_minimum_charge_power_follows_the_hardware_floor():
+    """Die Startschwelle rechnet mit dem echten Mindeststrom: 6 A × 230 V =
+    1380 W. Mit 5 A gerechnet hätte der Regler schon bei 1150 W gestartet und
+    die fehlenden 230 W aus dem Speicher gezogen."""
+    clock = FakeClock()
+    s = _managed({"min_current": 5, "max_current": 16}, driver_floor=6.0)
+    wb = WallboxController(s, clock=clock)
+    assert wb._min_power() == pytest.approx(1380.0)
+
+
+def test_three_phase_vehicle_needs_three_phase_worth_of_surplus():
+    """„Ein Tesla kann nicht mit 1 kW laden."
+
+    Lädt das Fahrzeug dreiphasig, sind 6 A Mindeststrom nicht 1,38 kW, sondern
+    3 × 230 V × 6 A = 4,14 kW. Der Regler muss deshalb auch 4,14 kW Überschuss
+    abwarten – startet er früher, zieht das Fahrzeug die Differenz aus Speicher
+    oder Netz, und zwar sofort und in voller Höhe."""
+    clock = FakeClock()
+    wb = WallboxController(
+        WallboxSettings(mode="pv_only", min_current=6, max_current=16,
+                        phases_mode="fixed1", start_delay_s=0, start_threshold_w=1400),
+        clock=clock,
+    )
+    dreiphasig = WallboxData(state=WallboxState.CHARGING, power=4140,
+                             current_set=6, phases_active=3, voltage=230.0)
+    wb.observe(dreiphasig)
+    assert wb.watts_per_amp() == pytest.approx(690.0)
+    assert wb._min_power() == pytest.approx(4140.0)
+
+    # 2 kW Überschuss reichen dafür nicht – trotz „start_threshold_w = 1400".
+    assert not wb.decide(2000, connected(), ctx()).enable
+    assert wb.decide(4200, connected(), ctx()).enable
+
+
+def test_three_phase_budget_yields_three_phase_amps():
+    """Gegenprobe zur Ampere-Genauigkeit: 5 kW Überschuss sind dreiphasig
+    7 A, nicht 21 A. Mit dem einphasigen Faktor gerechnet hätte das Fahrzeug
+    das Dreifache gezogen."""
+    clock = FakeClock()
+    wb = WallboxController(
+        WallboxSettings(mode="pv_only", min_current=6, max_current=16,
+                        phases_mode="fixed1", start_delay_s=0, ramp_up_step_a=16),
+        clock=clock,
+    )
+    laufend = WallboxData(state=WallboxState.CHARGING, power=4140,
+                          current_set=6, phases_active=3, voltage=230.0)
+    wb.decide(5000, laufend, ctx())
+    d = wb.decide(5000, laufend, ctx())
+    assert d.current_a == 7
+    assert d.power_w == pytest.approx(7 * 690)

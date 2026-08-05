@@ -104,6 +104,9 @@ export function Settings() {
             <Toggle on={reg.battery_priority !== false}
                     onChange={(v) => setVal("regulation", "battery_priority", v)} />
           </Field>
+          <Field label={t("settings.batteryDrainLimit")} help={t("settings.batteryDrainLimitHelp")}>
+            <Num value={reg.battery_drain_limit_w} onChange={(v) => setVal("regulation", "battery_drain_limit_w", v)} />
+          </Field>
           {reg.battery_priority === false && (
             <>
               <Field label={t("settings.batteryReserve")} help={t("settings.batteryReserveHelp")}>

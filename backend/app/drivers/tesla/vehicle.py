@@ -7,6 +7,7 @@ SoC über BLE ist Best-Effort; die Regelung hängt nicht davon ab.
 from __future__ import annotations
 
 import asyncio
+import math
 import time
 
 from ..base import (
@@ -34,6 +35,9 @@ CHARGING_STATES = {
 
 # BLE-Proxy nicht fluten: Fahrzeugdaten höchstens alle X Sekunden frisch holen
 MIN_POLL_INTERVAL_S = 20.0
+
+#: Nennspannung, wenn das Fahrzeug keine eigene meldet.
+NOMINAL_VOLTAGE = 230.0
 
 #: Wie lange ein per Funk bestätigter Zustand ohne neue Antwort weiter gilt.
 #: Danach gilt das Fahrzeug als abwesend – lieber kein Budget reservieren als
@@ -153,19 +157,21 @@ class TeslaVehicle(WallboxDriver):
         self._last_known_state = state
         self._state_confirmed_at = now
         amps = _f(charge.get("charger_actual_current"))
-        volts = _f(charge.get("charger_voltage")) or 230.0
-        phases = int(_f(charge.get("charger_phases")) or 1)
+        volts_raw = _f(charge.get("charger_voltage"))
+        volts = volts_raw if 180.0 <= volts_raw <= 260.0 else None
         reported_kw = _f(charge.get("charger_power"))
-        power = reported_kw * 1000.0 if reported_kw > 0 else amps * volts * phases
+        phases = _phases(charge, amps, volts, reported_kw)
+        power = _charge_power(amps, volts, phases, reported_kw)
         self._cache = WallboxData(
             state=state,
-            power=checked("wallbox_power", power, source="Tesla charger_power"),
+            power=checked("wallbox_power", power, source="Tesla-Ladeleistung"),
             current_set=sanitized("wallbox_current", _f(charge.get("charge_amps")), zero_is_none=True),
-            phases_active=phases if phases in (1, 3) else None,
-            # Gemessene Spannung durchreichen. Der Regler rechnet damit exakt
-            # von Ampere in Watt, statt sie aus charger_power zu schätzen –
-            # das ist bei Tesla ein ganzzahliger kW-Wert und dafür viel zu grob.
-            voltage=volts if 180.0 <= volts <= 260.0 else None,
+            phases_active=phases,
+            # Gemessene Spannung durchreichen – aber nur, wenn sie wirklich
+            # gemeldet wurde. Ein stillschweigend eingesetzter Nennwert sähe
+            # für den Regler wie eine Messung aus und würde die
+            # Einschwingprüfung in `observe` umgehen.
+            voltage=volts,
             energy_session_kwh=sanitized("energy_kwh", _f(charge.get("charge_energy_added")), zero_is_none=True),
             soc=sanitized("vehicle_soc", charge.get("battery_level")),
             charge_limit_soc=sanitized("vehicle_soc", charge.get("charge_limit_soc")),
@@ -181,8 +187,14 @@ class TeslaVehicle(WallboxDriver):
     async def set_current(self, amps: float) -> None:
         """Tesla nimmt den Sollstrom nur ganzzahlig und ≥ 5 A an. Werte
         darunter interpretiert das Fahrzeug je nach Software als 5 A oder
-        ignoriert sie – deshalb hier sauber klemmen."""
-        target = int(round(max(self.min_current, min(amps, self.max_current))))
+        ignoriert sie – deshalb hier sauber klemmen.
+
+        **Abgerundet, nicht gerundet.** Der Regler hat den Strom aus dem
+        verfügbaren Überschuss berechnet; kaufmännisch aufzurunden würde ein
+        Ampere mehr anfordern, als zugeteilt war – bei einphasig 230 W, die
+        aus Speicher oder Netz kommen müssten."""
+        wanted = max(self.min_current, min(amps, self.max_current))
+        target = int(math.floor(wanted + 1e-9))
         await self.client.command("set_charging_amps", {"charging_amps": target})
         self._invalidate()
 
@@ -236,6 +248,52 @@ class TeslaVehicle(WallboxDriver):
             "sent": target,
             "readback": None if got is None else round(float(got)),
         }
+
+
+def _phases(charge: dict, amps: float, volts: float | None, reported_kw: float) -> int | None:
+    """Wie viele Phasen lädt das Fahrzeug gerade?
+
+    Tesla meldet `charger_phases` in Europa je nach Fahrzeug und Software als
+    **2**, wenn dreiphasig geladen wird. Einen zweiphasigen Ladebetrieb gibt es
+    nicht – der Wert heißt „mehrphasig". Ungeprüft übernommen fehlt in jeder
+    Leistungsrechnung ein Drittel.
+
+    Fehlt die Angabe ganz, entscheidet der grobe kW-Wert: Er taugt nicht, um
+    1,38 von 1,15 kW zu unterscheiden, aber sehr wohl 1,4 von 4,1 kW. Jedes
+    Signal für das, was es kann.
+    """
+    raw = int(_f(charge.get("charger_phases")))
+    if raw in (2, 3):
+        return 3
+    if raw == 1:
+        return 1
+    if amps > 0 and reported_kw > 0:
+        single = amps * (volts or NOMINAL_VOLTAGE)
+        measured = reported_kw * 1000.0
+        return 3 if abs(measured - single * 3) < abs(measured - single) else 1
+    return None
+
+
+def _charge_power(amps: float, volts: float | None, phases: int | None, reported_kw: float) -> float:
+    """Ladeleistung in W – fein vor grob.
+
+    `charger_power` ist bei Tesla ein **ganzzahliger kW-Wert**. Bei 6 A
+    einphasig fließen real 1380 W, gemeldet wird „1" – also 1000 W. Bei 16 A
+    sind es real 3680 W, gemeldet „4" – also 4000 W.
+
+    Dieser Wert ging bisher als Messung in die Regelung ein, und der Fehler
+    von bis zu ±500 W wirkt in beide teuren Richtungen: Zu niedrig gemeldet
+    schrumpft das Budget, und Überschuss geht ins Netz. Zu hoch gemeldet
+    wächst es, das Fahrzeug fordert mehr an, als die Sonne hergibt – und die
+    Differenz kommt aus Speicher oder Netz.
+
+    `charger_actual_current` und `charger_voltage` sind dagegen fein
+    aufgelöst. Ihr Produkt ist die eigentliche Messung; der kW-Wert bleibt
+    Rückfall für den Fall, dass das Fahrzeug keinen Strom meldet.
+    """
+    if amps > 0:
+        return amps * (volts or NOMINAL_VOLTAGE) * (phases or 1)
+    return reported_kw * 1000.0
 
 
 def _f(value) -> float:
