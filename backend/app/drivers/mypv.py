@@ -106,6 +106,16 @@ class MyPvAcThor(WaterHeaterDriver):
 
     modulating = True
 
+    #: Sollwert alle 2 Minuten auffrischen, auch wenn er unverändert ist.
+    #:
+    #: Das Gerät verwirft die externe Vorgabe, wenn länger als der Watchdog
+    #: (Register 1004, hier auf 600 s gesetzt) kein Schreibbefehl kommt, und
+    #: heizt dann wieder nach eigener Logik. Der Control-Loop schickt einen
+    #: unveränderten Wert aber nur einmal – ohne diese Auffrischung lief der
+    #: Heizstab nach dem Abschalten irgendwann von selbst wieder an.
+    #: 120 s lassen reichlich Luft für ausgefallene Takte.
+    resend_interval_s = 120.0
+
     def __init__(self, config: dict) -> None:
         super().__init__(config)
         self.host = str(config.get("host", "")).strip()

@@ -81,6 +81,15 @@ log = logging.getLogger(__name__)
 READ_TIMEOUT_S = 6.0
 OFFLINE_AFTER_FAILURES = 3
 VOLTAGE = 230.0
+
+#: Ab dieser gemessenen Leistung gilt eine Last, die aus sein soll, als laufend.
+#: Über dem Messrauschen einer Wallbox, unter jeder echten Ladestufe.
+UNCONTROLLED_W = 300.0
+#: Wie viele Takte die Messung dem Befehl widersprechen muss, bevor der Befehl
+#: erneut geschickt wird. Ein Fahrzeug antwortet über Funk verzögert, und der
+#: Tesla-Treiber liefert bis zu 20 s alte Werte aus seinem Cache – ein
+#: einzelner Takt Abweichung ist deshalb noch kein Ungehorsam.
+OBEY_CONFIRM_TICKS = 4
 #: Stellraster für modulierende Heizstäbe (W). Siehe _apply_heater.
 HEATER_STEP_W = 10.0
 
@@ -113,8 +122,11 @@ class ManagedDevice:
         elif self.category == DeviceCategory.WATER_HEATER.value:
             self.controller = WaterHeaterController(WaterHeaterSettings.from_dict(self.settings))
 
-        # Dedup der zuletzt gesendeten Stellgrößen
+        # Dedup der zuletzt gesendeten Stellgrößen …
         self.sent: dict[str, Any] = {}
+        # … und wann sie zuletzt wirklich auf dem Draht waren (Watchdog-
+        # Auffrischung, siehe _send).
+        self.sent_at: dict[str, float] = {}
         # Sende-Resilienz: Fehlversuche je Stellgröße + Backoff-Fenster
         # (value, retry_at) – verhindert das Hämmern fehlschlagender Schreibbefehle
         self.send_fail_count: dict[str, int] = {}
@@ -124,6 +136,14 @@ class ManagedDevice:
         # „Befehl gesendet“ allein ist keine Erfolgsmeldung.
         self.command_error: str | None = None
         self.command_ok_since: float = time.monotonic()
+        #: Takte in Folge, in denen die Messung dem letzten Befehl widerspricht,
+        #: und ob das bereits gemeldet wurde (siehe ControlLoop._obeyed).
+        self.ignored_ticks = 0
+        self.uncontrolled = False
+        #: Zuletzt gemeldete Erreichbarkeit des Fahrzeugs (siehe
+        #: WallboxData.vehicle_reachable). Nur für die einmalige Meldung beim
+        #: Wechsel – ohne sie stünde jede Minute dieselbe Zeile im Protokoll.
+        self.vehicle_reachable: bool | None = None
         # Session-Verfolgung (nur Wallbox)
         self.session_id: int | None = None
         self.session_energy_kwh = 0.0
@@ -338,6 +358,38 @@ class ControlLoop:
                 if self.notifier:
                     await self.notifier.send(f"⚠️ {dev.name} ist offline: {dev.last_error}")
 
+    async def _note_vehicle_link(self, dev: ManagedDevice) -> None:
+        """Abgerissenen Funkkontakt zum Fahrzeug sichtbar machen.
+
+        Ein Fahrzeug, das per Funk nicht mehr antwortet, meldet nach einer
+        Weile schlicht „nicht verbunden". Das ist von einem abgesteckten Auto
+        nicht zu unterscheiden, und beides ist ein völlig normaler Zustand –
+        deshalb nimmt der Loop das Gerät dafür bewusst *nicht* offline.
+
+        Genau daraus wurde aber ein stiller Ausfall: zwei Sonnentage ohne eine
+        einzige Ladung, während das Gerät durchgehend als online angezeigt
+        wurde und im Protokoll nichts stand. Nicht offline melden heißt nicht
+        gar nichts melden – einmal beim Wechsel, nicht in jedem Takt.
+        """
+        reachable = getattr(dev.data, "vehicle_reachable", None)
+        if reachable is None or reachable == dev.vehicle_reachable:
+            return
+        first = dev.vehicle_reachable is None
+        dev.vehicle_reachable = reachable
+        if reachable:
+            if not first:
+                await log_event(f"Fahrzeug wieder erreichbar: {dev.name}", category="control")
+            return
+        if first:
+            return  # beim Start nichts melden – da weiß noch niemand etwas
+        await log_event(
+            f"Fahrzeug antwortet nicht mehr: {dev.name}. Es wird kein Überschuss "
+            f"mehr dorthin verteilt, bis es sich wieder meldet.",
+            level="warning", category="control",
+        )
+        if self.notifier:
+            await self.notifier.send(f"⚠️ {dev.name}: Fahrzeug antwortet nicht mehr – keine Ladung möglich")
+
     async def _step(self) -> None:
         active = [d for d in self.devices.values() if d.enabled]
         await asyncio.gather(*(self._read_device(d) for d in active))
@@ -385,6 +437,8 @@ class ControlLoop:
         grid_ok = grid_power is not None and (not has_meter_device or meter_online)
 
         wallboxes = [d for d in active if d.category == DeviceCategory.WALLBOX.value]
+        for dev in wallboxes:
+            await self._note_vehicle_link(dev)
         heaters = [d for d in active if d.category == DeviceCategory.WATER_HEATER.value]
         battery_devs = [d for d in active if d.category == DeviceCategory.BATTERY.value]
 
@@ -659,16 +713,32 @@ class ControlLoop:
         falscher Modus, Timeout …), wird derselbe Wert nicht mehr jeden Tick
         wiederholt, sondern mit exponentiell wachsendem Abstand (max. 60 s).
         Ein NEUER Zielwert setzt den Backoff sofort zurück – legitime
-        Sollwertänderungen werden also nie verzögert."""
-        if dev.sent.get(key) == value:
-            return
+        Sollwertänderungen werden also nie verzögert.
+
+        **Auffrischen unveränderter Sollwerte.** Manche Geräte haben einen
+        Watchdog: Bleibt eine Weile ein Schreibbefehl aus, verwerfen sie die
+        externe Vorgabe und fallen auf ihre Eigenregelung zurück. Der
+        my-PV AC•THOR macht genau das (Register 1004, max. 600 s). Zusammen
+        mit dem Dedup oben ergab das einen Heizstab, der nach dem Abschalten
+        „manchmal trotzdem noch" lief: MinePower schickte die 0 W genau
+        einmal, danach nie wieder – und nach Ablauf des Watchdogs heizte das
+        Gerät wieder nach eigenem Gutdünken.
+
+        Treiber mit Watchdog setzen deshalb `resend_interval_s` deutlich
+        unter ihre Watchdog-Zeit. Der Wert wird dann periodisch erneut
+        geschrieben, auch wenn er sich nicht geändert hat."""
         now = time.monotonic()
+        if dev.sent.get(key) == value:
+            refresh_after = float(getattr(dev.driver, "resend_interval_s", 0.0) or 0.0)
+            if not refresh_after or (now - dev.sent_at.get(key, 0.0)) < refresh_after:
+                return
         backoff = dev.send_backoff.get(key)
         if backoff is not None and backoff[0] == value and now < backoff[1]:
             return  # gleicher, weiterhin fehlschlagender Wert → Wiederholung aussetzen
         try:
             await asyncio.wait_for(coro_factory(), timeout=READ_TIMEOUT_S)
             dev.sent[key] = value
+            dev.sent_at[key] = now
             dev.send_fail_count.pop(key, None)
             dev.send_backoff.pop(key, None)
             if dev.command_error and dev.command_error.startswith(f"{key}:"):
@@ -694,9 +764,58 @@ class ControlLoop:
                 if self.notifier:
                     await self.notifier.send(f"⚠️ {dev.name}: Befehl wird nicht übernommen – {exc}")
 
+    async def _obeyed(self, dev: ManagedDevice, measured_w: float, allowed_w: float, what: str) -> None:
+        """Gegenprüfen, ob die Last dem letzten Befehl wirklich folgt.
+
+        Der Regelkreis war bis hier einseitig: Ein Sollwert galt als erledigt,
+        sobald der Treiber ihn ohne Fehler quittiert hatte. Ob die Last ihn
+        auch befolgt, wurde nie gemessen — und `_send` schickt denselben Wert
+        aus Dedup-Gründen kein zweites Mal. Beides zusammen ergibt eine Lücke,
+        aus der die Last nie wieder herausfindet:
+
+        Ein Tesla beginnt beim Einstecken von sich aus zu laden, ebenso nach
+        einem Abfahrtstimer. MinePower hatte „aus" längst gesendet, hält es für
+        erledigt und wiederholt es nie. Im Diagnosebericht lud das Auto so um
+        18 Uhr mit 5,3 kW bei 435 W Sonne — 4,2 kW kamen aus dem Hausspeicher,
+        855 W aus dem Netz. Am nächsten Morgen dasselbe bei 5 % Ladestand:
+        5,2 kW ins Auto, 5,8 kW aus dem Netz.
+
+        Deshalb hier die zweite Richtung: Widerspricht die Messung dem Befehl
+        über mehrere Takte, wird der Dedup-Eintrag verworfen und der Befehl
+        erneut geschickt. Bleibt es dabei, erfährt es der Nutzer — dann liegt
+        es am Gerät, nicht mehr an der Regelung.
+        """
+        if measured_w <= allowed_w:
+            dev.ignored_ticks = 0
+            if dev.uncontrolled:
+                dev.uncontrolled = False
+                await log_event(f"{dev.name} folgt wieder der Regelung", category="control")
+            return
+        dev.ignored_ticks += 1
+        if dev.ignored_ticks < OBEY_CONFIRM_TICKS:
+            return
+        dev.ignored_ticks = 0
+        # Dedup verwerfen: Nur so kommt derselbe Sollwert noch einmal aufs Gerät.
+        dev.sent.clear()
+        dev.send_backoff.clear()
+        if dev.uncontrolled:
+            return  # schon gemeldet – weiter nachfassen, aber nicht weiter melden
+        dev.uncontrolled = True
+        msg = (f"{dev.name} folgt der Regelung nicht: {what}, gemessen "
+               f"{measured_w:.0f} W. Befehl wird erneut gesendet.")
+        await log_event(msg, level="warning", category="control")
+        if self.notifier:
+            await self.notifier.send(f"⚠️ {msg}")
+
     async def _apply_wallbox(self, dev: ManagedDevice, d: WallboxDecision) -> None:
         driver: WallboxDriver = dev.driver  # type: ignore[assignment]
         dev.decision = {"enable": d.enable, "current_a": round(d.current_a, 1), "phases": d.phases, "reason": d.reason}
+        if isinstance(dev.data, WallboxData):
+            # Toleranz nach oben: Die gemeldete Leistung schwankt, und ein
+            # Fahrzeug folgt einem neuen Sollstrom erst nach Sekunden.
+            allowed = UNCONTROLLED_W if not d.enable else d.power_w * 1.25 + UNCONTROLLED_W
+            await self._obeyed(dev, dev.data.power, allowed,
+                               "aus" if not d.enable else f"höchstens {d.power_w:.0f} W")
         if d.phases is not None and "phase_switch" in driver.meta.capabilities:
             # Vor der Umschaltung Ladung stoppen (viele Boxen verlangen das)
             await self._send(dev, "enable", False, lambda: driver.stop_charging())
@@ -716,6 +835,13 @@ class ControlLoop:
     async def _apply_heater(self, dev: ManagedDevice, power_w: float, reason: str) -> None:
         driver: WaterHeaterDriver = dev.driver  # type: ignore[assignment]
         dev.decision = {"power_w": round(power_w), "reason": reason}
+        if isinstance(dev.data, WaterHeaterData):
+            # Gleiche Gegenprüfung wie bei der Wallbox. Ein my-PV-Gerät heizt
+            # nach abgelaufenem Watchdog oder in einem eigenen Zeitprogramm
+            # weiter — im Diagnosebericht nachts um vier mit 1163 W, während
+            # der Speicher mit 1835 W leerlief.
+            await self._obeyed(dev, dev.data.power, power_w * 1.15 + UNCONTROLLED_W,
+                               f"höchstens {power_w:.0f} W")
         # 10-W-Raster, abgerundet: fein genug, damit der Lückenfüller kleine
         # Reste wirklich verwertet, und grob genug, dass nicht bei jedem
         # Rauschen ein neuer Sollwert geschrieben wird. Abrunden statt runden,
@@ -850,6 +976,9 @@ class ControlLoop:
                 "online": dev.online,
                 "last_error": dev.last_error,
                 "command_error": dev.command_error,
+                # Gerät läuft, obwohl es das nicht soll – sichtbar machen,
+                # nicht nur ins Protokoll schreiben.
+                "uncontrolled": dev.uncontrolled,
                 "decision": dev.decision,
                 # Fähigkeiten mitsenden, damit die Oberfläche nur Bedienelemente
                 # zeigt, die das Gerät auch wirklich kann (z. B. Ladegrenze).

@@ -793,15 +793,23 @@ class WaterHeaterController:
         s = self.s
         temp = data.temperature_c
 
+        # „Aus" schlägt alles – auch einen noch laufenden Boost.
+        #
+        # Vorher wurde der Boost zuerst geprüft und lief mit voller Leistung
+        # weiter, obwohl der Nutzer das Gerät gerade abgeschaltet hatte. Aus
+        # dessen Sicht heizte der Stab „manchmal trotzdem noch", und die
+        # einzige Abhilfe war, den Boost separat zu finden und zu beenden.
+        # Ein Ausschalter, den man zweimal betätigen muss, ist keiner.
+        if s.mode == "off":
+            self.on = False
+            self.boost = False
+            return WaterHeaterDecision(0.0, "deaktiviert")
+
         if self.boost:
             if temp is not None and temp >= s.boost_temp_c:
                 self.boost = False
             else:
                 return WaterHeaterDecision(s.max_power_w, "Boost aktiv")
-
-        if s.mode == "off":
-            self.on = False
-            return WaterHeaterDecision(0.0, "deaktiviert")
 
         if temp is not None and temp >= s.target_temp_c:
             self.on = False

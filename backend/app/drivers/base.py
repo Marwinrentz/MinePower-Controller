@@ -136,6 +136,17 @@ class WallboxData(BaseModel):
     #: hier eine sichtbare, direkt bedienbare Stellgröße statt einer
     #: Einstellung, die man in der Hersteller-App suchen muss.
     charge_limit_soc: float | None = None
+    #: Konnte der Ladepunkt das Fahrzeug zuletzt wirklich erreichen?
+    #:
+    #: Nur für Anbindungen, bei denen das eine eigene Frage ist (Funk, Cloud).
+    #: ``None`` = der Treiber verfolgt das nicht, ``False`` = das Gerät selbst
+    #: antwortet, das Fahrzeug daran aber seit Längerem nicht mehr.
+    #:
+    #: Ohne diese Unterscheidung sieht ein abgerissener Funkkontakt exakt aus
+    #: wie ein abgestecktes Auto: Der Treiber meldet ``IDLE``, das Gerät gilt
+    #: als online, und der Regler schweigt. Im Feld kostete das zwei volle
+    #: Sonnentage Ladung, ohne dass irgendwo ein Hinweis auftauchte.
+    vehicle_reachable: bool | None = None
     rfid_tag: str | None = None
     extra: dict[str, Any] = Field(default_factory=dict)
 

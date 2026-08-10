@@ -142,6 +142,10 @@ class TeslaVehicle(WallboxDriver):
                     f"{STATE_TRUST_S / 60:.0f} min unbestätigt" if stale
                     else "nicht erreichbar (schläft oder nicht verbunden)")
             self._cache = WallboxData(state=state, power=0.0,
+                                      # Der Proxy antwortet, das Fahrzeug nicht.
+                                      # Für den Loop ist das etwas anderes als
+                                      # „abgesteckt“ – er meldet es dem Nutzer.
+                                      vehicle_reachable=False,
                                       extra={"Fahrzeug": hint,
                                              "capacity_kwh": self.config.get("capacity_kwh")})
             self._cache_time = now
@@ -167,6 +171,7 @@ class TeslaVehicle(WallboxDriver):
             power=checked("wallbox_power", power, source="Tesla-Ladeleistung"),
             current_set=sanitized("wallbox_current", _f(charge.get("charge_amps")), zero_is_none=True),
             phases_active=phases,
+            vehicle_reachable=True,
             # Gemessene Spannung durchreichen – aber nur, wenn sie wirklich
             # gemeldet wurde. Ein stillschweigend eingesetzter Nennwert sähe
             # für den Regler wie eine Messung aus und würde die

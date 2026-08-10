@@ -946,3 +946,83 @@ def test_three_phase_budget_yields_three_phase_amps():
     d = wb.decide(5000, laufend, ctx())
     assert d.current_a == 7
     assert d.power_w == pytest.approx(7 * 690)
+
+
+# ---------------------------------------------- „Aus" muss aus bedeuten
+# Gemeldet: Der Heizstab lief nach dem Abschalten manchmal weiter. Zwei
+# unabhängige Ursachen, beide hier festgehalten.
+
+def test_off_beats_a_running_boost():
+    """Boost wurde vor dem Modus geprüft und lief mit voller Leistung weiter,
+    obwohl der Nutzer gerade abgeschaltet hatte."""
+    clock = FakeClock()
+    wh = WaterHeaterController(WaterHeaterSettings(mode="off", max_power_w=3000), clock=clock)
+    wh.boost = True
+    d = wh.decide(3000, WaterHeaterData(power=3000, temperature_c=40), ctx())
+    assert d.power_w == 0.0
+    assert wh.boost is False        # und bleibt aus, nicht nur diesen Takt
+
+
+def test_boost_still_works_when_not_switched_off():
+    """Gegenprobe: Im PV-Modus heizt der Boost weiterhin durch."""
+    clock = FakeClock()
+    wh = WaterHeaterController(WaterHeaterSettings(mode="pv_only", max_power_w=3000), clock=clock)
+    wh.boost = True
+    assert wh.decide(0, WaterHeaterData(power=0, temperature_c=40), ctx()).power_w == 3000
+
+
+# ------------------------- Gegenprüfung: folgt das Gerät dem Befehl?
+# Aus dem Diagnosebericht: Das Auto lud um 18 Uhr mit 5,3 kW bei 435 W Sonne –
+# 4,2 kW aus dem Speicher, 855 W aus dem Netz. MinePower hatte „aus" längst
+# gesendet und wiederholte es wegen des Sende-Dedups nie wieder.
+
+class _ObeyDev:
+    def __init__(self, power):
+        self.name = "Auto"
+        self.data = WallboxData(state=WallboxState.CHARGING, power=power)
+        self.sent = {"enable": False, "current": 6}
+        self.send_backoff = {"enable": (False, 1e9)}
+        self.ignored_ticks = 0
+        self.uncontrolled = False
+
+
+async def _run_obey(dev, measured, allowed, ticks):
+    loop = ControlLoop()
+    for _ in range(ticks):
+        await loop._obeyed(dev, measured, allowed, "aus")
+
+
+async def test_load_that_ignores_off_is_retried():
+    """Nach mehreren widersprechenden Takten wird der Dedup verworfen –
+    nur so kommt „aus" ein zweites Mal auf dem Gerät an."""
+    dev = _ObeyDev(5349)
+    await _run_obey(dev, 5349, 300.0, 4)
+    assert dev.sent == {}            # Dedup weg → Befehl geht erneut raus
+    assert dev.uncontrolled is True
+
+
+async def test_single_deviating_tick_is_tolerated():
+    """Ein Fahrzeug antwortet über Funk verzögert; der Tesla-Treiber liefert
+    bis zu 20 s alte Werte. Ein einzelner Takt ist noch kein Ungehorsam."""
+    dev = _ObeyDev(5349)
+    await _run_obey(dev, 5349, 300.0, 1)
+    assert dev.sent != {}
+    assert dev.uncontrolled is False
+
+
+async def test_obedient_load_is_left_alone():
+    """Gegenprobe: Wer folgt, wird nicht angefasst."""
+    dev = _ObeyDev(0)
+    await _run_obey(dev, 0.0, 300.0, 10)
+    assert dev.sent != {}
+    assert dev.ignored_ticks == 0
+    assert dev.uncontrolled is False
+
+
+async def test_recovery_is_noticed():
+    """Folgt das Gerät wieder, wird der Zustand zurückgesetzt."""
+    dev = _ObeyDev(5349)
+    await _run_obey(dev, 5349, 300.0, 4)
+    assert dev.uncontrolled is True
+    await _run_obey(dev, 0.0, 300.0, 1)
+    assert dev.uncontrolled is False
