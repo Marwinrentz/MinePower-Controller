@@ -100,6 +100,7 @@ export const de = {
     barLoads: "Wohin",
     balanceTitle: "Netzpunkt",
     balancePerfect: "Ausgeglichen",
+    idle: "Gerade fließt nichts",
   },
   mode: {
     pv_only: "Nur PV",

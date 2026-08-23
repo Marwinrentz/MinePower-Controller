@@ -166,19 +166,30 @@
 
 /* ---------------------------------------------------------------- Flussleiste */
 
-.m-flow { display: flex; flex-direction: column; gap: 10px; padding: var(--m-pad); }
-.m-flow-row { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-.m-flow-tag { color: var(--m-text-2); font-size: 11.5px; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; }
-.m-flow-track { display: flex; gap: 3px; height: 30px; min-width: 0; width: 100%; }
-.m-flow-seg {
-  align-items: center; border-radius: 8px; color: #fff; display: flex; gap: 4px;
-  font-size: 11.5px; font-weight: 700; justify-content: center; min-width: 0;
-  overflow: hidden; padding: 0 4px; white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  transition: width 520ms var(--m-spring);
+.m-flow { display: flex; flex-direction: column; gap: 16px; padding: var(--m-pad); }
+.m-flow-row { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+
+.m-flow-head { align-items: baseline; display: flex; gap: 8px; justify-content: space-between; }
+.m-flow-tag {
+  color: var(--m-text-2); font-size: 11px; font-weight: 650;
+  letter-spacing: 0.09em; text-transform: uppercase;
 }
-.m-flow-empty { background: var(--m-card-2); border-radius: 8px; flex: 1; }
+.m-flow-sum { color: var(--m-text); font-size: 13.5px; font-weight: 700; }
+
+/* Ein durchgehendes Gleis statt einzelner Kacheln: Der Balken soll als eine
+   Menge lesbar sein, die sich aufteilt – nicht als Reihe von Kästchen. */
+.m-flow-track {
+  background: var(--m-card-2); border-radius: 999px; display: flex;
+  height: 14px; min-width: 0; overflow: hidden; width: 100%;
+}
+.m-flow-seg { min-width: 0; transition: width 520ms var(--m-spring); }
+.m-flow-seg + .m-flow-seg { box-shadow: inset 1.5px 0 0 var(--m-card); }
+.m-flow-empty { flex: 1; }
+
+.m-flow-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.m-flow-key { align-items: center; color: var(--m-text-2); display: flex; gap: 5px; }
+.m-flow-key i { border-radius: 3px; height: 9px; width: 9px; flex: none; }
+.m-flow-key b { color: var(--m-text); font-size: 12.5px; font-weight: 650; }
 
 /* ---------------------------------------------------------------- Gerätekarten */
 

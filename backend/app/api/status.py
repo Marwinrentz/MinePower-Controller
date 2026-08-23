@@ -35,6 +35,16 @@ async def websocket_endpoint(ws: WebSocket):
     async with async_session() as session:
         user = await authenticate_websocket(ws, session)
     if user is None:
+        # Erst den Handshake abschließen, dann mit Grund schließen.
+        #
+        # Ein close() *vor* accept() lehnt den Handshake auf HTTP-Ebene ab
+        # (403 Forbidden). Der Browser sieht dann nur einen abgebrochenen
+        # Verbindungsversuch – Code 1006, ohne jede Begründung –, und der
+        # Schlusscode 4401 kommt dort nie an. Das Frontend konnte das
+        # abgelaufene Token deshalb nicht von einem Netzwerkabbruch
+        # unterscheiden und hat endlos weiter verbunden: Die Oberfläche fror
+        # ein, ohne je zur Anmeldung zu führen.
+        await ws.accept()
         await ws.close(code=4401)
         return
     await ws_manager.connect(ws)

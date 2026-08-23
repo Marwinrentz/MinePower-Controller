@@ -534,13 +534,30 @@ small, .dim { color: var(--text-dim); font-size: var(--text-sm); }
 /* ---------------------------------------------------------------- Energiefluss */
 
 .flow-card { padding: var(--s4); }
-.flow-line { fill: none; stroke-linecap: round; }
-.flow-anim { animation: flowdash linear infinite; }
-@keyframes flowdash { to { stroke-dashoffset: -1000; } }
 
-.flow-node-label { font-size: 10px; font-weight: 650; letter-spacing: 0.02em; }
-.flow-node-value { font-size: 13px; font-weight: 750; }
-.flow-node-sub { font-size: 9.5px; font-weight: 650; }
+/* Banddiagramm: Fläche trägt die Information, nicht die Linie.
+   Beschriftung bewusst klein und ruhig – die Höhen sollen wirken. */
+.ef { overflow: visible; }
+.ef-head {
+  font-size: 9.5px; font-weight: 600; letter-spacing: 0.14em;
+  text-transform: uppercase; fill: var(--text-dim);
+}
+.ef-name { font-size: 11px; font-weight: 620; fill: var(--text-dim); }
+.ef-val { font-size: 15px; font-weight: 700; fill: var(--text-strong); }
+.ef-note { font-size: 10px; font-weight: 650; }
+.ef-idle { font-size: 12px; font-weight: 600; fill: var(--text-dim); }
+
+.ef-rail { fill: var(--surface-3); }
+.ef-rail-fill {
+  fill: var(--text-dim); opacity: 0.28;
+  transition: height var(--t-slow) var(--ease);
+}
+/* Der Schimmer sitzt als zweite Ebene auf dem Band. In dunklen Themes würde
+   reines Weiß darüber ausbleichen – dort genügt ein Hauch. */
+.ef-sweep { mix-blend-mode: overlay; }
+:root[data-theme="dark"] .ef-sweep { opacity: 0.5; }
+
+/* Kurzer Impuls, wenn ein Gerät startet/stoppt oder umschaltet */
 
 /* Kurzer Impuls, wenn ein Gerät startet/stoppt oder umschaltet */
 @keyframes flash {
@@ -695,6 +712,7 @@ table.table td.num { font-variant-numeric: tabular-nums; text-align: right; }
     transition-duration: 0.01ms !important;
   }
   .flow-anim { animation: none !important; }
+  .ef-sweep { display: none; }
 }
 
 /* ============================================================================

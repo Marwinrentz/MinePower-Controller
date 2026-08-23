@@ -142,10 +142,18 @@ class TeslaVehicle(WallboxDriver):
                     f"{STATE_TRUST_S / 60:.0f} min unbestätigt" if stale
                     else "nicht erreichbar (schläft oder nicht verbunden)")
             self._cache = WallboxData(state=state, power=0.0,
-                                      # Der Proxy antwortet, das Fahrzeug nicht.
-                                      # Für den Loop ist das etwas anderes als
-                                      # „abgesteckt“ – er meldet es dem Nutzer.
-                                      vehicle_reachable=False,
+                                      # Erst als „nicht erreichbar“ melden, wenn
+                                      # der Zustand wirklich nicht mehr gilt.
+                                      #
+                                      # Ein einzelner Timeout ist bei einer
+                                      # Funkanbindung Normalbetrieb – das
+                                      # Fahrzeug schläft, der Proxy kommt nicht
+                                      # durch, der nächste Versuch klappt.
+                                      # Vorher galt jeder Timeout sofort als
+                                      # Ausfall: 136 Warnungen am Tag bei einer
+                                      # Mediandauer von 18 Sekunden. Wer so oft
+                                      # warnt, wird nicht mehr gelesen.
+                                      vehicle_reachable=not stale,
                                       extra={"Fahrzeug": hint,
                                              "capacity_kwh": self.config.get("capacity_kwh")})
             self._cache_time = now

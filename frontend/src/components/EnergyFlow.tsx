@@ -1,184 +1,253 @@
-/** Energiefluss-Diagramm – das Herzstück des Dashboards.
+/** Energiefluss als proportionales Banddiagramm.
  *
- *  Gestaltungsregeln:
- *  • Jede Linie zeigt Richtung, Stärke und Tempo der tatsächlichen Leistung.
- *    Dicke ∝ Leistung, Tempo ∝ Leistung – man *sieht*, wo viel fließt.
- *  • Zahlen zählen weich hoch statt zu springen (siehe AnimatedValue).
- *  • Inaktive Pfade verschwinden nicht, sie werden nur still. So bleibt die
- *    Anlagentopologie stabil lesbar, statt bei jedem Tick umzuspringen.
- *  • Ein Knoten ohne Gerät (keine Batterie, kein Warmwasser) wird gedimmt
- *    dargestellt – kein Platzhalter-Rauschen, aber auch kein Layout-Sprung.
+ *  Warum nicht mehr Kreise mit Verbindungslinien: Die alte Darstellung führte
+ *  jede Leitung über den Knoten „Haus“ — PV→Haus, Haus→Auto, Haus→Batterie.
+ *  Das Haus ist aber ein Verbraucher, keine Sammelschiene. Wer das Bild las,
+ *  bekam eine Topologie gezeigt, die es so nicht gibt, und die Linienstärke
+ *  sagte über die Verhältnisse fast nichts aus.
+ *
+ *  Hier trägt stattdessen die Fläche die Information:
+ *
+ *    • Bandhöhe ∝ Leistung. Zwei Bänder nebeneinander lassen sich direkt
+ *      vergleichen, ohne eine einzige Zahl zu lesen.
+ *    • Links steht, was einspeist, rechts, was abnimmt, in der Mitte die
+ *      Schiene. Beide Seiten sind gleich hoch — Energieerhaltung wird
+ *      dadurch sichtbar statt behauptet.
+ *    • Was gerade nicht fließt, verschwindet. Das Bild zeigt den Zustand der
+ *      Anlage, nicht ihren Bestückungsplan; Geräteliste steht daneben.
+ *
+ *  Bewegung: ein langsamer Schimmer entlang der Bänder. Kein Lauflicht aus
+ *  Strichen — das zieht im Dauerbetrieb auf einem Wandbildschirm ständig den
+ *  Blick an, ohne je etwas Neues zu sagen.
  */
+import { useId } from "react";
 import { useI18n } from "../i18n";
 import { fmtW } from "../lib/format";
 import type { Snapshot } from "../lib/types";
-import { useAnimatedNumber, useFlashOnChange } from "./ui";
+import { useAnimatedNumber } from "./ui";
 import { Icon, type IconName } from "./icons";
 
-const NODES = {
-  pv: { x: 330, y: 62 },
-  house: { x: 330, y: 236 },
-  grid: { x: 92, y: 236 },
-  battery: { x: 568, y: 236 },
-  car: { x: 186, y: 404 },
-  water: { x: 474, y: 404 },
-};
+/** Darunter gilt ein Zweig als still und wird nicht gezeichnet. */
+const ACTIVE_W = 30;
 
-const ACTIVE_W = 30; // darunter gilt eine Verbindung als still
+const VB = { w: 720, h: 392 };
+const PAD_TOP = 26;
+const PAD_BOTTOM = 26;
+const RAIL_X = 344;
+const RAIL_W = 14;
+const STUB_W = 9;
+const LEFT_STUB = 168;
+const RIGHT_STUB = VB.w - LEFT_STUB - STUB_W;
+const GAP = 7;          // Luft zwischen zwei Bändern an der Außenkante
+//: Mindesthöhe eines Bandes. Nicht nur, damit ein kleiner Zweig sichtbar
+//: bleibt – zusammen mit GAP ergibt sich daraus der kleinste Abstand zweier
+//: Beschriftungen (17), und der muss über der Schriftgröße des Werts (15)
+//: liegen, sonst überschreiben sich zwei benachbarte Zahlen.
+const MIN_H = 10;
 
-type EdgeProps = {
-  from: { x: number; y: number };
-  to: { x: number; y: number };
-  power: number;
-  reverse?: boolean;
+type Branch = {
+  key: string;
+  icon: IconName;
+  watts: number;
   color: string;
-  curve?: number;
   label: string;
+  note?: string;
 };
 
-function Edge({ from, to, power, reverse = false, color, curve = 0, label }: EdgeProps) {
-  const mx = (from.x + to.x) / 2 + curve;
-  const my = (from.y + to.y) / 2 + Math.abs(curve) * 0.3;
-  const d = `M ${from.x} ${from.y} Q ${mx} ${my} ${to.x} ${to.y}`;
-  const magnitude = Math.abs(power);
-  const active = magnitude > ACTIVE_W;
-  // Dicke wächst gedämpft (Wurzel), sonst dominiert ein einzelner großer
-  // Verbraucher das ganze Bild.
-  const width = active ? Math.min(8, 2.2 + Math.sqrt(magnitude) / 13) : 2;
-  // Tempo: viel Leistung = schnellerer Fluss – aber mit einem ruhigen
-  // Höchsttempo (7 s je Dash-Zyklus). Das Diagramm läuft im Dauerbetrieb auf
-  // einem Bildschirm; alles Schnellere zieht dauernd den Blick auf sich.
-  const duration = active ? Math.max(7.0, Math.min(30, 34000 / magnitude)) : 0;
+type Placed = Branch & { y0: number; y1: number; ry0: number; ry1: number };
 
+/** Außenkante mit Abständen, Schienenkante ohne — die Schiene ist durchgehend. */
+function place(items: Branch[], total: number, top: number, height: number): Placed[] {
+  if (items.length === 0 || total <= 0) return [];
+  const gaps = GAP * (items.length - 1);
+  const usable = Math.max(height - gaps, items.length * MIN_H);
+  // Erst roh verteilen, dann die Mindesthöhen bei den großen Bändern abziehen.
+  // Sonst summieren sich viele Mindesthöhen auf und das Bild läuft über.
+  const raw = items.map((b) => (b.watts / total) * usable);
+  const lifted = raw.map((h) => Math.max(h, MIN_H));
+  const overshoot = lifted.reduce((a, b) => a + b, 0) - usable;
+  const slack = lifted.map((h) => Math.max(0, h - MIN_H));
+  const slackSum = slack.reduce((a, b) => a + b, 0);
+  const heights = lifted.map((h, i) =>
+    overshoot > 0 && slackSum > 0 ? h - (slack[i] / slackSum) * overshoot : h,
+  );
+
+  let y = top;
+  let ry = top;
+  return items.map((b, i) => {
+    const h = heights[i];
+    const rh = (b.watts / total) * height; // an der Schiene lückenlos
+    const seg = { ...b, y0: y, y1: y + h, ry0: ry, ry1: ry + rh };
+    y += h + GAP;
+    ry += rh;
+    return seg;
+  });
+}
+
+/** Band zwischen Außenkante und Schiene. */
+function ribbon(x1: number, x2: number, a0: number, a1: number, b0: number, b1: number): string {
+  const c1 = x1 + (x2 - x1) * 0.55;
+  const c2 = x2 - (x2 - x1) * 0.55;
+  return `M ${x1} ${a0} C ${c1} ${a0}, ${c2} ${b0}, ${x2} ${b0}` +
+         ` L ${x2} ${b1} C ${c2} ${b1}, ${c1} ${a1}, ${x1} ${a1} Z`;
+}
+
+function Ribbon({ seg, side, sweepId }: { seg: Placed; side: "in" | "out"; sweepId: string }) {
+  const [x1, x2] = side === "in"
+    ? [LEFT_STUB + STUB_W, RAIL_X]
+    : [RAIL_X + RAIL_W, RIGHT_STUB];
+  const d = side === "in"
+    ? ribbon(x1, x2, seg.y0, seg.y1, seg.ry0, seg.ry1)
+    : ribbon(x2, x1, seg.y0, seg.y1, seg.ry0, seg.ry1);
   return (
-    <g aria-label={`${label}: ${fmtW(magnitude)}`}>
-      <path className="flow-line" d={d} stroke="var(--surface-3)" strokeWidth={width + 3} />
-      {active && (
-        <path
-          className="flow-line flow-anim"
-          d={d}
-          stroke={color}
-          strokeWidth={width}
-          strokeDasharray="1 16"
-          style={{
-            animationDuration: `${duration}s`,
-            animationDirection: reverse ? "reverse" : "normal",
-            transition: "stroke-width var(--t-slow) var(--ease)",
-          }}
-        />
-      )}
+    <g>
+      <path d={d} fill={seg.color} fillOpacity="0.17" />
+      <path d={d} fill={`url(#${sweepId})`} className="ef-sweep" />
     </g>
   );
 }
 
-function Node({ x, y, icon, label, value, sub, accent, muted = false, highlight = false }: {
-  x: number; y: number; icon: IconName; label: string; value: React.ReactNode;
-  sub?: string; accent: string; muted?: boolean; highlight?: boolean;
-}) {
+function Stub({ seg, side }: { seg: Placed; side: "in" | "out" }) {
+  const x = side === "in" ? LEFT_STUB : RIGHT_STUB;
   return (
-    <g
-      className={highlight ? "flash" : undefined}
-      style={{
-        opacity: muted ? 0.4 : 1,
-        transformOrigin: `${x}px ${y}px`,
-        transition: "opacity var(--t-slow) var(--ease)",
-      }}
-    >
-      <circle cx={x} cy={y} r="43" fill="var(--surface)" stroke="var(--line)" strokeWidth="1" />
-      <circle
-        cx={x} cy={y} r="43" fill="none" stroke={accent}
-        strokeOpacity={muted ? 0.2 : 0.55} strokeWidth="1.5"
-        style={{ transition: "stroke-opacity var(--t-slow) var(--ease)" }}
-      />
-      <g transform={`translate(${x - 10}, ${y - 28})`} color={accent}>
-        <Icon name={icon} size={20} />
-      </g>
-      <text x={x} y={y + 5} textAnchor="middle" className="flow-node-value num" fill="var(--text-strong)">
-        {value}
+    <rect x={x} y={seg.y0} width={STUB_W} height={Math.max(seg.y1 - seg.y0, 1)}
+          rx={Math.min(3, (seg.y1 - seg.y0) / 2)} fill={seg.color} />
+  );
+}
+
+function Label({ seg, side }: { seg: Placed; side: "in" | "out" }) {
+  const mid = (seg.y0 + seg.y1) / 2;
+  const anchor = side === "in" ? "end" : "start";
+  const x = side === "in" ? LEFT_STUB - 13 : RIGHT_STUB + STUB_W + 13;
+  const iconX = side === "in" ? x - 15 : x - 1;
+  const tall = seg.y1 - seg.y0 >= 26;
+  const animated = useAnimatedNumber(seg.watts);
+
+  return (
+    <g>
+      {/* Symbol nur bei hohen Bändern. Bei einem 10-px-Streifen säße es genau
+          auf der Zahl; die Farbe des Anschlussstücks reicht dort zur
+          Zuordnung, eine Überlagerung wäre schlicht unlesbar. */}
+      {tall && (
+        <g transform={`translate(${iconX}, ${mid - 19})`} color={seg.color}>
+          <Icon name={seg.icon} size={15} />
+        </g>
+      )}
+      {tall && (
+        <text x={x} y={mid - 1} textAnchor={anchor} className="ef-name">
+          {seg.label}
+        </text>
+      )}
+      <text x={x} y={tall ? mid + 15 : mid + 5} textAnchor={anchor} className="ef-val num">
+        {fmtW(animated)}
       </text>
-      <text x={x} y={y + 20} textAnchor="middle" className="flow-node-label" fill="var(--text-dim)">
-        {label}
-      </text>
-      {sub && (
-        <text x={x} y={y + 33} textAnchor="middle" className="flow-node-sub" fill={accent}>
-          {sub}
+      {seg.note && tall && (
+        <text x={x} y={mid + 29} textAnchor={anchor} className="ef-note" fill={seg.color}>
+          {seg.note}
         </text>
       )}
     </g>
   );
 }
 
-/** Innerhalb von <text> ist kein <span> erlaubt – diese Variante liefert
- *  deshalb nur den fertigen String als Textknoten, während die Interpolation
- *  im Hook läuft. */
-function FlowValue({ watts }: { watts: number }) {
-  const animated = useAnimatedNumber(watts);
-  return <>{fmtW(animated)}</>;
-}
-
 export function EnergyFlow({ snapshot }: { snapshot: Snapshot }) {
   const { t } = useI18n();
+  const uid = useId().replace(/:/g, "");
+  const sweepIn = `sweep-in-${uid}`;
+  const sweepOut = `sweep-out-${uid}`;
+
   const grid = snapshot.grid_power ?? 0;
   const bat = snapshot.battery?.power ?? 0;
-  const importing = grid > ACTIVE_W;
-  const gridColor = importing ? "var(--c-grid-import)" : "var(--c-grid-export)";
+  const soc = snapshot.battery?.soc;
 
-  const hasBattery = snapshot.battery != null;
-  const hasCar = snapshot.devices.some((d) => d.category === "wallbox" && d.enabled);
-  const hasWater = snapshot.devices.some((d) => d.category === "water_heater" && d.enabled);
+  const sources: Branch[] = ([
+    { key: "pv", icon: "sun", watts: snapshot.pv_power, color: "var(--c-pv)", label: t("dash.pv") },
+    { key: "imp", icon: "grid", watts: Math.max(0, grid), color: "var(--c-grid-import)", label: t("dash.import") },
+    {
+      key: "bout", icon: "battery", watts: Math.max(0, -bat), color: "var(--c-battery)",
+      label: t("dash.battery"),
+      note: soc != null ? `${Math.round(soc)} %` : undefined,
+    },
+  ] as Branch[]).filter((b) => b.watts > ACTIVE_W);
 
-  // Zustandswechsel kurz hervorheben: Ladung startet/stoppt, Richtung am Netz
-  // kippt, Batterie wechselt zwischen Laden und Entladen.
-  const carFlash = useFlashOnChange(snapshot.wallbox_power > ACTIVE_W);
-  const waterFlash = useFlashOnChange(snapshot.water_power > ACTIVE_W);
-  const gridFlash = useFlashOnChange(importing);
-  const batFlash = useFlashOnChange(bat > ACTIVE_W ? "charge" : bat < -ACTIVE_W ? "discharge" : "idle");
+  const loads: Branch[] = ([
+    { key: "house", icon: "house", watts: snapshot.house_power, color: "var(--c-house)", label: t("dash.house") },
+    { key: "car", icon: "car", watts: snapshot.wallbox_power, color: "var(--c-car)", label: t("dash.car") },
+    { key: "water", icon: "water", watts: snapshot.water_power, color: "var(--c-water)", label: t("dash.water") },
+    {
+      key: "bin", icon: "battery", watts: Math.max(0, bat), color: "var(--c-battery)",
+      label: t("dash.battery"),
+      note: soc != null ? `${Math.round(soc)} %` : undefined,
+    },
+    { key: "exp", icon: "export", watts: Math.max(0, -grid), color: "var(--c-grid-export)", label: t("dash.export") },
+  ] as Branch[]).filter((b) => b.watts > ACTIVE_W);
 
-  const batterySub = !hasBattery
-    ? undefined
-    : bat > ACTIVE_W
-      ? `${t("dash.charging")} ${fmtW(bat)}`
-      : bat < -ACTIVE_W
-        ? `${t("dash.discharging")} ${fmtW(Math.abs(bat))}`
-        : undefined;
+  const inSum = sources.reduce((a, b) => a + b.watts, 0);
+  const outSum = loads.reduce((a, b) => a + b.watts, 0);
+  // Beide Seiten auf denselben Maßstab: Sonst wäre die Schiene links und
+  // rechts verschieden hoch, obwohl in Summe dasselbe fließt.
+  const total = Math.max(inSum, outSum, 1);
+
+  const railTop = PAD_TOP;
+  const railH = VB.h - PAD_TOP - PAD_BOTTOM;
+  const inPlaced = place(sources, total, railTop, railH * (inSum / total));
+  const outPlaced = place(loads, total, railTop, railH * (outSum / total));
+
+  const idle = sources.length === 0 && loads.length === 0;
 
   return (
-    <svg
-      viewBox="0 0 660 470"
-      style={{ width: "100%", height: "auto", display: "block" }}
-      role="img"
-      aria-label={t("dash.energyFlow")}
-    >
-      {/* Kanten: definiert in „positiver“ Flussrichtung */}
-      <Edge from={NODES.pv} to={NODES.house} power={snapshot.pv_power}
-            color="var(--c-pv)" label={t("dash.pv")} />
-      <Edge from={NODES.grid} to={NODES.house} power={grid} reverse={grid < 0}
-            color={gridColor} label={t("dash.grid")} />
-      <Edge from={NODES.house} to={NODES.battery} power={bat} reverse={bat < 0}
-            color="var(--c-battery)" label={t("dash.battery")} />
-      <Edge from={NODES.house} to={NODES.car} power={snapshot.wallbox_power}
-            color="var(--c-car)" curve={-30} label={t("dash.car")} />
-      <Edge from={NODES.house} to={NODES.water} power={snapshot.water_power}
-            color="var(--c-water)" curve={30} label={t("dash.water")} />
+    <svg viewBox={`0 0 ${VB.w} ${VB.h}`} className="ef"
+         style={{ width: "100%", height: "auto", display: "block" }}
+         role="img" aria-label={t("dash.energyFlow")}>
+      <defs>
+        {/* Schimmer statt Lauflicht: eine breite, weiche Aufhellung, die
+            langsam durch das Band wandert. */}
+        <linearGradient id={sweepIn} gradientUnits="userSpaceOnUse"
+                        x1={LEFT_STUB} y1="0" x2={RAIL_X} y2="0">
+          <stop offset="0" stopColor="#fff" stopOpacity="0" />
+          <stop offset="0.5" stopColor="#fff" stopOpacity="0.30" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0" />
+          <animateTransform attributeName="gradientTransform" type="translate"
+                            from="-220 0" to="220 0" dur="4.5s" repeatCount="indefinite" />
+        </linearGradient>
+        <linearGradient id={sweepOut} gradientUnits="userSpaceOnUse"
+                        x1={RAIL_X + RAIL_W} y1="0" x2={RIGHT_STUB} y2="0">
+          <stop offset="0" stopColor="#fff" stopOpacity="0" />
+          <stop offset="0.5" stopColor="#fff" stopOpacity="0.30" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0" />
+          <animateTransform attributeName="gradientTransform" type="translate"
+                            from="-220 0" to="220 0" dur="4.5s" repeatCount="indefinite" />
+        </linearGradient>
+      </defs>
 
-      <Node x={NODES.pv.x} y={NODES.pv.y} icon="sun" label={t("dash.pv")}
-            value={<FlowValue watts={snapshot.pv_power} />} accent="var(--c-pv)" />
-      <Node x={NODES.grid.x} y={NODES.grid.y} icon="grid" label={t("dash.grid")}
-            value={<FlowValue watts={Math.abs(grid)} />}
-            sub={importing ? t("dash.import") : grid < -ACTIVE_W ? t("dash.export") : undefined}
-            accent={gridColor} highlight={gridFlash} />
-      <Node x={NODES.house.x} y={NODES.house.y} icon="house" label={t("dash.house")}
-            value={<FlowValue watts={snapshot.house_power} />} accent="var(--c-house)" />
-      <Node x={NODES.battery.x} y={NODES.battery.y} icon="battery" label={t("dash.battery")}
-            value={hasBattery ? `${Math.round(snapshot.battery!.soc)} %` : "–"}
-            sub={batterySub} accent="var(--c-battery)"
-            muted={!hasBattery} highlight={batFlash} />
-      <Node x={NODES.car.x} y={NODES.car.y} icon="car" label={t("dash.car")}
-            value={<FlowValue watts={snapshot.wallbox_power} />} accent="var(--c-car)"
-            muted={!hasCar} highlight={carFlash} />
-      <Node x={NODES.water.x} y={NODES.water.y} icon="water" label={t("dash.water")}
-            value={<FlowValue watts={snapshot.water_power} />} accent="var(--c-water)"
-            muted={!hasWater} highlight={waterFlash} />
+      <text x={LEFT_STUB + STUB_W} y="14" textAnchor="end" className="ef-head">
+        {t("dash.barSources")}
+      </text>
+      <text x={RIGHT_STUB} y="14" textAnchor="start" className="ef-head">
+        {t("dash.barLoads")}
+      </text>
+
+      {inPlaced.map((s) => <Ribbon key={s.key} seg={s} side="in" sweepId={sweepIn} />)}
+      {outPlaced.map((s) => <Ribbon key={s.key} seg={s} side="out" sweepId={sweepOut} />)}
+
+      {/* Sammelschiene: der Punkt, auf den geregelt wird */}
+      <rect x={RAIL_X} y={railTop} width={RAIL_W} height={railH}
+            rx={RAIL_W / 2} className="ef-rail" />
+      {!idle && (
+        <rect x={RAIL_X} y={railTop} width={RAIL_W} height={railH * (Math.max(inSum, outSum) / total)}
+              rx={RAIL_W / 2} className="ef-rail-fill" />
+      )}
+
+      {inPlaced.map((s) => <Stub key={s.key} seg={s} side="in" />)}
+      {outPlaced.map((s) => <Stub key={s.key} seg={s} side="out" />)}
+      {inPlaced.map((s) => <Label key={s.key} seg={s} side="in" />)}
+      {outPlaced.map((s) => <Label key={s.key} seg={s} side="out" />)}
+
+      {idle && (
+        <text x={VB.w / 2} y={VB.h / 2 + 4} textAnchor="middle" className="ef-idle">
+          {t("dash.idle")}
+        </text>
+      )}
     </svg>
   );
 }

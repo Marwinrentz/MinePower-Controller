@@ -100,6 +100,7 @@ export const en: Dict = {
     barLoads: "To",
     balanceTitle: "Grid point",
     balancePerfect: "Balanced",
+    idle: "Nothing is flowing right now",
   },
   mode: {
     pv_only: "PV only",

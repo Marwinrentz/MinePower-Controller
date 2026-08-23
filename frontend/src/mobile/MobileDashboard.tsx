@@ -73,23 +73,51 @@ function Balance({ snapshot, t }: { snapshot: Snapshot; t: (k: string) => string
 
 type Seg = { key: string; icon: IconName; watts: number; color: string; label: string };
 
+/** Mindestbreite, damit ein kleiner Zweig sichtbar bleibt – aber sie wird den
+ *  großen Segmenten *abgezogen*, nicht obendrauf gelegt. Vorher stand hier ein
+ *  schlichtes Math.max(share, 0.08): Bei vier kleinen Zweigen summierten sich
+ *  die Breiten auf über 100 %, der Balken lief aus seiner Spur und zeigte
+ *  Verhältnisse, die es nicht gab. Ein Balken, der lügt, ist schlechter als
+ *  gar keiner. */
+const MIN_SHARE = 0.05;
+
+function shares(items: Seg[], scale: number): number[] {
+  const raw = items.map((s) => s.watts / scale);
+  const lifted = raw.map((r) => Math.max(r, MIN_SHARE));
+  const over = lifted.reduce((a, b) => a + b, 0) - raw.reduce((a, b) => a + b, 0);
+  const slack = lifted.map((r) => Math.max(0, r - MIN_SHARE));
+  const slackSum = slack.reduce((a, b) => a + b, 0);
+  return lifted.map((r, i) => (slackSum > 0 ? r - (slack[i] / slackSum) * over : r));
+}
+
 function FlowRow({ tag, items, scale }: { tag: string; items: Seg[]; scale: number }) {
+  const w = shares(items, scale);
+  const sum = items.reduce((a, s) => a + s.watts, 0);
   return (
     <div className="m-flow-row">
-      <span className="m-flow-tag">{tag}</span>
+      <div className="m-flow-head">
+        <span className="m-flow-tag">{tag}</span>
+        <span className="m-flow-sum num">{fmtW(sum)}</span>
+      </div>
       <div className="m-flow-track">
         {items.length === 0 && <div className="m-flow-empty" />}
-        {items.map((s) => {
-          const share = s.watts / scale;
-          return (
-            <div key={s.key} className="m-flow-seg"
-                 style={{ width: `${Math.max(share, 0.08) * 100}%`, background: s.color }}
-                 title={`${s.label}: ${fmtW(s.watts)}`}>
-              <Icon name={s.icon} size={14} />
-              {share > 0.22 && <span>{fmtW(s.watts)}</span>}
-            </div>
-          );
-        })}
+        {items.map((s, i) => (
+          <div key={s.key} className="m-flow-seg"
+               style={{ width: `${w[i] * 100}%`, background: s.color }}
+               title={`${s.label}: ${fmtW(s.watts)}`} />
+        ))}
+      </div>
+      {/* Zahlen unter den Balken statt hineingequetscht: In ein 40-px-Segment
+          passt kein Wert, und abgeschnittene Ziffern sind schlimmer als eine
+          Zeile mehr. */}
+      <div className="m-flow-legend">
+        {items.map((s) => (
+          <span key={s.key} className="m-flow-key">
+            <i style={{ background: s.color }} />
+            <Icon name={s.icon} size={12} />
+            <b className="num">{fmtW(s.watts)}</b>
+          </span>
+        ))}
       </div>
     </div>
   );
