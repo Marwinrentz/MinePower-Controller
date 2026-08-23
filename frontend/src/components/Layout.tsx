@@ -15,6 +15,7 @@ import { useTheme } from "../store/theme";
 
 const NAV: { to: string; icon: IconName; key: string }[] = [
   { to: "/", icon: "dashboard", key: "dashboard" },
+  { to: "/vehicle", icon: "car", key: "vehicle" },
   { to: "/devices", icon: "devices", key: "devices" },
   { to: "/statistics", icon: "statistics", key: "statistics" },
   { to: "/settings", icon: "settings", key: "settings" },

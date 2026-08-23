@@ -1041,3 +1041,108 @@ html, body { overflow-x: clip; max-width: 100%; }
   from { opacity: 0; transform: translateY(14px) scale(0.98); }
   to { opacity: 1; transform: none; }
 }
+
+/* ---------------------------------------------------------------- Geräteseite */
+
+.stack-lg { display: flex; flex-direction: column; gap: var(--s5); }
+
+.dev-page { display: flex; flex-direction: column; gap: var(--s6); }
+
+.dev-hero { align-items: center; display: flex; flex-wrap: wrap; gap: var(--s6); }
+.dev-hero .art { flex: 1 1 300px; max-width: 440px; min-width: 240px; }
+.dev-hero-info { display: flex; flex-direction: column; gap: var(--s2); flex: 1 1 220px; }
+.dev-hero-info h2 { margin: 0; }
+.dev-state { align-items: center; display: flex; flex-wrap: wrap; gap: var(--s3); }
+.dev-power { color: var(--text-strong); font-size: var(--text-lg); font-weight: 700; }
+.dev-soc { align-items: baseline; color: var(--text-strong); display: flex; gap: 3px; line-height: 1; }
+.dev-soc .num { font-size: var(--text-3xl); font-weight: 750; letter-spacing: -0.03em; }
+.dev-soc small { color: var(--text-dim); font-size: var(--text-lg); font-weight: 650; }
+.dev-reason { font-size: var(--text-sm); margin: 0; }
+.dev-warn {
+  align-items: center; color: var(--warn); display: flex; gap: var(--s2);
+  font-size: var(--text-sm); font-weight: 600; margin: 0;
+}
+.dev-err { color: var(--err); font-size: var(--text-sm); margin: 0; }
+.dev-hint { font-size: var(--text-xs); margin: var(--s2) 0 0; }
+
+/* Messwerte in einer Reihe: Beschriftung klein oben, Wert groß darunter */
+.dev-readout {
+  border: 1px solid var(--line); border-radius: var(--r-md);
+  display: grid; gap: 1px; background: var(--line); overflow: hidden;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+}
+.dev-readout > div {
+  background: var(--surface); display: flex; flex-direction: column; gap: 2px;
+  padding: var(--s3) var(--s4);
+}
+.dev-readout span {
+  color: var(--text-dim); font-size: var(--text-xs); font-weight: 600;
+  letter-spacing: 0.05em; text-transform: uppercase;
+}
+.dev-readout b { color: var(--text-strong); font-size: var(--text-lg); font-weight: 700; }
+
+.dev-block { display: flex; flex-direction: column; gap: var(--s3); }
+.dev-block-head { align-items: baseline; display: flex; justify-content: space-between; }
+.dev-block-head b { color: var(--text-strong); font-size: var(--text-lg); }
+
+/* Schieber: gefüllter Teil in Akzentfarbe, damit der Wert auch ohne Zahl
+   ablesbar ist. --pct setzt die Seite live. */
+.dev-slider {
+  -webkit-appearance: none; appearance: none;
+  background: linear-gradient(to right, var(--accent) var(--pct, 50%), var(--surface-3) var(--pct, 50%));
+  border-radius: 999px; height: 8px; width: 100%; cursor: pointer;
+}
+.dev-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  background: var(--surface); border: 3px solid var(--accent); border-radius: 50%;
+  box-shadow: var(--shadow-sm); height: 22px; width: 22px;
+}
+.dev-slider::-moz-range-thumb {
+  background: var(--surface); border: 3px solid var(--accent); border-radius: 50%;
+  box-shadow: var(--shadow-sm); height: 16px; width: 16px;
+}
+
+/* --- Gerätegrafik --- */
+.art { display: block; height: auto; width: 100%; }
+.art-shell { fill: var(--surface-3); stroke: var(--line-strong); stroke-width: 2; }
+.art-level { transition: y var(--t-slow) var(--ease), height var(--t-slow) var(--ease); }
+.art-glass { fill: var(--surface-2); stroke: var(--line-strong); stroke-width: 1.5; }
+.art-tyre { fill: var(--surface-2); stroke: var(--line-strong); stroke-width: 2.5; }
+.art-rim { fill: var(--surface-3); stroke: var(--line-strong); stroke-width: 1.5; }
+.art-port { fill: var(--surface-2); stroke: var(--line-strong); stroke-width: 1.5; }
+.art-port.on { fill: var(--c-car); stroke: var(--c-car); }
+.art-cable { fill: none; stroke: var(--line-strong); stroke-width: 4; stroke-linecap: round; }
+.art-cable .art-plug { fill: var(--line-strong); stroke: none; }
+.art-cable.live { stroke: var(--c-car); }
+.art-cable.live .art-plug { fill: var(--c-car); }
+.art-rod { fill: var(--line-strong); }
+.art-rod.on { fill: var(--c-waste); }
+.art-pipe { fill: none; stroke: var(--line-strong); stroke-width: 5; stroke-linecap: round; }
+.art-heat { fill: none; stroke: var(--c-waste); stroke-width: 2.5; stroke-linecap: round; opacity: 0.75; }
+.art-heat path { animation: rise 3.2s ease-in-out infinite; }
+.art-heat path:nth-child(2) { animation-delay: 1.05s; }
+.art-heat path:nth-child(3) { animation-delay: 2.1s; }
+@keyframes rise {
+  0% { opacity: 0; transform: translateY(6px); }
+  35% { opacity: 0.85; }
+  100% { opacity: 0; transform: translateY(-10px); }
+}
+
+/* --- Ladezyklen --- */
+.cycle-list { display: flex; flex-direction: column; gap: var(--s3); list-style: none; margin: 0; padding: 0; }
+.cycle { align-items: center; display: grid; gap: var(--s3); grid-template-columns: 64px 1fr auto; }
+.cycle-when { display: flex; flex-direction: column; font-size: var(--text-xs); line-height: 1.25; }
+.cycle-when b { color: var(--text-strong); font-size: var(--text-sm); }
+.cycle-bar {
+  background: var(--c-grid-import); border-radius: 999px; height: 12px;
+  min-width: 6px; overflow: hidden; transition: width var(--t-slow) var(--ease);
+}
+.cycle-solar { background: var(--c-pv); height: 100%; }
+.cycle-nums { display: flex; flex-direction: column; text-align: right; }
+.cycle-nums b { color: var(--text-strong); font-size: var(--text-sm); }
+.cycle-nums span { font-size: var(--text-xs); }
+
+@media (max-width: 560px) {
+  .dev-hero { gap: var(--s4); }
+  .cycle { grid-template-columns: 52px 1fr auto; }
+}

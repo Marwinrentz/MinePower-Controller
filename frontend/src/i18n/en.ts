@@ -3,6 +3,7 @@ import type { Dict } from "./de";
 export const en: Dict = {
   nav: {
     dashboard: "Dashboard",
+    vehicle: "Vehicle",
     devices: "Devices",
     statistics: "Statistics",
     settings: "Settings",
@@ -101,6 +102,23 @@ export const en: Dict = {
     balanceTitle: "Grid point",
     balancePerfect: "Balanced",
     idle: "Nothing is flowing right now",
+  },
+  vehicle: {
+    title: "Vehicle",
+    none: "No controllable device set up",
+    noneSub: "This page shows the charge point and hot water in detail. Add a device in the wizard first.",
+    current: "Charging current",
+    phases: "Phases",
+    power: "Power",
+    temp: "Temperature",
+    sessionEnergy: "This session",
+    solarShare: "solar",
+    cycles: "Charge cycles",
+    cyclesHelp: "Bar length = energy charged, green part = solar share. What is missing came from the grid.",
+    asleep: "Vehicle is not responding — asleep or out of radio range.",
+    wake: "Wake up",
+    wakeHelp: "Wakes the vehicle over the radio link so it responds to commands again.",
+    boostHelp: "Boost heats at full power immediately, regardless of surplus — power may come from the grid.",
   },
   mode: {
     pv_only: "PV only",

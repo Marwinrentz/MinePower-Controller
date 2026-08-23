@@ -147,6 +147,19 @@ async def device_action(
             await _persist_mode(device_id, str(body.value))
         elif action == "set_charge_limit":
             await _set_charge_limit(dev, device_id, body.value)
+        elif action == "wake":
+            # Ein schlafendes Fahrzeug antwortet über Funk nicht und fällt
+            # damit aus der Regelung. Der Treiber konnte es längst wecken —
+            # es gab nur keinen Weg, das auszulösen, außer zu warten.
+            wake = getattr(dev.driver, "wake_up", None)
+            if wake is None:
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                    "Dieser Ladepunkt kann kein Fahrzeug wecken")
+            try:
+                await wake()
+            except Exception as exc:  # noqa: BLE001 – Grund gehört ins GUI
+                raise HTTPException(status.HTTP_502_BAD_GATEWAY,
+                                    f"Wecken fehlgeschlagen: {exc}") from exc
         else:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Unbekannte Aktion: {action}")
     elif isinstance(dev.controller, WaterHeaterController):

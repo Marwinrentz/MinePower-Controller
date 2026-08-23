@@ -4,6 +4,7 @@ import { useIsPhone } from "./components/ui";
 import { MobileDashboard } from "./mobile/MobileDashboard";
 import { MobileShell } from "./mobile/MobileShell";
 import { Dashboard } from "./pages/Dashboard";
+import { Vehicle } from "./pages/Vehicle";
 import { Devices } from "./pages/Devices";
 import { Events } from "./pages/Events";
 import { Login } from "./pages/Login";
@@ -51,6 +52,7 @@ export function App() {
           <Route path="/wall" element={<Wall />} />
           <Route element={<Shell />}>
             <Route path="/" element={<Home />} />
+            <Route path="/vehicle" element={<Page><Vehicle /></Page>} />
             <Route path="/devices" element={<Page><Devices /></Page>} />
             <Route path="/statistics" element={<Page><Statistics /></Page>} />
             <Route path="/settings" element={<Page><Settings /></Page>} />

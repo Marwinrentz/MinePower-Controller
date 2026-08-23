@@ -55,7 +55,7 @@ class TeslaVehicle(WallboxDriver):
                     "Start/Stopp, Ladelimit. Methode A: externer TeslaBleHttpProxy (cloud-frei, "
                     "läuft z. B. auf einem Raspberry Pi – NICHT Teil dieser App). "
                     "Methode B: Tesla Fleet-API (Cloud, liefert zuverlässig SoC).",
-        capabilities={"soc", "charge_limit", "write_test"},
+        capabilities={"soc", "charge_limit", "write_test", "wake"},
         maturity=Maturity.STABLE,
         notes="Über einen BLE-Proxy im Dauerbetrieb erprobt.",
         fields=[

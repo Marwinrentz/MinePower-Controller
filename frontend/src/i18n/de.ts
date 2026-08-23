@@ -1,6 +1,7 @@
 export const de = {
   nav: {
     dashboard: "Dashboard",
+    vehicle: "Fahrzeug",
     devices: "Geräte",
     statistics: "Statistik",
     settings: "Einstellungen",
@@ -101,6 +102,23 @@ export const de = {
     balanceTitle: "Netzpunkt",
     balancePerfect: "Ausgeglichen",
     idle: "Gerade fließt nichts",
+  },
+  vehicle: {
+    title: "Fahrzeug",
+    none: "Kein steuerbares Gerät eingerichtet",
+    noneSub: "Diese Seite zeigt Ladepunkt und Warmwasser im Detail. Lege im Assistenten zuerst ein Gerät an.",
+    current: "Ladestrom",
+    phases: "Phasen",
+    power: "Leistung",
+    temp: "Temperatur",
+    sessionEnergy: "Diese Ladung",
+    solarShare: "Sonne",
+    cycles: "Ladezyklen",
+    cyclesHelp: "Balkenlänge = geladene Energie, grüner Anteil = Solaranteil. Was fehlt, kam aus dem Netz.",
+    asleep: "Fahrzeug antwortet nicht — es schläft oder ist außer Funkreichweite.",
+    wake: "Wecken",
+    wakeHelp: "Weckt das Fahrzeug über die Funkverbindung, damit es wieder auf Befehle reagiert.",
+    boostHelp: "Boost heizt sofort mit voller Leistung, unabhängig vom Überschuss — der Strom kommt dann notfalls aus dem Netz.",
   },
   mode: {
     pv_only: "Nur PV",
