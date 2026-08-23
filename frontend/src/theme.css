@@ -535,27 +535,24 @@ small, .dim { color: var(--text-dim); font-size: var(--text-sm); }
 
 .flow-card { padding: var(--s4); }
 
-/* Banddiagramm: Fläche trägt die Information, nicht die Linie.
-   Beschriftung bewusst klein und ruhig – die Höhen sollen wirken. */
+/* Knotendiagramm: flache Kacheln mit Farbschimmer, Leitungen mit
+   Richtungsverlauf, fließende Punkte statt Strichlauflicht. */
 .ef { overflow: visible; }
-.ef-head {
-  font-size: 9.5px; font-weight: 600; letter-spacing: 0.14em;
-  text-transform: uppercase; fill: var(--text-dim);
-}
-.ef-name { font-size: 11px; font-weight: 620; fill: var(--text-dim); }
-.ef-val { font-size: 15px; font-weight: 700; fill: var(--text-strong); }
-.ef-note { font-size: 10px; font-weight: 650; }
-.ef-idle { font-size: 12px; font-weight: 600; fill: var(--text-dim); }
+.ef-wire { transition: stroke-width var(--t-slow) var(--ease); }
+.ef-dot { opacity: 0.95; }
 
-.ef-rail { fill: var(--surface-3); }
-.ef-rail-fill {
-  fill: var(--text-dim); opacity: 0.28;
-  transition: height var(--t-slow) var(--ease);
+.ef-node { fill: var(--surface); fill-opacity: 0.55; stroke: var(--line); stroke-width: 1; }
+.ef-node-value { font-size: 15px; font-weight: 750; fill: var(--text-strong); }
+.ef-node-label { font-size: 10px; font-weight: 620; fill: var(--text-dim); letter-spacing: 0.02em; }
+
+.ef-hub { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+.ef-hub-ring { fill: none; stroke: var(--text-dim); stroke-opacity: 0.35; stroke-width: 2.5; }
+.ef-hub-ring.ok { stroke: var(--ok); stroke-opacity: 0.85; }
+.ef-hub-value { font-size: 14px; font-weight: 750; fill: var(--text-strong); }
+.ef-hub-label {
+  font-size: 8.5px; font-weight: 650; fill: var(--text-dim);
+  letter-spacing: 0.09em; text-transform: uppercase;
 }
-/* Der Schimmer sitzt als zweite Ebene auf dem Band. In dunklen Themes würde
-   reines Weiß darüber ausbleichen – dort genügt ein Hauch. */
-.ef-sweep { mix-blend-mode: overlay; }
-:root[data-theme="dark"] .ef-sweep { opacity: 0.5; }
 
 /* Kurzer Impuls, wenn ein Gerät startet/stoppt oder umschaltet */
 
@@ -712,7 +709,7 @@ table.table td.num { font-variant-numeric: tabular-nums; text-align: right; }
     transition-duration: 0.01ms !important;
   }
   .flow-anim { animation: none !important; }
-  .ef-sweep { display: none; }
+  .ef-dot { display: none; }
 }
 
 /* ============================================================================
@@ -1146,3 +1143,28 @@ html, body { overflow-x: clip; max-width: 100%; }
   .dev-hero { gap: var(--s4); }
   .cycle { grid-template-columns: 52px 1fr auto; }
 }
+
+/* Umschalter zwischen steuerbaren Geräten auf der Fahrzeugseite.
+   Bewusst kein <Segment>: Die Namen sind lang ("my-PV AC•THOR / AC ELWA-E /
+   ELWA 2") und brauchen Symbol plus Umbruchfreiheit, nicht gleiche Breiten. */
+.dev-switch {
+  background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: var(--r-md); display: flex; gap: 4px; overflow-x: auto; padding: 4px;
+}
+.dev-switch-item {
+  align-items: center; background: transparent; border: 0; border-radius: var(--r-sm);
+  color: var(--text-dim); cursor: pointer; display: flex; flex: 1; gap: var(--s2);
+  font: inherit; font-size: var(--text-sm); font-weight: 600;
+  justify-content: center; min-height: 40px; padding: 0 var(--s3);
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  white-space: nowrap;
+}
+.dev-switch-item:hover { color: var(--text-strong); }
+.dev-switch-item.on { background: var(--surface); box-shadow: var(--shadow-sm); color: var(--text-strong); }
+.dev-switch-item span { overflow: hidden; text-overflow: ellipsis; }
+
+/* Gerätegruppen auf der Geräteseite */
+.dev-group { display: flex; flex-direction: column; gap: var(--s4); }
+.dev-group-head { display: flex; flex-direction: column; gap: 2px; }
+.dev-group-head h2 { margin: 0; }
+.dev-group-head span { font-size: var(--text-sm); }

@@ -103,6 +103,16 @@ export const en: Dict = {
     balancePerfect: "Balanced",
     idle: "Nothing is flowing right now",
   },
+  devices: {
+    group: {
+      measure: "Measurement",
+      measureSub: "Provide the numbers the control loop acts on. Not controlled themselves.",
+      control: "Controllable loads",
+      controlSub: "Receive the surplus – in the order of the priority chain.",
+      storage: "Home battery",
+      storageSub: "Takes precedence over all controllable loads.",
+    },
+  },
   vehicle: {
     title: "Vehicle",
     none: "No controllable device set up",

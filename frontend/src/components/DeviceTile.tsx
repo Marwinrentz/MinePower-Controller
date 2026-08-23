@@ -43,7 +43,12 @@ function ChargeLimitSlider({ value, onCommit, disabled, t }: {
         type="range"
         min={50}
         max={100}
-        step={5}
+        /* Ganze Prozent. Mit 5er-Rasterung hing der Knopf beim Ziehen hinter
+           dem Finger her und sprang dann ruckartig weiter, und der vom
+           Fahrzeug gemeldete Wert (z. B. 82 %) ließ sich gar nicht einstellen –
+           der Regler zeigte dann 80, während daneben 82 % stand. Gesendet wird
+           weiterhin erst beim Loslassen, die API sieht also kein Pixelrauschen. */
+        step={1}
         value={shown}
         disabled={disabled}
         aria-label={t("device.chargeLimit")}

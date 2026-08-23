@@ -305,6 +305,20 @@
 .m-tab.on { color: var(--accent); }
 .m-tab:active { opacity: 0.6; }
 
+/* Mit dem Fahrzeug-Reiter sind es sechs Einträge. Auf einem 375-px-Gerät
+   bleiben je 62 px, und „Einstellungen" reicht dort bis an beide Kanten.
+   Statt das Wort je nach Bildschirmgröße auszutauschen – dieselbe Sache
+   hieße dann auf dem Handy anders als am Rechner – wird die Beschriftung
+   hier eine Spur kleiner und enger gesetzt. Das Symbol trägt die Erkennung
+   ohnehin, die Schrift bestätigt sie nur. */
+@media (max-width: 400px) {
+  .m-tab { font-size: 9.5px; letter-spacing: -0.015em; }
+  .m-tab-icon { font-size: 19px; }
+}
+@media (max-width: 340px) {
+  .m-tab { font-size: 9px; }
+}
+
 /* ---------------------------------------------------------------- Übergänge */
 
 .m-in { animation: m-in 380ms var(--m-spring) both; }

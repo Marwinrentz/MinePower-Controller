@@ -103,6 +103,16 @@ export const de = {
     balancePerfect: "Ausgeglichen",
     idle: "Gerade fließt nichts",
   },
+  devices: {
+    group: {
+      measure: "Messung",
+      measureSub: "Liefern die Zahlen, auf die geregelt wird. Werden nicht gesteuert.",
+      control: "Steuerbare Lasten",
+      controlSub: "Bekommen den Überschuss zugeteilt – in der Reihenfolge der Prioritätskette.",
+      storage: "Hausspeicher",
+      storageSub: "Hat Vorrang vor allen steuerbaren Lasten.",
+    },
+  },
   vehicle: {
     title: "Fahrzeug",
     none: "Kein steuerbares Gerät eingerichtet",

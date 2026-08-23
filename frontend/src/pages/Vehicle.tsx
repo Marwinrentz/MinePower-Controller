@@ -329,14 +329,17 @@ export function Vehicle() {
   const [tick, setTick] = useState(0);
   const bump = () => setTick((n) => n + 1);
 
-  const cars = (snapshot?.devices ?? []).filter((d) => d.category === "wallbox" && d.enabled);
-  const heaters = (snapshot?.devices ?? []).filter((d) => d.category === "water_heater" && d.enabled);
-
+  // Auto und Warmwasser bekommen getrennte Ansichten statt einer langen
+  // Seite. Beides untereinander hieß: Wer nach der Wassertemperatur sieht,
+  // scrollt jedes Mal an Fahrzeug, Reglern und dreißig Ladezyklen vorbei.
+  const loads = (snapshot?.devices ?? []).filter(
+    (d) => d.enabled && (d.category === "wallbox" || d.category === "water_heater"),
+  );
   const [selected, setSelected] = useState<number | null>(null);
-  const car = cars.find((c) => c.id === selected) ?? cars[0];
+  const active = loads.find((d) => d.id === selected) ?? loads[0];
 
   if (!snapshot) return <p className="dim">{t("common.loading")}</p>;
-  if (cars.length === 0 && heaters.length === 0) {
+  if (loads.length === 0) {
     return (
       <Card>
         <h2>{t("vehicle.none")}</h2>
@@ -345,19 +348,29 @@ export function Vehicle() {
     );
   }
 
+  const isCar = active.category === "wallbox";
+
   return (
     <div className="stack-lg" key={tick}>
-      {cars.length > 1 && (
-        <Segment
-          options={cars.map((c) => ({ value: String(c.id), label: c.name }))}
-          value={String(car.id)}
-          onChange={(v) => setSelected(Number(v))}
-          ariaLabel={t("device.categories.wallbox")}
-        />
+      {loads.length > 1 && (
+        <div className="dev-switch">
+          {loads.map((d) => (
+            <button
+              key={d.id}
+              type="button"
+              className={`dev-switch-item ${d.id === active.id ? "on" : ""}`}
+              aria-current={d.id === active.id}
+              onClick={() => setSelected(d.id)}
+            >
+              <Icon name={d.category === "wallbox" ? "car" : "water"} size={17} />
+              <span>{d.name}</span>
+            </button>
+          ))}
+        </div>
       )}
-      {car && <VehicleCard dev={car} onAction={bump} />}
-      {car && <Cycles deviceId={car.id} />}
-      {heaters.map((h) => <HeaterCard key={h.id} dev={h} onAction={bump} />)}
+      {isCar
+        ? <><VehicleCard dev={active} onAction={bump} /><Cycles deviceId={active.id} /></>
+        : <HeaterCard dev={active} onAction={bump} />}
     </div>
   );
 }
