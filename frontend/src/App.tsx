@@ -5,6 +5,7 @@ import { MobileDashboard } from "./mobile/MobileDashboard";
 import { MobileShell } from "./mobile/MobileShell";
 import { Dashboard } from "./pages/Dashboard";
 import { Vehicle } from "./pages/Vehicle";
+import { Water } from "./pages/Water";
 import { Devices } from "./pages/Devices";
 import { Events } from "./pages/Events";
 import { Login } from "./pages/Login";
@@ -12,10 +13,15 @@ import { Settings } from "./pages/Settings";
 import { Statistics } from "./pages/Statistics";
 import { Wall } from "./pages/Wall";
 import { Wizard } from "./pages/Wizard";
-import { useAuth } from "./store/auth";
+import { useAuth, keepSessionAlive } from "./store/auth";
+import { useEffect } from "react";
 
 function RequireAuth() {
   const token = useAuth((s) => s.token);
+  // Solange jemand angemeldet ist, das Token gleitend verlängern. Ohne das
+  // lief es irgendwann mitten im Betrieb ab und warf den Nutzer auf den
+  // Anmeldeschirm – oft genau dann, wenn er etwas schalten wollte.
+  useEffect(() => (token ? keepSessionAlive() : undefined), [token]);
   return token ? <Outlet /> : <Navigate to="/login" replace />;
 }
 
@@ -53,6 +59,7 @@ export function App() {
           <Route element={<Shell />}>
             <Route path="/" element={<Home />} />
             <Route path="/vehicle" element={<Page><Vehicle /></Page>} />
+            <Route path="/water" element={<Page><Water /></Page>} />
             <Route path="/devices" element={<Page><Devices /></Page>} />
             <Route path="/statistics" element={<Page><Statistics /></Page>} />
             <Route path="/settings" element={<Page><Settings /></Page>} />

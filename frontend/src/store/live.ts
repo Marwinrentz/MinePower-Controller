@@ -141,12 +141,17 @@ function openSocket(set: (s: Partial<LiveState>) => void) {
   ws.onclose = (ev) => {
     set({ connected: false });
     ws = null;
-    // 4401 = das Backend hat das Token abgelehnt (abgelaufen oder ungültig).
-    // Ohne diese Auswertung liefe der Reconnect endlos mit demselben toten
-    // Token weiter: Die Oberfläche stünde still, ohne je eine HTTP-Anfrage zu
-    // stellen — und nur die liefert den 401, der sonst abmeldet.
+    // 4401 = das Backend hat das Token abgelehnt. Nicht sofort abmelden:
+    // Der Code sagt nur, dass DIESE Prüfung fehlschlug — beim Hochlauf oder
+    // nach einem Datenbank-Neustart kann das vorübergehend sein. Erst
+    // gegenprüfen; gilt die Anmeldung noch, wird normal weiterverbunden.
     if (ev.code === 4401) {
-      useAuth.getState().logout();
+      void useAuth.getState().verify().then((stillValid) => {
+        if (stillValid && wanted) {
+          retryTimer = window.setTimeout(() => openSocket(set), retryDelay);
+          retryDelay = Math.min(retryDelay * 2, 15000);
+        }
+      });
       return;
     }
     if (wanted) {

@@ -14,7 +14,15 @@ class AppSettings(BaseSettings):
 
     jwt_secret: str = "insecure-dev-secret-change-me"
     jwt_algorithm: str = "HS256"
-    jwt_expire_minutes: int = 12 * 60
+    #: Gültigkeitsdauer eines Anmelde-Tokens.
+    #:
+    #: 12 Stunden waren für eine Anlagensteuerung im eigenen Netz zu kurz: Wer
+    #: morgens nachsieht und abends noch einmal, musste sich jedes Mal neu
+    #: anmelden. Dazu kommt, dass die Oberfläche das Token nur im Browser
+    #: hält – ein abgelaufenes bedeutet also nicht „unsicher", sondern nur
+    #: „lästig". 30 Tage, und solange die Oberfläche offen ist, wird das Token
+    #: laufend erneuert (siehe /api/auth/refresh).
+    jwt_expire_minutes: int = 30 * 24 * 60
 
     log_level: str = "INFO"
     control_interval_s: float = 3.0

@@ -83,6 +83,9 @@ export type SnapshotDevice = {
   phases?: number;
   /** Im Fahrzeug hinterlegte Ladegrenze in % (nur Fahrzeug-Treiber). */
   charge_limit_soc?: number | null;
+  /** Warmwasser: eingestellte Ziel- und Boost-Temperatur in °C. */
+  target_temp_c?: number;
+  boost_temp_c?: number;
 };
 
 export type Snapshot = {

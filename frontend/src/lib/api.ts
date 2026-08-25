@@ -18,7 +18,11 @@ export async function api<T = unknown>(path: string, options: RequestInit = {}):
   if (token) headers.Authorization = `Bearer ${token}`;
   const resp = await fetch(path, { ...options, headers });
   if (resp.status === 401) {
-    useAuth.getState().logout();
+    // Gegenprüfen statt blind abmelden: Eine einzelne 401 kann auch aus einem
+    // Wettlauf beim Token-Wechsel stammen. Lehnt /api/auth/me ebenfalls ab,
+    // meldet verify() ab; sonst bleibt die Anmeldung bestehen und der Aufrufer
+    // sieht nur diesen einen Fehlschlag.
+    void useAuth.getState().verify();
     throw new ApiError(401, "Sitzung abgelaufen");
   }
   if (!resp.ok) {

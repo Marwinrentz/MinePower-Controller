@@ -811,11 +811,26 @@ class ControlLoop:
         driver: WallboxDriver = dev.driver  # type: ignore[assignment]
         dev.decision = {"enable": d.enable, "current_a": round(d.current_a, 1), "phases": d.phases, "reason": d.reason}
         if isinstance(dev.data, WallboxData):
-            # Toleranz nach oben: Die gemeldete Leistung schwankt, und ein
-            # Fahrzeug folgt einem neuen Sollstrom erst nach Sekunden.
-            allowed = UNCONTROLLED_W if not d.enable else d.power_w * 1.25 + UNCONTROLLED_W
-            await self._obeyed(dev, dev.data.power, allowed,
-                               "aus" if not d.enable else f"höchstens {d.power_w:.0f} W")
+            # Zwei sehr verschiedene Fälle, deshalb zwei Toleranzen.
+            #
+            # „Soll aus, läuft trotzdem" ist das eigentliche Problem: ein
+            # Fahrzeug, das sich selbst wieder einschaltet. Da genügt jede
+            # nennenswerte Leistung als Beweis.
+            #
+            # „Läuft, zieht aber mehr als zugeteilt" ist meistens harmlos.
+            # Beim Hochrampen liegt die Messung kurz über dem Sollwert, und
+            # dreiphasig ist eine einzige Ampere-Stufe schon 690 W. Mit der
+            # alten Pauschale von 25 % schlug das im Bericht viermal an einem
+            # Tag an und löste sich in derselben Minute wieder auf – Meldungen,
+            # die nichts bedeuten, kosten nur Vertrauen. Deshalb zusätzlich
+            # eine ganze Stromstufe Luft.
+            if not d.enable:
+                allowed, what = UNCONTROLLED_W, "aus"
+            else:
+                step = getattr(dev.controller, "watts_per_amp", lambda: VOLTAGE)()
+                allowed = d.power_w + max(UNCONTROLLED_W, step, d.power_w * 0.25)
+                what = f"höchstens {d.power_w:.0f} W"
+            await self._obeyed(dev, dev.data.power, allowed, what)
         if d.phases is not None and "phase_switch" in driver.meta.capabilities:
             # Vor der Umschaltung Ladung stoppen (viele Boxen verlangen das)
             await self._send(dev, "enable", False, lambda: driver.stop_charging())
@@ -999,6 +1014,13 @@ class ControlLoop:
             elif isinstance(dev.controller, WaterHeaterController):
                 payload["mode"] = dev.controller.s.mode
                 payload["boost"] = dev.controller.boost
+                # Die beiden Temperaturschwellen gehören in den Snapshot: Die
+                # Oberfläche zeigte bisher fest 60 °C an und bot den Boost auch
+                # dann an, wenn der Speicher längst über der Boost-Grenze lag –
+                # der Regler verwirft ihn dann sofort wieder, und für den
+                # Nutzer sprang der Schalter ohne erkennbaren Grund zurück.
+                payload["target_temp_c"] = dev.controller.s.target_temp_c
+                payload["boost_temp_c"] = dev.controller.s.boost_temp_c
             devices_payload.append(payload)
 
         self.snapshot = {

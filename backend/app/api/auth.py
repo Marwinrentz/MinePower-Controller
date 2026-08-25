@@ -66,6 +66,22 @@ async def me(user: User = Depends(get_current_user)):
     return user
 
 
+@router.post("/refresh", response_model=TokenResponse)
+async def refresh(user: User = Depends(get_current_user)):
+    """Gleitende Verlängerung: gültiges Token gegen ein frisches tauschen.
+
+    Ohne das läuft ein Token irgendwann mitten im Betrieb ab, und die
+    Oberfläche wirft den Nutzer auf den Anmeldeschirm – oft genau dann, wenn
+    er etwas schalten will. Die Oberfläche ruft das hier beim Start und danach
+    regelmäßig auf, solange sie offen ist.
+
+    Bewusst kein zweites, langlebiges Refresh-Token: Das müsste zusätzlich
+    gespeichert und widerrufbar gehalten werden, ohne hier etwas zu gewinnen –
+    wer das alte Token besitzt, ist bereits angemeldet.
+    """
+    return TokenResponse(token=create_token(user), user=UserOut.model_validate(user))
+
+
 @router.get("/users", response_model=list[UserOut])
 async def list_users(db: AsyncSession = Depends(get_db), _: User = Depends(require_role("admin"))):
     return (await db.scalars(select(User).order_by(User.id))).all()

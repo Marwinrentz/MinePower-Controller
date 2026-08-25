@@ -20,6 +20,8 @@
   --m-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable",
             "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
 
+  /* Höhe der Tab-Leiste – das „Mehr"-Blatt setzt genau darüber auf. */
+  --m-tabbar-h: 50px;
   --m-r-card: 18px;
   --m-r-inner: 12px;
   --m-gap: 12px;
@@ -354,3 +356,42 @@
   padding: 0; width: 30px; -webkit-tap-highlight-color: transparent;
 }
 .m-note-close:active { background: var(--m-card-2); }
+
+/* ------------------------------------------------------------ „Mehr"-Blatt */
+
+/* Ein Knopf in der Leiste sieht aus wie ein NavLink – gleiche Klasse, aber
+   Browser-Vorgaben für <button> müssen weg. */
+.m-tabs button.m-tab {
+  -webkit-appearance: none; appearance: none;
+  background: none; border: 0; cursor: pointer; font: inherit;
+  font-size: inherit; font-weight: inherit; padding: 0;
+}
+
+.m-sheet-scrim {
+  animation: m-fade 180ms var(--m-spring) both;
+  background: var(--scrim, rgba(0,0,0,.45)); border: 0; inset: 0;
+  padding: 0; position: fixed; z-index: 59;
+}
+@keyframes m-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.m-sheet {
+  animation: m-rise 240ms var(--m-spring) both;
+  background: var(--m-card); border-top: 1px solid var(--m-line);
+  border-radius: 22px 22px 0 0; bottom: calc(var(--m-tabbar-h, 64px) + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -12px 40px -12px rgba(0,0,0,.45);
+  display: flex; flex-direction: column; gap: 2px;
+  left: 0; padding: 10px; position: fixed; right: 0; z-index: 61;
+}
+@keyframes m-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+
+.m-sheet-item {
+  align-items: center; border-radius: 12px; color: var(--m-text);
+  display: flex; gap: 12px; font-size: 15px; font-weight: 600;
+  min-height: 48px; padding: 0 14px; text-decoration: none;
+}
+.m-sheet-item:active { background: var(--m-card-2); }
+.m-sheet-item.on { background: var(--m-card-2); color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .m-sheet, .m-sheet-scrim { animation: none; }
+}
