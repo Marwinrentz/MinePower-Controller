@@ -37,6 +37,13 @@ class AppSettings(BaseSettings):
     mqtt_url: str = ""
     mqtt_base_topic: str = "minepower"
 
+    # Automatische lokale Sicherung (siehe services/backup.py). Schützt vor
+    # Stromausfällen, die die Postgres-Datendatei beschädigen: eigenes
+    # Volume, eigenes Format, unabhängig vom manuellen Export im GUI.
+    backup_dir: str = "/app/backups"
+    backup_interval_h: float = 6.0
+    backup_keep: int = 30
+
     class Config:
         env_file = ".env"
         extra = "ignore"

@@ -239,6 +239,36 @@ export function AnimatedValue({ value, format, className, style }: {
   return <span className={`num ${className ?? ""}`} style={style}>{format(animated)}</span>;
 }
 
+/** Farbtöne, die eine Kennzahl annehmen darf.
+ *
+ *  Bewusst eine geschlossene Liste statt eines freien `color`-Strings: Jeder
+ *  Ton steht für genau einen Energiepfad, und der Aufrufer kann keinen
+ *  erfinden. Vorher trugen „Ersparnis" und „PV-Ertrag" beide `var(--ok)`
+ *  beziehungsweise `var(--c-pv)` – zwei Namen für exakt denselben Grünton,
+ *  also dieselbe Farbe für zwei verschiedene Bedeutungen. Geld ist kein
+ *  Energiefluss und bleibt jetzt neutral. */
+export type FigureTone = "pv" | "waste" | "import" | "export" | "car" | "battery" | "water";
+
+/** Kennzahl in einem `.figures`-Raster.
+ *
+ *  `lead` macht sie doppelt breit und deutlich größer – pro Raster höchstens
+ *  ein oder zwei, sonst gibt es wieder keinen Einstieg für das Auge. */
+export function Figure({ label, value, hint, tone, lead, help, title }: {
+  label: string; value: ReactNode; hint?: ReactNode;
+  tone?: FigureTone; lead?: boolean; help?: string; title?: string;
+}) {
+  return (
+    <div className={lead ? "figure figure-lead" : "figure"} title={title}>
+      <span className="figure-label">
+        {label}
+        {help && <Help text={help} />}
+      </span>
+      <span className={tone ? `figure-value num t-${tone}` : "figure-value num"}>{value}</span>
+      {hint && <span className="figure-hint">{hint}</span>}
+    </div>
+  );
+}
+
 /** Einzelne Kennzahl in der Kopfleiste des Dashboards. */
 export function Metric({ label, value, hint, color, title }: {
   label: string; value: ReactNode; hint?: string; color?: string; title?: string;

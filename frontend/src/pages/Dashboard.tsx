@@ -1,11 +1,19 @@
 /** Dashboard – der Zustand der Anlage auf einen Blick.
  *
  *  Aufbau nach Wichtigkeit, nicht nach Verfügbarkeit der Daten:
- *   1. Störungen und Sicherheitszustände (falls vorhanden) – ganz oben,
- *      unübersehbar, im Klartext.
- *   2. Kopfzeile: Was macht die Anlage gerade? Überschuss, Netz, Verschenkt.
- *   3. Energiefluss + Gerätekacheln mit direkter Bedienung.
- *   4. Verlauf – Details, die man sucht statt sieht.
+ *   1. Störungen und Sicherheitszustände – ganz oben, im Klartext.
+ *   2. Der Zustand als ein Satz, groß, ohne Rahmen.
+ *   3. Kennzahlen mit klarer Rangfolge: der Überschuss führt, der Rest
+ *      ordnet sich unter.
+ *   4. Zwei Spalten bis zum Seitenende – links, was die Anlage tut
+ *      (Energiefluss jetzt, Verlauf rückblickend), rechts die Geräte, an
+ *      denen man etwas ändern kann.
+ *
+ *  Was hier bewusst fehlt: der Farbverlauf über der Kopfzeile. Er benutzte
+ *  die Energiefarben (PV, Auto, Warmwasser) als Dekoration, obwohl dieselben
+ *  Farben überall sonst eine feste Bedeutung tragen – dieselbe Farbe darf
+ *  nicht zweierlei heißen. Und sieben gleich große Zahlen nebeneinander sind
+ *  keine Übersicht: Ohne Rangfolge findet das Auge keinen Einstieg.
  */
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -14,7 +22,7 @@ import { DeviceTile } from "../components/DeviceTile";
 import { BalanceMeter, FlowBar } from "../components/EnergyBalance";
 import { EnergyFlow } from "../components/EnergyFlow";
 import {
-  AnimatedValue, Badge, Banner, Button, Card, Empty, Metric, Segment, useIsPhone,
+  AnimatedValue, Badge, Banner, Button, Card, Empty, Figure, Segment, useIsPhone,
 } from "../components/ui";
 import { useI18n } from "../i18n";
 import { get, post } from "../lib/api";
@@ -108,7 +116,7 @@ export function Dashboard() {
   };
 
   return (
-    <div className="col" style={{ gap: "var(--s4)" }}>
+    <div className="page">
       {/* 1 – Was gerade nicht stimmt, zuerst. */}
       {snapshot.paused && (
         <Banner tone="warn" title={t("dash.paused")}
@@ -136,50 +144,13 @@ export function Dashboard() {
         </Banner>
       )}
 
-      {/* 2 – Zustand und Kennzahlen */}
-      <div className="hero">
-        <div className="hero-state">
-          <span className="hero-headline">{state.headline}</span>
-          <span className="hero-sub">{state.sub}</span>
+      {/* 2 – Der Zustand als ein Satz. Kein Kasten: Er ist die Überschrift
+              der Seite, nicht eines ihrer Elemente. */}
+      <header className="dash-status">
+        <div className="dash-state">
+          <h1 className="dash-headline">{state.headline}</h1>
+          <p className="dash-sub">{state.sub}</p>
         </div>
-
-        <div className="metrics">
-          <Metric
-            label={t("dash.surplus")}
-            value={<AnimatedValue value={snapshot.surplus} format={fmtW} />}
-            color={snapshot.surplus > 100 ? "var(--c-pv)" : "var(--text-dim)"}
-            title={t("dash.surplusHelp")}
-          />
-          <Metric
-            label={grid >= 0 ? t("dash.import") : t("dash.export")}
-            value={<AnimatedValue value={Math.abs(grid)} format={fmtW} />}
-            color={grid > 30 ? "var(--c-grid-import)" : "var(--c-grid-export)"}
-          />
-          <Metric
-            label={t("dash.wasted")}
-            value={<AnimatedValue value={snapshot.waste_w} format={fmtW} />}
-            color={snapshot.waste_w > 100 ? "var(--c-waste)" : "var(--text-dim)"}
-            hint={stats ? `${stats.wasted_kwh} kWh / 24 h` : undefined}
-            title={snapshot.waste_reason ?? t("dash.wastedHelp")}
-          />
-          {stats && (
-            <Metric label={t("stats.pvYield")} hint="24 h" value={`${stats.pv_kwh} kWh`} color="var(--c-pv)" />
-          )}
-          {/* Auf dem Handy nur die vier Kennzahlen, die im Alltag zählen –
-              der Rest steht eine Ebene tiefer in der Statistik. */}
-          {!isPhone && stats && <Metric label={t("stats.autarky")} hint="24 h" value={`${stats.autarky_pct} %`} />}
-          {!isPhone && forecast?.today_kwh != null && (
-            <Metric label={t("settings.forecast")} hint={t("dash.today")}
-                    value={`${forecast.today_kwh.toFixed(1)} kWh`} />
-          )}
-          {!isPhone && snapshot.price_ct != null && (
-            <Metric label={t("dash.price")}
-                    hint={snapshot.price_cheap == null ? undefined
-                      : t(snapshot.price_cheap ? "dash.priceCheap" : "dash.priceNormal")}
-                    value={`${snapshot.price_ct.toFixed(1)} ct`} />
-          )}
-        </div>
-
         <div className="row tight">
           <Button small variant={snapshot.paused ? "primary" : ""} onClick={togglePause} disabled={busy}>
             <><Icon name={snapshot.paused ? "play" : "pause"} size={14} />{" "}
@@ -191,58 +162,104 @@ export function Dashboard() {
             </Button>
           )}
         </div>
-      </div>
+      </header>
 
-      {/* Erklärt die Kennzahl „verschenkt“, sobald sie relevant wird */}
-      {snapshot.waste_reason && snapshot.waste_w > 150 && (
-        <Banner tone="info" title={`${t("dash.wasted")}: ${fmtW(snapshot.waste_w)}`}>
-          {snapshot.waste_reason}
-        </Banner>
-      )}
-
-      {/* 3 – Fluss und Geräte */}
-      <div className="dash-main">
-        <Card className="flow-card">
-          <div className="card-head" style={{ marginBottom: isPhone ? "var(--s3)" : 0 }}>
-            <span className="section-label">{t("dash.energyFlow")}</span>
-            <div className="row tight">
-              {snapshot.gap_filled_w > 0 && (
-                <Badge tone="accent" >{t("dash.gapFilled")}: {fmtW(snapshot.gap_filled_w)}</Badge>
-              )}
-              {snapshot.weather && <Badge>{snapshot.weather}</Badge>}
-            </div>
-          </div>
-          {/* Zuerst die Kernfrage: steht der Netzpunkt auf null? Erst danach
-              die Verteilung – das Knoten-Diagramm am Desktop, die kompakte
-              Leiste auf dem Handy (ein 660 px breites SVG ist dort unlesbar). */}
-          <BalanceMeter snapshot={snapshot} t={t} size={isPhone ? "md" : "sm"} />
-          {isPhone
-            ? <div style={{ marginTop: "var(--s3)" }}><FlowBar snapshot={snapshot} t={t} /></div>
-            : <EnergyFlow snapshot={snapshot} />}
-        </Card>
-
-        <div className="dash-tiles">
-          {tiles.map((d, i) => (
-            <div key={d.id} className="list-enter" style={{ animationDelay: `${i * 40}ms` }}>
-              <DeviceTile device={d} />
-            </div>
-          ))}
-          {tiles.length === 0 && (
-            <Card>
-              <Empty icon={<Icon name="devices" size={30} />} title={t("dash.noDevices")}>{t("dash.noDevicesSub")}</Empty>
-            </Card>
+      {/* 3 – Kennzahlen mit Rangfolge: der Überschuss doppelt breit und
+              deutlich größer, alles Weitere gleichrangig darunter. */}
+      <div className="figures-block">
+        <div className="figures">
+          <Figure lead title={t("dash.surplusHelp")} label={t("dash.surplus")}
+                  tone={snapshot.surplus > 100 ? "pv" : undefined}
+                  value={<AnimatedValue value={snapshot.surplus} format={fmtW} />} />
+          <Figure label={grid >= 0 ? t("dash.import") : t("dash.export")}
+                  tone={grid > 30 ? "import" : "export"}
+                  value={<AnimatedValue value={Math.abs(grid)} format={fmtW} />} />
+          <Figure title={snapshot.waste_reason ?? t("dash.wastedHelp")} label={t("dash.wasted")}
+                  tone={snapshot.waste_w > 100 ? "waste" : undefined}
+                  value={<AnimatedValue value={snapshot.waste_w} format={fmtW} />}
+                  hint={stats ? `${stats.wasted_kwh} kWh / 24 h` : undefined} />
+          {/* PV-Ertrag und Autarkiegrad standen hier ebenfalls und sind wieder
+              verschwunden: Beides sind Rückblicke über 24 Stunden, und beide
+              haben auf der Statistikseite eine eigene, größere Bühne. Das
+              Dashboard beantwortet „was ist gerade" – die aktuelle PV-Leistung
+              steht ohnehin im Flussdiagramm darunter. */}
+          {!isPhone && forecast?.today_kwh != null && (
+            <Figure label={t("settings.forecast")} value={`${forecast.today_kwh.toFixed(1)} kWh`}
+                    hint={t("dash.today")} />
+          )}
+          {!isPhone && snapshot.price_ct != null && (
+            <Figure label={t("dash.price")} value={`${snapshot.price_ct.toFixed(1)} ct`}
+                    hint={snapshot.price_cheap != null
+                      ? t(snapshot.price_cheap ? "dash.priceCheap" : "dash.priceNormal")
+                      : undefined} />
           )}
         </div>
+
+        {/* Erklärt die Kennzahl „verschenkt", sobald sie relevant wird.
+            Vorher stand hier ein blauer Banner in voller Breite, der Titel und
+            Wert der Kennzahl direkt darüber noch einmal wiederholte – ein
+            Kasten quer über die Seite für einen Halbsatz. Jetzt eine Fußnote
+            am Raster: gleicher Inhalt, kein zweites Objekt. */}
+        {snapshot.waste_reason && snapshot.waste_w > 150 && (
+          <p className="figures-note">{snapshot.waste_reason}</p>
+        )}
       </div>
 
-      {/* 4 – Verlauf */}
-      <Card>
-        <div className="card-head">
-          <h2>{t("dash.history")}</h2>
-          <Segment options={RANGES.map((r) => ({ value: r, label: r }))} value={range} onChange={setRange} />
+      {/* 4 – Zwei Spalten bis zum Seitenende: links, was die Anlage tut
+              (Fluss jetzt, Verlauf rückblickend), rechts, woran man drehen
+              kann. Der Verlauf stand vorher darunter über die volle Breite –
+              dadurch endete die linke Spalte auf halber Höhe und neben den
+              Gerätekacheln klaffte ein leeres Feld von der Größe des
+              Flussdiagramms. */}
+      <div className="dash-main">
+        <div className="dash-col">
+          <section className="page-section">
+            <div className="sec-head">
+              <span className="section-label">{t("dash.energyFlow")}</span>
+              <div className="row tight">
+                {snapshot.gap_filled_w > 0 && (
+                  <Badge tone="accent">{t("dash.gapFilled")}: {fmtW(snapshot.gap_filled_w)}</Badge>
+                )}
+                {snapshot.weather && <Badge>{snapshot.weather}</Badge>}
+              </div>
+            </div>
+            <div className="flow-panel">
+              {/* Zuerst die Kernfrage: steht der Netzpunkt auf null? Erst danach
+                  die Verteilung – das Knoten-Diagramm am Desktop, die kompakte
+                  Leiste auf dem Handy (ein 680 px breites SVG ist dort unlesbar). */}
+              <BalanceMeter snapshot={snapshot} t={t} size={isPhone ? "md" : "sm"} />
+              {isPhone ? <FlowBar snapshot={snapshot} t={t} /> : <EnergyFlow snapshot={snapshot} />}
+            </div>
+          </section>
+
+          {/* 5 – Verlauf: Details, die man sucht statt sieht. */}
+          <section className="page-section">
+            <div className="sec-head">
+              <span className="section-label">{t("dash.history")}</span>
+              <Segment options={RANGES.map((r) => ({ value: r, label: r }))} value={range} onChange={setRange} />
+            </div>
+            <Card><PowerHistoryChart range={range} /></Card>
+          </section>
         </div>
-        <PowerHistoryChart range={range} />
-      </Card>
+
+        <section className="page-section">
+          <div className="sec-head">
+            <span className="section-label">{t("nav.devices")}</span>
+          </div>
+          <div className="dash-tiles">
+            {tiles.map((d, i) => (
+              <div key={d.id} className="list-enter" style={{ animationDelay: `${i * 40}ms` }}>
+                <DeviceTile device={d} />
+              </div>
+            ))}
+            {tiles.length === 0 && (
+              <Card>
+                <Empty icon={<Icon name="devices" size={30} />} title={t("dash.noDevices")}>{t("dash.noDevicesSub")}</Empty>
+              </Card>
+            )}
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

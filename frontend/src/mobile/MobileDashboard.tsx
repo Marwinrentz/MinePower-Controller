@@ -3,10 +3,15 @@
  *  Reihenfolge nach dem, was man am Telefon wirklich wissen will:
  *   1. Störungen (falls vorhanden)
  *   2. Steht der Netzpunkt auf null?  ← die Kernfrage, groß und mittig
- *   3. Vier Kennzahlen
+ *   3. Kennzahlen als *ein* Block, mit der Begründung als Fußnote darunter
  *   4. Wohin fließt die Energie
  *   5. Geräte – als aufklappbare Zeilen, damit die Steuerung erreichbar ist,
  *      ohne dass die Liste zur Wand aus Knöpfen wird
+ *
+ *  Nur zwei Dinge tragen hier eine eigene Kante: die Waage und die
+ *  Kennzahlengruppe. Vorher hatte jede einzelne Kennzahl ihre eigene Karte –
+ *  neun schwebende Flächen auf einem Bildschirm, alle gleich laut. Wenn alles
+ *  hervorgehoben ist, ist nichts hervorgehoben.
  */
 import { useState } from "react";
 import { useI18n } from "../i18n";
@@ -156,7 +161,7 @@ function Flow({ snapshot, t }: { snapshot: Snapshot; t: (k: string) => string })
 /* ---------------------------------------------------------------- Geräte */
 
 const WB_MODES = ["pv_only", "min_pv", "fast", "target", "price"] as const;
-const WH_MODES = ["pv_only", "schedule", "off"] as const;
+const WH_MODES = ["pv_only", "price", "schedule", "off"] as const;
 
 function DeviceRow({ device, t }: { device: SnapshotDevice; t: (k: string) => string }) {
   const [open, setOpen] = useState(false);
@@ -369,25 +374,26 @@ export function MobileDashboard() {
 
         <Balance snapshot={snapshot} t={t} />
 
+        {/* Ein Block statt vier Karten – siehe .m-stats in mobile.css. */}
         <div className="m-stats">
-          <div className="m-card m-stat">
-            <span className="m-stat-val" style={{ color: snapshot.surplus > 100 ? "var(--c-pv)" : "var(--m-text)" }}>
+          <div className="m-stat">
+            <span className={`m-stat-val ${snapshot.surplus > 100 ? "pv" : ""}`}>
               {fmtW(snapshot.surplus)}
             </span>
             <span className="m-stat-lab">{t("dash.surplus")}</span>
           </div>
-          <div className="m-card m-stat">
-            <span className="m-stat-val" style={{ color: "var(--c-pv)" }}>{fmtW(snapshot.pv_power)}</span>
+          <div className="m-stat">
+            <span className="m-stat-val pv">{fmtW(snapshot.pv_power)}</span>
             <span className="m-stat-lab">{t("dash.pv")}</span>
           </div>
-          <div className="m-card m-stat">
-            <span className="m-stat-val" style={{ color: snapshot.waste_w > 100 ? "var(--c-waste)" : "var(--m-text)" }}>
+          <div className="m-stat">
+            <span className={`m-stat-val ${snapshot.waste_w > 100 ? "waste" : ""}`}>
               {fmtW(snapshot.waste_w)}
             </span>
             <span className="m-stat-lab">{t("dash.wasted")}</span>
           </div>
-          <div className="m-card m-stat">
-            <span className="m-stat-val" style={{ color: snapshot.battery ? "var(--c-battery)" : "var(--m-text-3)" }}>
+          <div className="m-stat">
+            <span className={`m-stat-val ${snapshot.battery ? "battery" : "none"}`}>
               {snapshot.battery ? `${Math.round(snapshot.battery.soc)} %` : "–"}
             </span>
             <span className="m-stat-lab">{t("dash.battery")}</span>
@@ -397,11 +403,9 @@ export function MobileDashboard() {
               ist. Über die ganze Breite, weil die Einordnung (günstig/teuer)
               wichtiger ist als die nackte Zahl. */}
           {snapshot.price_ct != null && (
-            <div className="m-card m-stat" style={{ gridColumn: "span 2" }}>
+            <div className="m-stat m-stat-wide">
               <span className="row" style={{ alignItems: "baseline", gap: 8 }}>
-                <span className="m-stat-val" style={{
-                  color: snapshot.price_cheap ? "var(--c-pv)" : "var(--m-text)",
-                }}>
+                <span className={`m-stat-val ${snapshot.price_cheap ? "pv" : ""}`}>
                   {snapshot.price_ct.toFixed(1)} ct
                 </span>
                 {snapshot.price_cheap != null && (
@@ -414,19 +418,18 @@ export function MobileDashboard() {
             </div>
           )}
         </div>
+
+        {/* Begründung direkt unter der Zahl, die sie erklärt, statt in einem
+            eigenen Abschnitt „Verschenkt" weiter unten – dort stünde dieselbe
+            Überschrift ein zweites Mal und man müsste den Bezug selbst
+            herstellen. */}
+        {snapshot.waste_reason && snapshot.waste_w > 150 && (
+          <p className="m-footnote">{snapshot.waste_reason}</p>
+        )}
       </div>
 
       <div className="m-section">{t("dash.energyFlow")}</div>
       <Flow snapshot={snapshot} t={t} />
-
-      {snapshot.waste_reason && snapshot.waste_w > 150 && (
-        <>
-          <div className="m-section">{t("dash.wasted")}</div>
-          <div className="m-card m-card-pad">
-            <span className="m-dev-sub" style={{ whiteSpace: "normal" }}>{snapshot.waste_reason}</span>
-          </div>
-        </>
-      )}
 
       <div className="m-section">{t("nav.devices")}</div>
       <div className="m-card">
@@ -438,10 +441,11 @@ export function MobileDashboard() {
         )}
       </div>
 
-      <div className="m-section">{t("dash.pause")}</div>
-      <button className="m-btn" style={{ width: "100%", minHeight: 48 }} disabled={busy} onClick={togglePause}>
-        <><Icon name={snapshot.paused ? "play" : "pause"} size={14} />{" "}
-            {snapshot.paused ? t("dash.resume") : t("dash.pause")}</>
+      {/* Ohne Abschnittsüberschrift: Die stand vorher als „Pause" über einem
+          Knopf, der „Pause" heißt. Eine Zeile, die nur sich selbst ankündigt. */}
+      <button className="m-btn m-btn-wide" disabled={busy} onClick={togglePause}>
+        <Icon name={snapshot.paused ? "play" : "pause"} size={15} />{" "}
+        {snapshot.paused ? t("dash.resume") : t("dash.pause")}
       </button>
     </div>
   );

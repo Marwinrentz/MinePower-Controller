@@ -38,6 +38,9 @@ DEFAULT_SETTINGS: dict[str, dict] = {
         "deadband_max_w": 400,
         "gap_fill_min_w": 25,
         "use_forecast": True,
+        # Netzladen im Modus „preisoptimiert": Der Hausspeicher wird für die
+        # Dauer des günstigen Fensters gesperrt, sonst bezahlt er die Ladung.
+        "price_window_battery": "hold",
     },
     "priority": {"order": []},
     "tariff": {"provider": "none", "cheap_limit_ct": 15},
@@ -68,6 +71,35 @@ async def ensure_jwt_secret() -> None:
             await session.commit()
             log.info("JWT-Secret automatisch erzeugt und persistiert")
         cfg.jwt_secret = value["jwt_secret"]
+
+
+async def maybe_restore_from_backup() -> bool:
+    """Springt ein, wenn die Datenbank leer, aber eine lokale Sicherung
+    vorhanden ist – der Fall nach einem Stromausfall, bei dem die
+    Postgres-Datendatei neu initialisiert werden musste (siehe
+    services/backup.py). Eine frische Erstinstallation hat noch keine
+    Sicherung und bleibt unangetastet; import_headless_config und
+    setup_demo_mode greifen wie gehabt nur, wenn danach immer noch keine
+    Geräte da sind."""
+    from .services import backup
+
+    async with async_session() as session:
+        devices = await session.scalar(select(func.count(Device.id)))
+        users = await session.scalar(select(func.count(User.id)))
+        if devices or users:
+            return False
+
+    path = backup.latest_backup()
+    if path is None:
+        return False
+
+    count = await backup.restore(path)
+    log.warning(
+        "Datenbank war leer – lokale Sicherung %s automatisch eingespielt (%d Geräte). "
+        "Vermutlich musste das Postgres-Datenverzeichnis nach einem Stromausfall neu "
+        "angelegt werden.", path.name, count,
+    )
+    return True
 
 
 async def init_db() -> None:

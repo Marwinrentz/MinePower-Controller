@@ -76,14 +76,14 @@ export function Settings() {
   const notif = values.notifications ?? {};
 
   return (
-    <div className="col" style={{ gap: 20 }}>
-      <div className="card-head">
-        <h1>{t("nav.settings")}</h1>
+    <div className="page">
+      <header className="page-head">
+        <h1 className="page-title">{t("nav.settings")}</h1>
         <div className="row tight">
           {saved && <span className="badge ok">{t("common.save")}</span>}
           <Button variant="primary" onClick={save}>{t("common.save")}</Button>
         </div>
-      </div>
+      </header>
 
       <div className="grid cols-2">
         <Card>
@@ -195,8 +195,15 @@ export function Settings() {
               </select>
             </Field>
           )}
-          <Field label={t("settings.cheapLimit")}>
+          <Field label={t("settings.cheapLimit")} help={t("settings.cheapLimitHelp")}>
             <Num value={tariff.cheap_limit_ct} onChange={(v) => setVal("tariff", "cheap_limit_ct", v)} />
+          </Field>
+          <Field label={t("settings.priceWindowBattery")} help={t("settings.priceWindowBatteryHelp")}>
+            <select className="select" value={String(reg.price_window_battery ?? "hold")}
+                    onChange={(e) => setVal("regulation", "price_window_battery", e.target.value)}>
+              <option value="hold">{t("settings.priceWindowHold")}</option>
+              <option value="charge">{t("settings.priceWindowCharge")}</option>
+            </select>
           </Field>
 
           <h2 style={{ marginTop: 20 }}>{t("settings.forecast")}</h2>

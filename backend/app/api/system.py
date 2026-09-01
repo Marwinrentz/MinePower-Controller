@@ -44,6 +44,16 @@ async def setup_state(db: AsyncSession = Depends(get_db)):
     return {"needs_admin": (users or 0) == 0, "needs_devices": (devices or 0) == 0}
 
 
+@router.get("/backup-status")
+async def backup_status(_: User = Depends(require_role("admin"))):
+    """Zeigt, dass die automatische lokale Sicherung läuft, statt dass sie
+    sich erst beim nächsten Stromausfall beweisen muss (siehe
+    services/backup.py)."""
+    from ..services import backup
+
+    return backup.status()
+
+
 @router.get("/export")
 async def export_config(db: AsyncSession = Depends(get_db), _: User = Depends(require_role("admin"))):
     """Komplette Konfiguration als JSON (Backup / Übertragung auf andere Instanz).

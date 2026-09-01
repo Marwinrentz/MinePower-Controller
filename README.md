@@ -157,6 +157,34 @@ Wie gut das gelingt, ist messbar: Jeder Takt erfasst, wie viel Überschuss über
 dem Netz-Sollwert eingespeist wurde, ohne dass eine Last ihn aufgenommen hat —
 mit Begründung im Klartext.
 
+### Preisoptimiertes Laden sperrt den Hausspeicher
+
+Wallbox und Heizstab kennen die Betriebsart **Preisoptimiert**: Liegt der
+Börsenstrompreis unter der Günstig-Schwelle aus den Einstellungen, laden sie
+aus dem Netz; darüber schalten sie auf reines Überschussladen zurück. Die
+Sonne wird also nicht verschenkt, nur weil die Börse teuer ist.
+
+Der entscheidende Teil ist, **woher** der Strom in dieser Stunde kommt. Ein
+Hybrid-Wechselrichter kennt keinen Strompreis — er sieht am Netzpunkt eine
+neue Last und deckt sie aus der Batterie. Ohne Gegenmaßnahme lädt das Auto
+also nicht mit billigem Netzstrom, sondern mit dem eigenen, teuer geladenen
+Speicher: einmal geladen, einmal entladen, zweimal Wirkungsgrad verloren, und
+abends steht das Haus ohne Reserve da.
+
+Für die Dauer des günstigen Fensters wird der Speicher deshalb gesperrt —
+wahlweise **Sperren** (weder laden noch entladen) oder **Vollladen** (aus dem
+günstigen Netz laden, aber nicht entladen). Beides über `set_mode`, ersatzweise
+über eine Reserve-SoC-Vorgabe von 100 %, damit auch Wechselrichter ohne
+Modus-Register mitmachen. Endet das Fenster, geht der Speicher zurück auf
+Automatik; beim Beenden von MinePower ebenfalls — es bleibt kein gesperrter
+Wechselrichter zurück.
+
+Lässt sich der Speicher gar nicht steuern (reines Monitoring) und entlädt er
+gerade, wird das Netzladen **ausgesetzt** statt ihn leerzuziehen, mit
+Begründung im Klartext auf dem Dashboard. Wer das anders will — etwa weil der
+Wechselrichter ohnehin schon auf „nicht entladen" steht —, schaltet
+`price_allow_battery_drain` am Gerät frei.
+
 ## Unterstützte Geräte
 
 Die letzte Spalte ist die wichtigste. **Nur vier Anbindungen liefen je gegen
@@ -221,7 +249,7 @@ docker pull marwinrentz1/minepower:latest
 
 | Dienst | Port | Zweck |
 |---|---|---|
-| `app` | `${HTTP_PORT:-8080}` → 8000 | Web-Oberfläche, REST-API, WebSocket |
+| `app` | `${HTTP_PORT:-8080}` → 8000 | Web-Oberfläche, REST-API, WebSocket; Volume `backup_data` (Sicherung) |
 | `db` | intern 5432 | TimescaleDB, Volume `db_data` |
 | `mqtt` (optional) | 1883 | `docker compose --profile mqtt up -d` |
 
@@ -278,6 +306,29 @@ docker compose up -d app
 Die App zuletzt starten: Sie legt beim Start nur dann Standardwerte an, wenn
 die Datenbank leer ist.
 
+**Stromausfall.** Ein harter Stromausfall kann die Postgres-Datendatei so
+beschädigen, dass sie sich nicht mehr reparieren lässt — das ist keine
+MinePower-Eigenheit, sondern trifft jede Datenbank auf Speicher, der `fsync`
+nicht ehrlich beantwortet (bei Consumer-SSDs und USB-Datenträgern ohne
+Power-Loss-Protection die Regel, nicht die Ausnahme). Für genau diesen Fall
+schreibt die App alle sechs Stunden automatisch eine Sicherung von Geräten,
+Einstellungen und Konten auf ein **eigenes** Volume
+(`backup_data:/app/backups`, unabhängig von `db_data`). Findet sie beim
+Start eine leere Datenbank vor, obwohl eine solche Sicherung existiert,
+spielt sie diese automatisch zurück — keine manuelle Wiederherstellung
+nötig. Bleibt die Postgres-Datendatei nach dem Ausfall komplett
+unbrauchbar (der `db`-Dienst startet gar nicht erst), das Datenverzeichnis
+löschen und den Stack neu hochfahren: Die App füllt sich beim nächsten
+Start selbst wieder aus der letzten lokalen Sicherung.
+
+Für maximale Widerstandsfähigkeit `backup_data` per Bind-Mount auf eine
+**andere** physische Platte legen als `db_data` — beide auf demselben
+Datenträger schützen nicht vor einem kompletten Laufwerksausfall. Der
+Status (Zeitpunkt und Anzahl der Sicherungen) steht unter
+`/api/system/backup-status`. Ein Stromausfall ist trotzdem kein Ersatz für
+eine USV: Wo möglich, eine mit automatischem, sauberem Container-Shutdown
+verwenden — das vermeidet den harten Kill überhaupt.
+
 **Logs:** `docker compose logs -f app` (Log-Level über `LOG_LEVEL`).
 
 **Diagnose.** Die Seite Ereignisse → Diagnose zeigt Geräte-Rohwerte, die
@@ -286,13 +337,19 @@ lässt sich dort zeitraumbezogen exportieren.
 
 ### Abweichende Aufbauten
 
-**Unraid.** Statt des benannten Volumes einen Bind-Mount auf den Cache-Pool
-verwenden — in `docker-compose.yml` beim Dienst `db`:
+**Unraid.** Statt der benannten Volumes Bind-Mounts auf den Cache-Pool
+verwenden — in `docker-compose.yml` bei den Diensten `db` und `app`:
 
 ```yaml
     volumes:
-      - /mnt/cache/appdata/minepower-db:/var/lib/postgresql/data
+      - /mnt/cache/appdata/minepower-db:/var/lib/postgresql/data     # bei db
+      - /mnt/cache/appdata/minepower-backups:/app/backups            # bei app
 ```
+
+Die Sicherung idealerweise auf einen anderen Datenträger als die
+Datenbank legen (siehe „Stromausfall" oben) — auf dem Cache-Pool reicht
+dafür z. B. ein zweiter, unabhängiger Pfad, sofern der Pool aus mehreren
+Platten besteht.
 
 **OCPP-Wallboxen.** Den Treiber-Port zusätzlich freigeben — beim Dienst `app`:
 
@@ -509,6 +566,33 @@ How well this works is measurable: every cycle records how much surplus was fed
 into the grid above the setpoint without any load absorbing it — including a
 plain-language reason.
 
+### Price-optimized charging locks the home battery
+
+Wallbox and heating element both offer a **Price optimized** mode: while the
+market price is below the cheap threshold from the settings, they charge from
+the grid; above it they fall back to surplus-only charging. Sunshine is not
+wasted just because the exchange is expensive.
+
+The decisive part is **where** the power comes from during that hour. A hybrid
+inverter knows nothing about electricity prices — it sees a new load at the
+grid point and covers it from the battery. Without a countermeasure the car is
+therefore not charged with cheap grid power but with your own, expensively
+stored energy: charged once, discharged once, efficiency lost twice, and by
+evening the house has no reserve left.
+
+For the duration of the cheap window the battery is therefore locked — either
+**Lock** (neither charge nor discharge) or **Fill up** (charge from the cheap
+grid, never discharge). Both via `set_mode`, falling back to a reserve-SoC of
+100 % so inverters without a mode register can join in. When the window closes
+the battery returns to automatic; so it does when MinePower shuts down — no
+inverter is left locked behind.
+
+If the battery cannot be controlled at all (monitoring only) and is currently
+discharging, grid charging is **skipped** rather than draining it, with a
+plain-language reason on the dashboard. If you want it anyway — say because the
+inverter is already set to never discharge — enable
+`price_allow_battery_drain` on the device.
+
 ## Supported devices
 
 The last column is the important one. **Only four integrations have ever run
@@ -572,7 +656,7 @@ docker pull marwinrentz1/minepower:latest
 
 | Service | Port | Purpose |
 |---|---|---|
-| `app` | `${HTTP_PORT:-8080}` → 8000 | Web interface, REST API, WebSocket |
+| `app` | `${HTTP_PORT:-8080}` → 8000 | Web interface, REST API, WebSocket; volume `backup_data` (backups) |
 | `db` | internal 5432 | TimescaleDB, volume `db_data` |
 | `mqtt` (optional) | 1883 | `docker compose --profile mqtt up -d` |
 
@@ -627,6 +711,26 @@ docker compose up -d app
 
 Start the app last: it only seeds defaults when the database is empty.
 
+**Power outages.** A hard power cut can damage the Postgres data file beyond
+repair — that's not a MinePower quirk, it hits any database on storage that
+doesn't answer `fsync` honestly (the norm, not the exception, for consumer
+SSDs and USB drives without power-loss protection). For exactly this case,
+the app writes an automatic backup of devices, settings and accounts to a
+**separate** volume every six hours (`backup_data:/app/backups`, independent
+of `db_data`). If it finds an empty database at startup even though such a
+backup exists, it restores it automatically — no manual step needed. If the
+Postgres data file is left completely unusable after the outage (the `db`
+service refuses to start at all), delete its data directory and bring the
+stack back up: the app repopulates itself from the last local backup on the
+next start.
+
+For maximum resilience, bind-mount `backup_data` onto a **different**
+physical disk than `db_data` — both on the same drive don't protect against
+a full drive failure. Status (timestamp and count of backups) is available
+at `/api/system/backup-status`. A power outage is still no substitute for a
+UPS: where possible, use one with an automatic, clean container shutdown —
+that avoids the hard kill in the first place.
+
 **Logs:** `docker compose logs -f app` (log level via `LOG_LEVEL`).
 
 **Diagnostics.** Events → Diagnostics shows raw device values, the current
@@ -635,13 +739,18 @@ can be exported there for a chosen period.
 
 ### Alternative setups
 
-**Unraid.** Use a bind mount onto the cache pool instead of the named volume —
-in `docker-compose.yml` under service `db`:
+**Unraid.** Use bind mounts onto the cache pool instead of the named volumes —
+in `docker-compose.yml` under services `db` and `app`:
 
 ```yaml
     volumes:
-      - /mnt/cache/appdata/minepower-db:/var/lib/postgresql/data
+      - /mnt/cache/appdata/minepower-db:/var/lib/postgresql/data     # under db
+      - /mnt/cache/appdata/minepower-backups:/app/backups            # under app
 ```
+
+Ideally put the backup on a different disk than the database (see "Power
+outages" above) — on the cache pool, a second, independent path is enough
+if the pool spans more than one drive.
 
 **OCPP wallboxes.** Expose the driver port as well — under service `app`:
 

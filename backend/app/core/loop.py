@@ -40,6 +40,7 @@ from ..drivers import registry
 from ..drivers.base import (
     BatteryData,
     BatteryDriver,
+    BatteryMode,
     DeviceCategory,
     InverterData,
     InverterDriver,
@@ -70,6 +71,7 @@ from .regulation import (
     WaterHeaterSettings,
     battery_drain_alarm,
     compute_budget,
+    price_window_open,
     protected_battery_discharge,
     releasable_battery_charge,
     wasted_power,
@@ -77,6 +79,18 @@ from .regulation import (
 from .schedules import any_window_active
 
 log = logging.getLogger(__name__)
+
+
+def _implements(driver: Any, method: str) -> bool:
+    """Beherrscht dieser Treiber den optionalen Befehl wirklich?
+
+    `BatteryDriver` definiert `set_mode`/`set_reserve_soc` als Stumpf, der
+    NotImplementedError wirft – ein `hasattr` ist also immer True und sagt
+    nichts. Verglichen wird deshalb gegen die Basisklasse: Nur wer die Methode
+    überschreibt, kann sie auch."""
+    own = getattr(type(driver), method, None)
+    base = getattr(BatteryDriver, method, None)
+    return own is not None and own is not base
 
 READ_TIMEOUT_S = 6.0
 OFFLINE_AFTER_FAILURES = 3
@@ -203,6 +217,11 @@ class ControlLoop:
         self.battery_guard_w = 0.0
         self.battery_release_w = 0.0
         self.battery_protected = False
+        #: Läuft gerade ein Netzladefenster (mindestens ein Gerät im Modus
+        #: „price" unter seiner Preisgrenze)?
+        self.grid_price_window = False
+        #: Konnte der Hausspeicher dafür gesperrt werden?
+        self.battery_locked = False
         self.buffer = MeasurementBuffer()
         # Vollständig vorbelegt: Das Frontend bekommt beim allerersten Abruf
         # (vor dem ersten Tick) dieselbe Struktur wie später – sonst müsste es
@@ -210,7 +229,9 @@ class ControlLoop:
         self.snapshot: dict[str, Any] = {
             "time": None, "pv_power": 0.0, "grid_power": None, "house_power": 0.0,
             "wallbox_power": 0.0, "water_power": 0.0, "battery": None, "surplus": 0.0,
-            "price_ct": None, "price_cheap": None, "safety": None, "paused": False, "waste_w": 0.0,
+            "price_ct": None, "price_cheap": None,
+            "grid_price_window": False, "battery_locked": False,
+            "safety": None, "paused": False, "waste_w": 0.0,
             "waste_reason": None, "gap_filled_w": 0.0,
             "deadband_w": self.cfg.deadband_w, "weather": None, "devices": [],
         }
@@ -238,6 +259,19 @@ class ControlLoop:
                 await self._task
             except asyncio.CancelledError:
                 pass
+        # Einen gesperrten Speicher nicht gesperrt zurücklassen: Wer MinePower
+        # mitten in einer günstigen Stunde beendet, hätte sonst einen
+        # Wechselrichter, der bis zum nächsten Start weder entlädt noch die
+        # eigene Reserve kennt – das Haus zöge alles aus dem Netz, ohne dass
+        # jemand den Grund sieht.
+        if self.grid_price_window:
+            for dev in self.devices.values():
+                if dev.category == DeviceCategory.BATTERY.value:
+                    try:
+                        await self._lock_battery(dev, window_open=False)
+                    except Exception:  # noqa: BLE001
+                        log.warning("Speichersperre für %s nicht aufgehoben", dev.name)
+            self.grid_price_window = False
         for dev in self.devices.values():
             try:
                 await dev.driver.disconnect()
@@ -289,6 +323,7 @@ class ControlLoop:
             deadband_max_w=float(reg.get("deadband_max_w", 400)),
             gap_fill_min_w=float(reg.get("gap_fill_min_w", 25)),
             use_forecast=bool(reg.get("use_forecast", True)),
+            price_window_battery=str(reg.get("price_window_battery", "hold")),
         )
         if self.grid_smoother.values.maxlen != max(1, self.cfg.smoothing_samples):
             self.grid_smoother = Smoother(self.cfg.smoothing_samples)
@@ -537,6 +572,25 @@ class ControlLoop:
             price_ct = self.tariff.current_price_ct()
             cheap = self.tariff.is_cheap_hour()
 
+        # --- Netzladefenster -------------------------------------------
+        # Will mindestens ein Gerät gerade bewusst aus dem Netz laden, muss
+        # der Hausspeicher zuerst aus dem Weg – sonst deckt er die neue Last
+        # und der „günstige Netzstrom" kommt in Wahrheit aus dem Speicher.
+        # Deshalb steht das VOR der Prioritätskette: Erst sperren, dann laden.
+        grid_window = self._price_window_devices(price_ct, cheap)
+        battery_locked = await self._apply_price_window(battery_devs, bool(grid_window))
+        drain_unblockable = bool(
+            grid_window and not battery_locked and battery is not None and bat_power_s < -50
+        )
+        self.grid_price_window = bool(grid_window)
+        self.battery_locked = battery_locked
+        if drain_unblockable:
+            blocker_hint = (
+                "Netzladen ausgesetzt: Hausspeicher entlädt und lässt sich nicht sperren"
+            )
+        else:
+            blocker_hint = None
+
         house_power = max(0.0, float(grid_power) + pv_power - wb_power - wh_power - bat_power)
         other_wb_current = 0.0
         recovery, forecast_surplus = self._forecast_context(pv_power, house_power)
@@ -552,6 +606,8 @@ class ControlLoop:
             blockers.append(
                 f"Batterie entlädt mit {battery_guard:.0f} W – das ist kein Solarüberschuss"
             )
+        if blocker_hint:
+            blockers.append(blocker_hint)
 
         for dev in order:
             if dev.category == DeviceCategory.BATTERY.value:
@@ -581,6 +637,8 @@ class ControlLoop:
                 # sofort abregeln. Beim Laden gibt es nichts abzuregeln – seine
                 # Ladeleistung stand nie im Topf.
                 battery_protected=battery_protected,
+                battery_locked=battery_locked,
+                battery_drain_unblockable=drain_unblockable,
             )
 
             if isinstance(dev.controller, WallboxController):
@@ -864,6 +922,92 @@ class ControlLoop:
         stepped = math.floor(max(0.0, power_w) / HEATER_STEP_W) * HEATER_STEP_W
         await self._send(dev, "power", stepped, lambda: driver.set_power(stepped))
 
+    # -------------------------------------------------- Netzladefenster
+
+    def _price_window_devices(self, price_ct: float | None, cheap: bool | None) -> list[str]:
+        """Namen der Geräte, die gerade im Modus „price" laden dürfen.
+
+        Rein aus Einstellungen und Preis abgeleitet, nicht aus den
+        Entscheidungen der Regler: Der Speicher muss gesperrt sein, BEVOR die
+        erste Last Netzstrom zieht. Würde erst die Kette laufen und danach
+        gesperrt, deckte der Speicher genau den einen Takt, in dem die Last
+        anspringt – bei drei Sekunden Takt und 11 kW sind das die Wattstunden,
+        die der ganze Mechanismus einsparen soll.
+        """
+        if price_ct is None and not cheap:
+            return []
+        ctx = ChargeContext(price_ct=price_ct, cheap_hour=bool(cheap))
+        names: list[str] = []
+        for dev in self.devices.values():
+            if not dev.enabled or dev.controller is None:
+                continue
+            settings = getattr(dev.controller, "s", None)
+            if settings is None or getattr(settings, "mode", None) != "price":
+                continue
+            limit = float(getattr(settings, "price_limit_ct", 15.0))
+            if price_window_open(ctx, limit):
+                names.append(dev.name)
+        return names
+
+    async def _apply_price_window(
+        self, battery_devs: list[ManagedDevice], window_open: bool
+    ) -> bool:
+        """Hausspeicher für die Dauer eines Netzladefensters sperren.
+
+        Gibt True zurück, wenn *jeder* vorhandene Speicher gesperrt ist (oder
+        es keinen gibt) – nur dann kommt der Strom garantiert aus dem Netz.
+
+        Zwei Wege, absichtlich in dieser Reihenfolge:
+
+        1. `set_mode(HOLD)` beziehungsweise `FORCE_CHARGE`, wenn der Nutzer
+           „nur volladen" gewählt hat. Der saubere Weg, kann aber nicht jeder
+           Treiber.
+        2. `set_reserve_soc(100)` als Rückfall. Ein Speicher, dessen Reserve
+           auf 100 % steht, darf nicht unter 100 % entladen – praktisch
+           dasselbe Ergebnis, und das können deutlich mehr Wechselrichter.
+
+        Klappt beides nicht, bleibt der Speicher wie er ist und die Regler
+        erfahren das über `battery_drain_unblockable`. Lieber gar nicht aus
+        dem Netz laden als aus dem Speicher.
+        """
+        all_locked = True
+        for dev in battery_devs:
+            locked = await self._lock_battery(dev, window_open)
+            if window_open and not locked:
+                all_locked = False
+        return all_locked
+
+    async def _lock_battery(self, dev: ManagedDevice, window_open: bool) -> bool:
+        driver: BatteryDriver = dev.driver  # type: ignore[assignment]
+        if not dev.online:
+            return False
+        if hasattr(driver, "control_enabled") and not driver.control_enabled():
+            return False  # reines Monitoring – hier ist nichts zu sperren
+
+        # „hold" = weder laden noch entladen. „charge" = aus dem günstigen Netz
+        # vollladen, aber nicht entladen. Beides erfüllt „nicht beziehen".
+        behaviour = str(dev.settings.get("price_window_mode") or self.cfg.price_window_battery)
+        if window_open:
+            mode = BatteryMode.FORCE_CHARGE if behaviour == "charge" else BatteryMode.HOLD
+            reserve = 100
+        else:
+            mode = BatteryMode.AUTO
+            reserve = int(dev.settings.get("reserve_soc", self.cfg.battery_reserve_soc))
+
+        # Die Fähigkeit wird VOR dem Senden geprüft, nicht über eine
+        # aufgefangene NotImplementedError: `_send` fängt jede Ausnahme selbst
+        # ab (Backoff, command_error, Benachrichtigung). Ein `except` um
+        # `_send` herum feuert deshalb nie – der Rückfall auf die Reserve
+        # bliebe tot, und ein Treiber ohne jede Steuerung meldete fälschlich
+        # „gesperrt".
+        if _implements(driver, "set_mode"):
+            await self._send(dev, "price_mode", mode.value, lambda: driver.set_mode(mode))
+            return True
+        if _implements(driver, "set_reserve_soc"):
+            await self._send(dev, "price_reserve", reserve, lambda: driver.set_reserve_soc(reserve))
+            return True
+        return False
+
     async def _apply_battery(self, dev: ManagedDevice) -> None:
         driver: BatteryDriver = dev.driver  # type: ignore[assignment]
         # Aktive Batteriebefehle sind Zusatzfunktion, kein Automatismus:
@@ -875,6 +1019,13 @@ class ControlLoop:
             return
         if hasattr(driver, "control_enabled") and not driver.control_enabled():
             return  # Nutzer hat die aktive Steuerung nicht freigeschaltet
+        if self.grid_price_window:
+            # Während eines Netzladefensters gehört die Reserve dem Fenster
+            # (siehe _lock_battery). Beide Stellen gleichzeitig schreiben zu
+            # lassen, hieße: Ein Takt sperrt auf 100 %, der nächste gibt auf
+            # den Normalwert frei, und der Speicher deckt genau dazwischen die
+            # Netzlast – jeden Takt aufs Neue.
+            return
         reserve = int(dev.settings.get("reserve_soc", self.cfg.battery_reserve_soc))
         try:
             await self._send(dev, "reserve", reserve, lambda: driver.set_reserve_soc(reserve))
@@ -1037,6 +1188,13 @@ class ControlLoop:
             # Grenzwert – das gehört hierher und nicht in die Oberfläche, die
             # ihn sonst raten müsste.
             "price_cheap": price_cheap,
+            # Netzladefenster: Ein Gerät im Modus „preisoptimiert" lädt gerade
+            # bewusst aus dem Netz. `battery_locked` sagt, ob der Hausspeicher
+            # dafür wirklich gesperrt werden konnte – ohne das würde der Strom
+            # aus dem Speicher statt aus dem Netz kommen, und genau das soll
+            # ablesbar sein statt geraten werden müssen.
+            "grid_price_window": self.grid_price_window,
+            "battery_locked": self.battery_locked,
             "safety": safety,
             "paused": self.paused,
             # Kennzahl „verschenkter Solarstrom“: Einspeisung über dem

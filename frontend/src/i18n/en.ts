@@ -144,6 +144,7 @@ export const en: Dict = {
   mode: {
     helpWater: {
       pv_only: "Heats only on surplus from the roof. Never from the grid.",
+      price: "Heats from the grid while the electricity price is below your limit; above it, surplus only. The home battery is locked meanwhile, so the heat really comes from cheap grid power and not from your storage.",
       schedule: "Heats only inside the time windows you set in the schedule.",
       off: "Stays off, no matter how much surplus there is.",
     },
@@ -153,7 +154,7 @@ export const en: Dict = {
       fast: "Charges at full power right away, without waiting for surplus. The rest comes from the grid.",
       schedule: "Runs only inside the time windows you set in the schedule.",
       target: "Makes sure the target state of charge is reached by departure time – using grid power if needed.",
-      price: "Charges as soon as the market price is below your limit.",
+      price: "Charges from the grid while the market price is below your limit; above it, surplus only. The home battery is locked meanwhile, so the power really comes from cheap grid supply and not from your storage.",
       off: "Stays off, no matter how much surplus there is.",
     },
     pv_only: "PV only",
@@ -278,6 +279,11 @@ export const en: Dict = {
     tariffProvider: "Provider",
     tariffHelp: "For price-optimized charging: Tibber (token required) or aWATTar (public).",
     cheapLimit: "Cheap threshold (ct/kWh)",
+    cheapLimitHelp: "Below this price an hour counts as cheap. Devices set to \u201cPrice optimized\u201d then charge from the grid; above it they fall back to surplus-only charging.",
+    priceWindowBattery: "Home battery during cheap hours",
+    priceWindowBatteryHelp: "What happens to the battery while a device charges from the grid on a cheap tariff. Without this lock a hybrid inverter covers the grid load from the battery — you are then not paying the cheap grid price but moving your own stored energy into the car, losing efficiency twice over. If the battery cannot be controlled (monitoring only), MinePower skips grid charging rather than draining it.",
+    priceWindowHold: "Lock — neither charge nor discharge",
+    priceWindowCharge: "Fill up — charge from cheap grid, never discharge",
     forecast: "Solar forecast",
     forecastHelp: "forecast.solar: location and system data for the yield forecast.",
     notifications: "Notifications",

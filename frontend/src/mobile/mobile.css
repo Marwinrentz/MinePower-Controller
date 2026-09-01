@@ -89,9 +89,12 @@
 .m-live-dot { border-radius: 50%; height: 8px; width: 8px; background: var(--ok); flex-shrink: 0; }
 .m-live-dot.off { background: var(--m-text-3); }
 
+/* Abschnittsüberschrift in normaler Schreibweise. Vorher stand hier
+   VERSALSCHRIFT – die liest sich Buchstabe für Buchstabe statt als Wortbild
+   und ließ jede Überschrift lauter wirken als den Inhalt darunter. */
 .m-section {
-  color: var(--m-text-2); font-size: 12.5px; font-weight: 650; letter-spacing: 0.02em;
-  margin: 22px 4px 8px; text-transform: uppercase;
+  color: var(--m-text); font-size: 17px; font-weight: 660; letter-spacing: -0.01em;
+  margin: 26px 4px 9px;
 }
 
 .m-card {
@@ -107,10 +110,7 @@
 
 .m-balance { display: flex; flex-direction: column; gap: 12px; padding: 18px var(--m-pad); }
 .m-balance-top { align-items: center; display: flex; justify-content: space-between; gap: 10px; }
-.m-balance-cap {
-  color: var(--m-text-2); font-size: 12.5px; font-weight: 650;
-  letter-spacing: 0.02em; text-transform: uppercase;
-}
+.m-balance-cap { color: var(--m-text-2); font-size: 14px; font-weight: 600; }
 .m-balance-pill {
   background: var(--m-tone-soft); border-radius: 999px; color: var(--m-tone);
   font-size: 12.5px; font-weight: 700; padding: 4px 11px; white-space: nowrap;
@@ -152,19 +152,51 @@
 
 /* ---------------------------------------------------------------- Kennzahlen */
 
-.m-stats { display: grid; gap: var(--m-gap); grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* Ein Block, nicht vier schwebende Karten.
+   Vorher hatte jede Kennzahl ihre eigene Karte mit eigenem Schatten und 12 px
+   Luft dazwischen – vier gleich laute Objekte, die sich gegenseitig um
+   Aufmerksamkeit stritten. Zusammengefasst hinter einer Kante mit Haarlinien
+   dazwischen liest sich derselbe Inhalt als eine Gruppe, und die Waage darüber
+   bleibt das, was zuerst ins Auge fällt. Die Fugen sind die Hintergrundfarbe,
+   die durch ein 1-px-Raster durchscheint – so bleiben sie exakt eine
+   Gerätepixelbreite, egal bei welcher Bildschirmdichte. */
+.m-stats {
+  background: var(--m-sep);
+  border-radius: var(--m-r-card);
+  display: grid; gap: 1px; grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: hidden;
+}
 .m-price-tag {
   background: var(--m-fill); border-radius: 999px; color: var(--m-text-2);
-  font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
-  padding: 3px 8px; text-transform: uppercase; white-space: nowrap;
+  font-size: 12px; font-weight: 650; padding: 3px 9px; white-space: nowrap;
 }
 .m-price-tag.cheap { background: color-mix(in srgb, var(--c-pv) 18%, transparent); color: var(--c-pv); }
-.m-stat { display: flex; flex-direction: column; gap: 2px; padding: 14px var(--m-pad); }
+.m-stat {
+  background: var(--m-card);
+  display: flex; flex-direction: column; gap: 2px; padding: 14px var(--m-pad);
+}
+.m-stat-wide { grid-column: span 2; }
+/* Farbe nur da, wo sie etwas bedeutet: Überschuss vorhanden, Strom
+   verschenkt, Speicherstand. Sonst neutral. */
+.m-stat-val.pv { color: var(--c-pv); }
+.m-stat-val.waste { color: var(--c-waste); }
+.m-stat-val.battery { color: var(--c-battery); }
+.m-stat-val.none { color: var(--m-text-3); }
 .m-stat-val {
+  color: var(--m-text);
   font-size: 24px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15;
   font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
 }
 .m-stat-lab { color: var(--m-text-2); font-size: 12.5px; font-weight: 550; }
+
+/* Fußnote: erklärt eine Zahl darüber, gehört aber nicht selbst in die
+   Blickachse. Deshalb ohne Kartenrahmen, eingerückt wie eine iOS-Fußzeile. */
+.m-footnote {
+  color: var(--m-text-2); font-size: 13px; line-height: 1.45;
+  margin: 2px 4px 0; overflow-wrap: anywhere;
+}
+
+.m-btn-wide { justify-content: center; min-height: 48px; width: 100%; }
 
 /* ---------------------------------------------------------------- Flussleiste */
 
@@ -172,10 +204,7 @@
 .m-flow-row { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
 
 .m-flow-head { align-items: baseline; display: flex; gap: 8px; justify-content: space-between; }
-.m-flow-tag {
-  color: var(--m-text-2); font-size: 11px; font-weight: 650;
-  letter-spacing: 0.09em; text-transform: uppercase;
-}
+.m-flow-tag { color: var(--m-text-2); font-size: 13px; font-weight: 600; }
 .m-flow-sum { color: var(--m-text); font-size: 13.5px; font-weight: 700; }
 
 /* Ein durchgehendes Gleis statt einzelner Kacheln: Der Balken soll als eine

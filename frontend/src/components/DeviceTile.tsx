@@ -14,7 +14,7 @@ import { AnimatedValue, Bar, Badge, Segment, StatusDot, useFlashOnChange, useIsP
 import { Icon, CATEGORY_ICON } from "./icons";
 
 const WALLBOX_MODES = ["pv_only", "min_pv", "fast", "target", "price"] as const;
-const HEATER_MODES = ["pv_only", "schedule", "off"] as const;
+const HEATER_MODES = ["pv_only", "price", "schedule", "off"] as const;
 
 
 /** Ladegrenze des Fahrzeugs (nicht der Wallbox).

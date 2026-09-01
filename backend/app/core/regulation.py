@@ -199,6 +199,12 @@ class RegulationConfig:
     deadband_max_w: float = 400.0
     gap_fill_min_w: float = 25.0   # ab diesem Rest lohnt der Lückenfüller
     use_forecast: bool = True      # Prognose aktiv in Entscheidungen einbeziehen
+    #: Was mit dem Hausspeicher geschieht, solange ein Gerät im Modus „price"
+    #: aus dem Netz lädt: "hold" = sperren (weder laden noch entladen),
+    #: "charge" = aus dem günstigen Netz vollladen, aber nicht entladen.
+    #: Beides erfüllt die eigentliche Bedingung „nicht beziehen"; einzeln je
+    #: Speicher über dessen `price_window_mode` übersteuerbar.
+    price_window_battery: str = "hold"
 
 
 @dataclass
@@ -230,6 +236,33 @@ class ChargeContext:
     #: Überschuss). In dem Zustand darf keine Halte-Logik greifen: Eine Ladung
     #: „über den Wolkendurchzug zu retten“ hieße hier, den Speicher leerzuziehen.
     battery_protected: bool = False
+    #: True, wenn der Hausspeicher während eines Netzladefensters gesperrt
+    #: werden konnte (Modus HOLD/Zwangsladen oder Reserve auf 100 %). Nur dann
+    #: ist garantiert, dass Netzladen wirklich aus dem Netz kommt und nicht
+    #: aus dem Speicher. Siehe `grid_charge_blocked` in loop.py.
+    battery_locked: bool = False
+    #: True, wenn ein Hausspeicher vorhanden ist, gerade entlädt und sich
+    #: NICHT sperren lässt (reines Monitoring). Dann würde Netzladen den
+    #: Speicher leerziehen – genau das Gegenteil der Absicht.
+    battery_drain_unblockable: bool = False
+
+
+def price_window_open(ctx: ChargeContext, limit_ct: float) -> bool:
+    """Ist der Strompreis gerade unter der eingestellten Grenze?
+
+    Eine Funktion statt zweier Kopien in Wallbox- und Warmwasser-Regler: Beide
+    Geräte müssen dieselbe Stunde als günstig bewerten, sonst lädt das Auto
+    aus dem Netz, während der Heizstab dieselbe Stunde für zu teuer hält –
+    und der Speicher wird gesperrt für ein Fenster, das nur die Hälfte der
+    Geräte nutzt.
+
+    `cheap_hour` kommt vom Tarif-Dienst (Tibber/aWATTar kennen ihre eigene
+    Günstig-Schwelle), der Vergleich mit `limit_ct` ist die geräteeigene
+    Grenze. Eine der beiden reicht.
+    """
+    if ctx.cheap_hour:
+        return True
+    return ctx.price_ct is not None and ctx.price_ct <= limit_ct
 
 
 @dataclass
@@ -249,6 +282,17 @@ class WallboxSettings:
     target_time: str = "07:00"     # Deadline für Zielladung
     price_limit_ct: float = 15.0
     use_battery_for_ev: bool = False  # Batterie-Entladung fürs Auto zulassen
+    #: Netzladen im Modus „price" auch dann erlauben, wenn der Hausspeicher
+    #: sich nicht sperren lässt (reines Monitoring) und gerade entlädt.
+    #:
+    #: Standard False, und das ist die teure Voreinstellung mit Absicht: Wer
+    #: „preisoptimiert" wählt, will billigen Netzstrom – nicht den eigenen,
+    #: teuer geladenen Speicher ins Auto umfüllen. Ohne diese Sperre finanziert
+    #: die günstige Stunde einen Speicher-Rundlauf mit zweifachem
+    #: Wirkungsgradverlust. Wer trotzdem laden will (etwa weil der
+    #: Wechselrichter selbst schon auf „nicht entladen" steht), schaltet es
+    #: hier frei.
+    price_allow_battery_drain: bool = False
     # --- Stellgrößen-Quantisierung ---
     #: Kleinste Stromstufe der Box in A. Fast alle können nur ganze Ampere.
     current_step: float = 1.0
@@ -615,12 +659,25 @@ class WallboxController:
             return self._stop("außerhalb Zeitfenster")
 
         if mode == "price":
-            if ctx.cheap_hour or (ctx.price_ct is not None and ctx.price_ct <= s.price_limit_ct):
+            if price_window_open(ctx, s.price_limit_ct):
+                # Netzladen heißt Netz – nicht Speicher. Zieht der Hausspeicher
+                # gerade mit und lässt er sich nicht sperren, ist das kein
+                # billiger Netzstrom, sondern ein Speicher-Rundlauf: einmal
+                # geladen, einmal entladen, zweimal Wirkungsgrad verloren, und
+                # abends steht das Haus ohne Reserve da.
+                if ctx.battery_drain_unblockable and not s.price_allow_battery_drain:
+                    self.charging = False
+                    return self._stop(
+                        "günstiger Tarif, aber Hausspeicher entlädt und lässt sich nicht sperren"
+                    )
                 self.charging = True
                 return self._finish(
                     WallboxDecision(True, s.max_current, self._phase_target(1e9), "günstiger Tarif"), ctx
                 )
-            mode = "pv_only"  # sonst Überschussladen
+            # Preis wieder über der Grenze: Netzladen endet hier. Weiter geht es
+            # als reines Überschussladen – die Sonne zu verschenken, nur weil
+            # der Börsenpreis gestiegen ist, wäre die falsche Antwort.
+            mode = "pv_only"
 
         if mode == "target":
             if self._target_needs_grid(data, ctx):
@@ -740,7 +797,7 @@ class WallboxController:
 
 @dataclass
 class WaterHeaterSettings:
-    mode: str = "pv_only"          # pv_only|schedule|off
+    mode: str = "pv_only"          # pv_only|schedule|price|off
     min_power_w: float = 100.0     # kleinste sinnvolle Modulationsstufe
     max_power_w: float = 3000.0
     start_threshold_w: float = 200.0
@@ -751,6 +808,11 @@ class WaterHeaterSettings:
     modulating: bool = True        # False = Relais (nur EIN/AUS mit Nennleistung)
     use_forecast: bool = True
     forecast_hold_max_s: float = 900.0
+    #: Preisgrenze für den Modus „price" (ct/kWh) – wie bei der Wallbox.
+    price_limit_ct: float = 15.0
+    #: Netzheizen erlauben, obwohl der Hausspeicher entlädt und sich nicht
+    #: sperren lässt. Siehe `WallboxSettings.price_allow_battery_drain`.
+    price_allow_battery_drain: bool = False
 
     @classmethod
     def from_dict(cls, d: dict) -> "WaterHeaterSettings":
@@ -820,6 +882,21 @@ class WaterHeaterController:
                 return WaterHeaterDecision(s.max_power_w, "Zeitfenster aktiv")
             return WaterHeaterDecision(0.0, "außerhalb Zeitfenster")
 
+        if s.mode == "price":
+            if price_window_open(ctx, s.price_limit_ct):
+                # Wie bei der Wallbox: Netzheizen darf nicht heißen, den
+                # Hausspeicher ins Warmwasser umzufüllen.
+                if ctx.battery_drain_unblockable and not s.price_allow_battery_drain:
+                    self.on = False
+                    return WaterHeaterDecision(
+                        0.0, "günstiger Tarif, aber Hausspeicher entlädt und lässt sich nicht sperren"
+                    )
+                self.on = True
+                self.stop_timer.reset()
+                return WaterHeaterDecision(s.max_power_w, "günstiger Tarif")
+            # Preis über der Grenze: Netzheizen endet, Überschussbetrieb läuft
+            # weiter. Die Zieltemperatur-Prüfung oben hat bereits gegriffen.
+
         # PV-Überschuss
         min_w = s.min_power_w if s.modulating else s.max_power_w
         if not self.on:
@@ -864,7 +941,12 @@ class WaterHeaterController:
         """Wie viel zusätzliche Leistung könnte dieses Gerät jetzt aufnehmen?"""
         if not self.fine_modulating or not self.on or self.boost:
             return 0.0
-        if self.s.mode != "pv_only":
+        # „price" zählt mit: Außerhalb des günstigen Fensters läuft das Gerät
+        # als reine Überschusslast und darf den Rest genauso aufnehmen wie im
+        # Modus „pv_only". Innerhalb des Fensters heizt es ohnehin schon mit
+        # voller Leistung – dann ist `max_power_w - power_w` gleich null und
+        # der Lückenfüller greift von selbst nicht.
+        if self.s.mode not in ("pv_only", "price"):
             return 0.0
         temp = data.temperature_c
         if temp is not None and temp >= self.s.target_temp_c:

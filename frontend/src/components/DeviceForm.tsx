@@ -240,11 +240,15 @@ function defaultSettings(category: DeviceCategory): Record<string, unknown> {
       return { mode: "pv_only", min_current: 6, max_current: 16, phases_mode: "fixed1",
                start_threshold_w: 1400, start_delay_s: 60, stop_delay_s: 180, grid_metered: true };
     case "water_heater":
-      return { mode: "pv_only", max_power_w: 3000, target_temp_c: 60, modulating: true };
+      return { mode: "pv_only", max_power_w: 3000, target_temp_c: 60, modulating: true,
+               price_limit_ct: 15 };
     case "battery":
       // Bewusst ohne manage_reserve: Hybrid-Wechselrichter regeln ihre
       // Batterie selbst; aktive Steuerung bleibt eine bewusste Entscheidung.
-      return { reserve_soc: 20, manage_reserve: false };
+      // price_window_mode greift dagegen nur während eines Netzladefensters
+      // und ist dort das Gegenteil eines Eingriffs: Es verhindert, dass der
+      // Speicher die Netzladung bezahlt.
+      return { reserve_soc: 20, manage_reserve: false, price_window_mode: "hold" };
     default:
       return {};
   }

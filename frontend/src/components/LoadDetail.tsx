@@ -39,7 +39,7 @@ export type Session = {
 };
 
 const WB_MODES = ["pv_only", "min_pv", "fast", "target", "price"] as const;
-const WH_MODES = ["pv_only", "schedule", "off"] as const;
+const WH_MODES = ["pv_only", "price", "schedule", "off"] as const;
 
 /** Falls ein Gerät eine Bestätigung nie liefert (Funk weg, Treiber stumm),
  *  darf die Anzeige nicht dauerhaft etwas Falsches behaupten. */

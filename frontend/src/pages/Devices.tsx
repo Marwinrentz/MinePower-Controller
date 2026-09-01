@@ -70,9 +70,9 @@ export function Devices() {
   const closeForm = () => { setAdding(null); setEditing(null); };
 
   return (
-    <div className="col" style={{ gap: "var(--s5)" }}>
-      <div className="card-head">
-        <h1>{t("nav.devices")}</h1>
+    <div className="page">
+      <header className="page-head">
+        <h1 className="page-title">{t("nav.devices")}</h1>
         <div className="row wrap tight">
           {CATEGORIES.map((c) => (
             <Button key={c} small onClick={() => { setAdding(c); setEditing(null); }}>
@@ -80,7 +80,7 @@ export function Devices() {
             </Button>
           ))}
         </div>
-      </div>
+      </header>
 
       {(adding || editing) && (
         <Card className="raised">

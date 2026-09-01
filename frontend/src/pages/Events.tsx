@@ -63,16 +63,16 @@ export function Events() {
   const tone = (level: string) => (level === "error" ? "err" : level === "warning" ? "warn" : "ok");
 
   return (
-    <div className="col" style={{ gap: "var(--s5)" }}>
-      <div className="card-head">
-        <h1>{t("events.title")}</h1>
+    <div className="page">
+      <header className="page-head">
+        <h1 className="page-title">{t("events.title")}</h1>
         <div className="row tight">
           <Button small onClick={load} title={t("common.loading")}>⟳</Button>
           <Button small pressed={diag != null} onClick={() => (diag ? setDiag(null) : loadDiag())}>
             <Icon name="flask" size={14} /> {t("events.diagnostics")}
           </Button>
         </div>
-      </div>
+      </header>
 
       {diag != null && (
         <Card className="raised">

@@ -15,6 +15,12 @@ services:
       POSTGRES_USER: minepower
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-minepower}
       POSTGRES_DB: minepower
+      # Nur bei einer frischen Datendatei wirksam (initdb-Zeitpunkt):
+      # Prüfsummen auf jeder Seite, damit eine Beschädigung nach einem
+      # Stromausfall als klarer Fehler auffällt statt als stille
+      # Dateninkonsistenz. Bestehende Installationen bekommen das erst nach
+      # einem Dump/Restore in ein neu initialisiertes Datenverzeichnis.
+      POSTGRES_INITDB_ARGS: "--data-checksums"
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
@@ -42,6 +48,14 @@ services:
       DEMO_MODE: ${DEMO_MODE:-false}
       HEADLESS_CONFIG: ${HEADLESS_CONFIG:-}
       MQTT_URL: ${MQTT_URL:-}
+      # Automatische lokale Sicherung (Geräte, Einstellungen, Konten) auf
+      # einem eigenen Volume – überlebt einen Stromausfall auch dann, wenn
+      # die Postgres-Datendatei danach neu angelegt werden muss. Siehe
+      # backend/app/services/backup.py.
+      BACKUP_INTERVAL_H: ${BACKUP_INTERVAL_H:-6}
+      BACKUP_KEEP: ${BACKUP_KEEP:-30}
+    volumes:
+      - backup_data:/app/backups
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/system/health',timeout=5).status==200 else 1)"]
       interval: 15s
@@ -63,4 +77,5 @@ services:
 
 volumes:
   db_data:
+  backup_data:
   mqtt_data:

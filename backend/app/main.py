@@ -25,6 +25,7 @@ from .config import get_settings
 from .core import runtime
 from .core.loop import ControlLoop
 from .drivers import registry
+from .services.backup import BackupService
 from .services.forecast import ForecastService
 from .services.mqtt import MqttPublisher
 from .services.notifications import Notifier
@@ -44,6 +45,10 @@ async def lifespan(app: FastAPI):
     log.info("Treiber registriert: %s", ", ".join(sorted(m.id for m in registry.all_metas())))
 
     await startup.init_db()
+    # Vor allem anderen: Eine leere DB nach einem Stromausfall bekommt hier
+    # ihre letzte lokale Sicherung zurück (siehe services/backup.py), bevor
+    # Erststart-Logik sie fälschlich als „neue Anlage" behandelt.
+    await startup.maybe_restore_from_backup()
     await startup.ensure_jwt_secret()
     await startup.seed_defaults()
     await startup.import_headless_config()
@@ -57,10 +62,12 @@ async def lifespan(app: FastAPI):
     if cfg.mqtt_url:
         loop.mqtt = MqttPublisher(cfg.mqtt_url, cfg.mqtt_base_topic)
     runtime.loop = loop
+    backup_service = BackupService()
 
     loop.tariff.start()
     loop.forecast.start()
     loop.start()
+    backup_service.start()
     log.info("MinePower gestartet")
 
     yield
@@ -68,6 +75,7 @@ async def lifespan(app: FastAPI):
     await loop.tariff.stop()
     await loop.forecast.stop()
     await loop.stop()
+    await backup_service.stop()
     if loop.mqtt:
         await loop.mqtt.close()
     log.info("MinePower beendet")
@@ -76,7 +84,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="MinePower",
     description="PV-Überschuss-Ladecontroller für E-Auto, Warmwasser und Hausbatterie",
-    version="2.9.0",
+    version="2.12.0",
     lifespan=lifespan,
 )
 

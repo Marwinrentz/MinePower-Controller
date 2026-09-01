@@ -146,6 +146,7 @@ export const de = {
     // Für den Heizstab eigene Sätze: „lädt" gehört zum Auto, ein Speicher heizt.
     helpWater: {
       pv_only: "Heizt nur mit Überschuss vom Dach. Nie aus dem Netz.",
+      price: "Heizt aus dem Netz, solange der Strompreis unter deinem Grenzwert liegt. Darüber wieder nur mit Überschuss. Der Hausspeicher wird dabei gesperrt, damit die Wärme wirklich aus dem billigen Netz kommt und nicht aus deinem Akku.",
       schedule: "Heizt nur in den Zeitfenstern, die du im Zeitplan festgelegt hast.",
       off: "Bleibt aus, egal wie viel Überschuss da ist.",
     },
@@ -155,7 +156,7 @@ export const de = {
       fast: "Lädt sofort mit voller Leistung, ohne auf Überschuss zu warten. Der Rest kommt aus dem Netz.",
       schedule: "Läuft nur in den Zeitfenstern, die du im Zeitplan festgelegt hast.",
       target: "Sorgt dafür, dass der eingestellte Ladestand bis zur Abfahrtszeit erreicht ist – notfalls mit Netzstrom.",
-      price: "Lädt, sobald der Börsenstrompreis unter deinem Grenzwert liegt.",
+      price: "Lädt aus dem Netz, solange der Börsenstrompreis unter deinem Grenzwert liegt. Darüber wieder nur mit Überschuss. Der Hausspeicher wird dabei gesperrt, damit der Strom wirklich aus dem billigen Netz kommt und nicht aus deinem Akku.",
       off: "Bleibt aus, egal wie viel Überschuss da ist.",
     },
     pv_only: "Nur PV",
@@ -283,6 +284,11 @@ export const de = {
     tariffProvider: "Anbieter",
     tariffHelp: "Für preisoptimiertes Laden: Tibber (Token nötig) oder aWATTar (öffentlich).",
     cheapLimit: "Günstig-Schwelle (ct/kWh)",
+    cheapLimitHelp: "Unter diesem Preis gilt eine Stunde als günstig. Geräte in der Betriebsart „Preisoptimiert\u201c laden dann aus dem Netz; darüber schalten sie auf reines Überschussladen zurück.",
+    priceWindowBattery: "Hausspeicher bei günstigem Strom",
+    priceWindowBatteryHelp: "Was mit dem Speicher passiert, solange ein Gerät preisoptimiert aus dem Netz lädt. Ohne diese Sperre deckt ein Hybrid-Wechselrichter die Netzladung aus der Batterie – du zahlst dann nicht den günstigen Netzpreis, sondern füllst deinen Speicher mit doppeltem Wirkungsgradverlust ins Auto um. Lässt sich der Speicher nicht steuern (reines Monitoring), setzt MinePower das Netzladen lieber aus, statt ihn leerzuziehen.",
+    priceWindowHold: "Sperren – weder laden noch entladen",
+    priceWindowCharge: "Vollladen – aus günstigem Netz laden, nicht entladen",
     forecast: "Solarprognose",
     forecastHelp: "forecast.solar: Standort und Anlagendaten für die Ertragsprognose.",
     notifications: "Benachrichtigungen",
