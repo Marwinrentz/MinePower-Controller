@@ -2,6 +2,21 @@
 
 Kurzfassung je Version. Ausführliche Begründungen stehen in den jeweiligen Commit-Nachrichten.
 
+## 2.12.1
+
+Lücke in der 2.12.0-Speichersperre geschlossen: Fronius, Huawei, SMA und
+SunSpec-Hybride melden ihre Batterie eingebettet im Wechselrichter, ohne
+eigenes Batteriegerät. `_apply_price_window` sah dafür eine leere
+Geräteliste und meldete faelschlich "gesperrt" - nicht weil die Batterie
+stillstand, sondern weil es nichts zum Durchgehen gab. Ein Netzladefenster
+haette dort unbemerkt aus der eigenen Batterie geladen statt aus dem Netz.
+
+Jetzt bekommt die Pruefung zusaetzlich die aus der Wechselrichter-Ablesung
+zusammengesetzte Batterie uebergeben: kein separates Geraet, aber eine
+echte Batterie vorhanden -> gilt als nicht sperrbar, das Netzladen setzt
+in dem Fall aus statt den Speicher leerzuziehen. Vier neue Tests, darunter
+ein Fake-Hybrid-Wechselrichter-Treiber nach Fronius/Huawei-Vorbild.
+
 ## 2.12.0
 
 Preisoptimiertes Laden zieht jetzt wirklich aus dem Netz — vorher bezahlte

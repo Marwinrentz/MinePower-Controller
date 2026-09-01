@@ -578,7 +578,7 @@ class ControlLoop:
         # und der „günstige Netzstrom" kommt in Wahrheit aus dem Speicher.
         # Deshalb steht das VOR der Prioritätskette: Erst sperren, dann laden.
         grid_window = self._price_window_devices(price_ct, cheap)
-        battery_locked = await self._apply_price_window(battery_devs, bool(grid_window))
+        battery_locked = await self._apply_price_window(battery_devs, bool(grid_window), battery)
         drain_unblockable = bool(
             grid_window and not battery_locked and battery is not None and bat_power_s < -50
         )
@@ -950,7 +950,10 @@ class ControlLoop:
         return names
 
     async def _apply_price_window(
-        self, battery_devs: list[ManagedDevice], window_open: bool
+        self,
+        battery_devs: list[ManagedDevice],
+        window_open: bool,
+        battery: BatteryData | None,
     ) -> bool:
         """Hausspeicher für die Dauer eines Netzladefensters sperren.
 
@@ -969,12 +972,23 @@ class ControlLoop:
         Klappt beides nicht, bleibt der Speicher wie er ist und die Regler
         erfahren das über `battery_drain_unblockable`. Lieber gar nicht aus
         dem Netz laden als aus dem Speicher.
-        """
+
+        **Der Fall ohne eigenes Batteriegerät.** Fronius, Huawei, SMA und
+        SunSpec liefern ihre Batteriewerte eingebettet im Wechselrichter mit
+        (`battery_monitor`) – dafür gibt es keinen eigenen `BatteryDriver` und
+        damit auch kein `set_mode`/`set_reserve_soc`. `battery_devs` ist dann
+        leer, aber ein echter Speicher existiert trotzdem: `battery` (aus der
+        Wechselrichter-Ablesung zusammengesetzt) sagt das. Eine leere Liste
+        ohne diese Prüfung hätte „gesperrt" gemeldet, weil es nichts zu tun
+        gab – nicht, weil es nichts zu befürchten gab. Erst wenn auch
+        `battery` None ist, gibt es wirklich keine Batterie im System."""
         all_locked = True
         for dev in battery_devs:
             locked = await self._lock_battery(dev, window_open)
             if window_open and not locked:
                 all_locked = False
+        if window_open and not battery_devs and battery is not None:
+            all_locked = False
         return all_locked
 
     async def _lock_battery(self, dev: ManagedDevice, window_open: bool) -> bool:

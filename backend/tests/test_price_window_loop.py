@@ -226,17 +226,33 @@ async def test_apply_price_window_requires_every_battery_locked(loop):
     good = FakeDevice("Sungrow", FullBattery())
     bad = FakeDevice("Fremdspeicher", MonitoringBattery(controllable=False))
 
-    assert await loop._apply_price_window([good, bad], window_open=True) is False
+    assert await loop._apply_price_window([good, bad], window_open=True, battery=None) is False
 
 
 async def test_apply_price_window_all_locked(loop):
     a = FakeDevice("Speicher A", FullBattery())
     b = FakeDevice("Speicher B", FullBattery())
 
-    assert await loop._apply_price_window([a, b], window_open=True) is True
+    assert await loop._apply_price_window([a, b], window_open=True, battery=None) is True
 
 
 async def test_apply_price_window_without_battery_is_locked(loop):
     """Keine Batterie = nichts, was dazwischenfunken kann. Netzladen ist dann
     unbedenklich und darf nicht an einer fehlenden Sperre scheitern."""
-    assert await loop._apply_price_window([], window_open=True) is True
+    assert await loop._apply_price_window([], window_open=True, battery=None) is True
+
+
+async def test_apply_price_window_inline_battery_without_device_is_unlocked(loop):
+    """Fronius/Huawei/SMA/SunSpec: Batteriewerte kommen eingebettet vom
+    Wechselrichter, es gibt keinen eigenen BatteryDriver und damit auch
+    kein set_mode/set_reserve_soc. `battery_devs` ist leer – aber die
+    Batterie existiert, `battery` sagt das. Ohne diesen Fall hätte die leere
+    Liste fälschlich „gesperrt" gemeldet, weil es nichts zu STELLEN gab,
+    nicht weil es nichts zu BEFÜRCHTEN gab."""
+    inline_battery = BatteryData(soc=40.0, power=-800.0, status="über Wechselrichter gelesen")
+
+    assert await loop._apply_price_window([], window_open=True, battery=inline_battery) is False
+
+
+async def test_apply_price_window_inline_battery_ignored_when_window_closed(loop):
+    assert await loop._apply_price_window([], window_open=False, battery=BatteryData(soc=40.0)) is True
