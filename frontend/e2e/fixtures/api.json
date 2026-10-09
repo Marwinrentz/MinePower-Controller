@@ -1,0 +1,500 @@
+{
+ "system/health": {
+  "status": "ok",
+  "control_loop": "running",
+  "version": "3.0.0",
+  "time": "2026-10-08T18:27:45.039441+00:00"
+ },
+ "statistics/forecast": {
+  "provider": "none",
+  "today_kwh": null,
+  "tomorrow_kwh": null,
+  "daily_kwh": {},
+  "updated_at": null,
+  "active": false,
+  "now_w": null
+ },
+ "sessions?limit=40": [],
+ "devices": [
+  {
+   "id": 1,
+   "name": "PV-Anlage (Simulation)",
+   "category": "inverter",
+   "driver_id": "sim_inverter",
+   "config": {
+    "kwp": 9.8
+   },
+   "settings": {},
+   "enabled": true,
+   "status": "online",
+   "last_error": null,
+   "last_seen": "2026-10-08T18:27:40.755225Z"
+  },
+  {
+   "id": 2,
+   "name": "Netzzähler (Simulation)",
+   "category": "meter",
+   "driver_id": "sim_meter",
+   "config": {},
+   "settings": {},
+   "enabled": true,
+   "status": "online",
+   "last_error": null,
+   "last_seen": "2026-10-08T18:27:40.755256Z"
+  },
+  {
+   "id": 3,
+   "name": "Wallbox (Simulation)",
+   "category": "wallbox",
+   "driver_id": "sim_wallbox",
+   "config": {
+    "max_current": 16,
+    "car_capacity_kwh": 62
+   },
+   "settings": {
+    "mode": "pv_only",
+    "min_current": 6,
+    "max_current": 16,
+    "phases_mode": "auto"
+   },
+   "enabled": true,
+   "status": "online",
+   "last_error": null,
+   "last_seen": "2026-10-08T18:27:40.755279Z"
+  },
+  {
+   "id": 4,
+   "name": "Heizstab (Simulation)",
+   "category": "water_heater",
+   "driver_id": "sim_water_heater",
+   "config": {
+    "rated_power": 3000
+   },
+   "settings": {
+    "mode": "schedule",
+    "max_power_w": 3000
+   },
+   "enabled": true,
+   "status": "online",
+   "last_error": null,
+   "last_seen": "2026-10-08T18:27:40.755299Z"
+  },
+  {
+   "id": 5,
+   "name": "Hausbatterie (Simulation)",
+   "category": "battery",
+   "driver_id": "sim_battery",
+   "config": {
+    "capacity_kwh": 9.6,
+    "max_power": 5000
+   },
+   "settings": {
+    "manage_reserve": true
+   },
+   "enabled": true,
+   "status": "online",
+   "last_error": null,
+   "last_seen": "2026-10-08T18:27:40.755327Z"
+  }
+ ],
+ "settings/schedules": [
+  {
+   "device_id": 4,
+   "days_mask": 31,
+   "start_time": "06:00",
+   "end_time": "07:30",
+   "enabled": true,
+   "id": 1
+  },
+  {
+   "device_id": 4,
+   "days_mask": 127,
+   "start_time": "17:00",
+   "end_time": "18:00",
+   "enabled": true,
+   "id": 2
+  }
+ ],
+ "settings": {
+  "values": {
+   "regulation": {
+    "interval_s": 3,
+    "grid_target_w": 0,
+    "house_limit_a": 35,
+    "battery_reserve_soc": 20,
+    "battery_drain_limit_w": 250,
+    "use_forecast": true,
+    "battery_grid_charge_enabled": false,
+    "grid_charge_max_w": 0,
+    "battery_manual_power_w": 3000,
+    "battery_manual_max_min": 240,
+    "vehicle_wake_enabled": true,
+    "battery_priority_soc": 100,
+    "battery_ev_support_soc": 0,
+    "battery_grid_charge_soc": 50,
+    "battery_grid_charge_forecast": true,
+    "battery_protect_other_loads": false,
+    "override_stop_h": 4,
+    "override_fast_h": 12
+   },
+   "priority": {
+    "order": [
+     3,
+     4
+    ]
+   },
+   "tariff": {
+    "provider": "none",
+    "grid_charge_limit_ct": 15,
+    "cheap_limit_ct": 15,
+    "grid_fees_ct": 0,
+    "levies_ct": 0,
+    "supplier_margin_ct": 0,
+    "vat_pct": 0,
+    "charge_on_negative": true
+   },
+   "forecast": {
+    "provider": "none"
+   },
+   "notifications": {
+    "ntfy_url": "",
+    "telegram_token": "",
+    "telegram_chat_id": "",
+    "email": ""
+   },
+   "ui": {
+    "default_language": "de"
+   }
+  }
+ },
+ "statistics/tariff": {
+  "provider": "none",
+  "current_ct": null,
+  "cheap_limit_ct": 15.0,
+  "prices": []
+ },
+ "sessions?limit=50": [],
+ "system/findings?range=7d": {
+  "generated_at": "2026-10-08T18:27:30.283149+00:00",
+  "range": "7d",
+  "findings": [
+   {
+    "level": "info",
+    "title": "Wallbox: BLE-Proxy 1× offline",
+    "detail": "Proxy 192.0.2.33:8080 nicht erreichbar.",
+    "fix": "BLE-Proxy (Raspberry Pi) prüfen: läuft er, stimmt IP/Port, Abstand zum Auto?",
+    "count": 1
+   }
+  ]
+ },
+ "system/diagnostics": {
+  "findings": [],
+  "warnings": [],
+  "battery_control": {
+   "manual": null,
+   "manual_last": null,
+   "grid_charging": false,
+   "defaults": {
+    "power_w": 3000.0,
+    "max_minutes": 240.0,
+    "reserve_soc": 20.0
+   },
+   "devices": [
+    {
+     "id": 5,
+     "name": "Hausbatterie (Simulation)",
+     "online": true,
+     "controllable": false,
+     "control_enabled": false,
+     "soc": 55.0,
+     "power": -221.8,
+     "mode": "auto",
+     "max_soc": null,
+     "min_soc": null,
+     "target_mode": null,
+     "target_power_w": null,
+     "command_error": null,
+     "writes": []
+    }
+   ]
+  },
+  "tariff": {
+   "provider": "none",
+   "limit_ct": 15.0,
+   "price_now_ct": null,
+   "spot_now_ct": null,
+   "fetched_at": null,
+   "covered_until": null,
+   "has_current_price": false,
+   "last_error": null,
+   "last_attempt": null,
+   "components": {
+    "grid_fees_ct": 0.0,
+    "levies_ct": 0.0,
+    "supplier_margin_ct": 0.0,
+    "vat_pct": 0.0
+   }
+  },
+  "regulation_config": {
+   "interval_s": 3.0,
+   "grid_target_w": 0.0,
+   "deadband_w": 100.0,
+   "smoothing_samples": 3,
+   "adaptive_deadband": true,
+   "deadband_min_w": 40.0,
+   "deadband_max_w": 400.0,
+   "gap_fill_min_w": 25.0,
+   "house_limit_a": 35.0,
+   "grid_charge_max_w": 0.0,
+   "battery_reserve_soc": 20.0,
+   "battery_priority_soc": 100.0,
+   "battery_priority_hysteresis": 3.0,
+   "battery_ev_support_soc": 0.0,
+   "battery_drain_limit_w": 250.0,
+   "battery_grid_charge_enabled": false,
+   "battery_grid_charge_soc": 50.0,
+   "battery_grid_charge_forecast": true,
+   "battery_protect_other_loads": false,
+   "battery_manual_power_w": 3000.0,
+   "battery_manual_max_min": 240.0,
+   "override_stop_h": 4.0,
+   "override_fast_h": 12.0,
+   "use_forecast": true,
+   "vehicle_wake_enabled": true
+  },
+  "priority": [
+   3,
+   4
+  ],
+  "paused": false,
+  "grid_smoothed": -6.033333333333332,
+  "deadband_effective_w": 50.8,
+  "deadband_configured_w": 100.0,
+  "volatility_index": 0.003,
+  "weather": "stabil",
+  "battery": {
+   "soc": 55.0,
+   "power": -221.8
+  },
+  "battery_guard_w": 212.7,
+  "battery_release_w": 0.0,
+  "battery_protected": false,
+  "battery_priority_soc": 100.0,
+  "battery_first": true,
+  "battery_ev_support_soc": 0.0,
+  "battery_reserve_soc": 20.0,
+  "battery_plan": {
+   "intent": "auto",
+   "reason": "Automatik",
+   "source": "auto"
+  },
+  "grid_loads": [],
+  "waste_w": 6.0,
+  "waste_reason": null,
+  "gap_filled_w": 0.0,
+  "forecast": {
+   "provider": "none",
+   "today_kwh": null,
+   "tomorrow_kwh": null,
+   "daily_kwh": {},
+   "updated_at": null,
+   "active": false,
+   "now_w": null
+  },
+  "devices": [
+   {
+    "id": 1,
+    "name": "PV-Anlage (Simulation)",
+    "driver_id": "sim_inverter",
+    "category": "inverter",
+    "online": true,
+    "failures": 0,
+    "last_error": null,
+    "command_error": null,
+    "last_seen": "2026-10-08T18:27:31.752745+00:00",
+    "raw_data": {
+     "pv_power": 64.2,
+     "daily_yield_kwh": null,
+     "total_yield_kwh": null,
+     "grid_power": null,
+     "status": "ok",
+     "battery_soc": null,
+     "battery_power": null,
+     "battery_capacity_kwh": null,
+     "extra": {}
+    },
+    "decision": {},
+    "sent": {}
+   },
+   {
+    "id": 2,
+    "name": "Netzzähler (Simulation)",
+    "driver_id": "sim_meter",
+    "category": "meter",
+    "online": true,
+    "failures": 0,
+    "last_error": null,
+    "command_error": null,
+    "last_seen": "2026-10-08T18:27:31.752773+00:00",
+    "raw_data": {
+     "grid_power": -15.6,
+     "power_l1": -5.2,
+     "power_l2": -5.2,
+     "power_l3": -5.2,
+     "energy_import_kwh": null,
+     "energy_export_kwh": null,
+     "extra": {}
+    },
+    "decision": {},
+    "sent": {}
+   },
+   {
+    "id": 3,
+    "name": "Wallbox (Simulation)",
+    "driver_id": "sim_wallbox",
+    "category": "wallbox",
+    "online": true,
+    "failures": 0,
+    "last_error": null,
+    "command_error": null,
+    "last_seen": "2026-10-08T18:27:31.752797+00:00",
+    "raw_data": {
+     "state": "connected",
+     "power": 0.0,
+     "current_set": 6.0,
+     "phases_active": 1,
+     "voltage": null,
+     "energy_session_kwh": 0.0,
+     "soc": 42.0,
+     "charge_limit_soc": 80.0,
+     "vehicle_reachable": null,
+     "rfid_tag": null,
+     "extra": {}
+    },
+    "decision": {
+     "enable": false,
+     "current_a": 0,
+     "phases": null,
+     "reason": "warte auf Überschuss (0 W)"
+    },
+    "sent": {
+     "enable": false
+    }
+   },
+   {
+    "id": 4,
+    "name": "Heizstab (Simulation)",
+    "driver_id": "sim_water_heater",
+    "category": "water_heater",
+    "online": true,
+    "failures": 0,
+    "last_error": null,
+    "command_error": null,
+    "last_seen": "2026-10-08T18:27:31.752814+00:00",
+    "raw_data": {
+     "power": 0.0,
+     "temperature_c": 44.0,
+     "is_on": false,
+     "device_mode": null,
+     "extra": {}
+    },
+    "decision": {
+     "power_w": 0,
+     "reason": "warte auf Überschuss (0 W)"
+    },
+    "sent": {
+     "power": 0.0
+    }
+   },
+   {
+    "id": 5,
+    "name": "Hausbatterie (Simulation)",
+    "driver_id": "sim_battery",
+    "category": "battery",
+    "online": true,
+    "failures": 0,
+    "last_error": null,
+    "command_error": null,
+    "last_seen": "2026-10-08T18:27:31.752831+00:00",
+    "raw_data": {
+     "soc": 55.0,
+     "power": -221.8,
+     "mode": "auto",
+     "mode_known": true,
+     "max_soc": null,
+     "min_soc": null,
+     "temperature_c": null,
+     "capacity_kwh": 9.6,
+     "status": "ok",
+     "extra": {}
+    },
+    "decision": {},
+    "sent": {}
+   }
+  ]
+ },
+ "events?limit=200": [
+  {
+   "id": 5,
+   "time": "2026-10-08T18:27:16.753887",
+   "level": "info",
+   "category": "auth",
+   "message": "Login: demo@minepower.de",
+   "data": {}
+  },
+  {
+   "id": 4,
+   "time": "2026-10-08T17:35:39.744419",
+   "level": "info",
+   "category": "control",
+   "message": "Override: set_mode → Heizstab (Simulation)",
+   "data": {
+    "value": "schedule"
+   }
+  },
+  {
+   "id": 3,
+   "time": "2026-10-08T17:35:39.733892",
+   "level": "info",
+   "category": "auth",
+   "message": "Login: demo@minepower.de",
+   "data": {}
+  },
+  {
+   "id": 2,
+   "time": "2026-10-08T16:36:02.754157",
+   "level": "warning",
+   "category": "device",
+   "message": "Gerät offline: Wallbox (Simulation) (ConnectionError: Tesla-Endpunkt http://192.0.2.33:8080 nicht erreichbar – läuft der Proxy?)",
+   "data": {}
+  },
+  {
+   "id": 1,
+   "time": "2026-10-08T16:35:49.963393",
+   "level": "info",
+   "category": "auth",
+   "message": "Login: demo@minepower.de",
+   "data": {}
+  }
+ ],
+ "auth/users": [
+  {
+   "id": 1,
+   "email": "demo@minepower.de",
+   "name": "Demo",
+   "role": "admin",
+   "rfid_tag": null,
+   "language": "de",
+   "disabled": false
+  }
+ ],
+ "auth/me": {
+  "id": 1,
+  "email": "demo@minepower.de",
+  "name": "Demo",
+  "role": "admin",
+  "rfid_tag": null,
+  "language": "de",
+  "disabled": false
+ }
+}

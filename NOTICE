@@ -1,0 +1,155 @@
+MinePower — Fremdkomponenten / Third-Party Components
+
+MinePower selbst steht unter den Bedingungen der Datei LICENSE. Die hier
+aufgeführten Komponenten stehen unter ihren eigenen Lizenzen; diese gelten
+unverändert weiter und werden durch die MinePower-Lizenz nicht eingeschränkt.
+
+MinePower itself is governed by the LICENSE file. The components listed below
+are governed by their own licenses, which continue to apply unchanged and are
+not restricted by the MinePower license.
+
+Die Lizenzangaben wurden aus den Metadaten der tatsächlich installierten
+Pakete ausgelesen (Stand: Version 2.2.0), nicht aus dem Gedächtnis notiert.
+License fields were read from the metadata of the actually installed packages
+(as of version 2.2.0), not written from memory.
+
+================================================================================
+BACKEND (Python)
+================================================================================
+
+  fastapi              0.141.1    MIT
+  uvicorn              0.52.1     BSD-3-Clause
+  SQLAlchemy           2.0.51     MIT
+  asyncpg              0.31.0     Apache-2.0
+  alembic              1.18.5     MIT
+  pydantic             2.13.4     MIT
+  pydantic-settings    2.14.2     MIT
+  email-validator      2.3.0      Unlicense
+  bcrypt               4.3.0      Apache-2.0
+  PyJWT                2.13.0     MIT
+  aiohttp              3.14.3     Apache-2.0 AND MIT
+  pymodbus             3.7.4      BSD-3-Clause
+  aiomqtt              2.5.1      BSD-3-Clause
+  websockets           13.1       BSD-3-Clause
+
+  Protokoll- und Registerbeschreibungen einiger Wallbox-Treiber wurden mit
+  der Referenzimplementierung in evcc (https://github.com/evcc-io/evcc,
+  MIT-Lizenz) und dem Wattpilot-Client von mabunixda
+  (https://github.com/mabunixda/wattpilot, Apache-2.0) abgeglichen. Es wurde
+  kein Quelltext übernommen.
+  Protocol and register descriptions of some wallbox drivers were checked
+  against evcc (MIT) and the wattpilot client by mabunixda (Apache-2.0).
+  No source code was copied.
+
+  Die vollständigen Lizenztexte liegen im Docker-Image jeweils im
+  dist-info-Verzeichnis des Pakets unter /usr/local/lib/python3.12/site-packages.
+  Full license texts ship inside the Docker image in each package's dist-info
+  directory under /usr/local/lib/python3.12/site-packages.
+
+================================================================================
+FRONTEND (npm)
+================================================================================
+
+  react                           MIT
+  react-dom                       MIT
+  react-router-dom                MIT
+  zustand                         MIT
+  echarts                         Apache-2.0
+  vite                            MIT           (nur Build)
+  typescript                      Apache-2.0    (nur Build)
+  @vitejs/plugin-react            MIT           (nur Build)
+  @types/react                    MIT           (nur Build)
+  @types/react-dom                MIT           (nur Build)
+
+  Ins ausgelieferte Bündel gelangen nur react, react-dom, react-router-dom,
+  zustand und echarts. Die übrigen sind reine Build-Werkzeuge.
+  Only react, react-dom, react-router-dom, zustand and echarts end up in the
+  shipped bundle; the rest are build-time tools.
+
+================================================================================
+LAUFZEITUMGEBUNG / RUNTIME IMAGES
+================================================================================
+
+  python:3.12-slim
+      Python selbst: PSF License. Das Debian-Basissystem enthält Pakete unter
+      verschiedenen freien Lizenzen (überwiegend GPL, LGPL, MIT, BSD); die
+      jeweiligen Texte liegen im Image unter /usr/share/doc/*/copyright.
+      Python itself: PSF License. The Debian base contains packages under
+      various free licenses; texts under /usr/share/doc/*/copyright.
+
+  timescale/timescaledb:latest-pg16   (per docker-compose bezogen, nicht Teil
+                                       dieses Projekts / pulled by
+                                       docker-compose, not part of this project)
+      PostgreSQL: PostgreSQL License.
+      TimescaleDB: Apache-2.0 für den Kern, Timescale License (TSL) für
+      zusätzliche Funktionen. Die TSL untersagt insbesondere, TimescaleDB als
+      Datenbank-as-a-Service anzubieten. Für den Eigenbetrieb, für den
+      MinePower gedacht ist, spielt das keine Rolle.
+      TimescaleDB: Apache-2.0 for the core, Timescale License (TSL) for
+      additional features. The TSL notably prohibits offering TimescaleDB as a
+      database-as-a-service. Irrelevant for the self-hosted use MinePower
+      targets.
+
+  eclipse-mosquitto:2   (optional, nur mit --profile mqtt)
+      EPL-2.0 / EDL-1.0.
+
+================================================================================
+DIENSTE UND SCHNITTSTELLEN DRITTER / THIRD-PARTY SERVICES
+================================================================================
+
+Diese werden angesprochen, aber nicht mitgeliefert. Wer sie nutzt, schließt ein
+eigenes Nutzungsverhältnis mit dem Anbieter und ist an dessen Bedingungen
+gebunden. Zugangsdaten bringt die betreibende Person selbst mit.
+
+These are addressed but not bundled. Using them means entering your own
+relationship with the provider under their terms. Credentials are supplied by
+the operator.
+
+  Tesla Fleet API            developer.tesla.com — Registrierung und Zustimmung
+                             zu den Tesla-Entwicklerbedingungen erforderlich.
+  TeslaBleHttpProxy          Eigenständiges Fremdprojekt, das die betreibende
+                             Person selbst betreibt. MinePower spricht nur
+                             dessen lokale HTTP-Schnittstelle an.
+  Tibber API                 developer.tibber.com — persönliches Zugriffstoken.
+  aWATTar API                Marktdaten (EPEX Spot). Kostenlos nach dem
+                             Fair-Use-Prinzip, 100 Abfragen pro Tag.
+  forecast.solar             Ertragsprognose. Der Tarif „Public" ist dauerhaft
+                             kostenlos und ohne Schlüssel nutzbar, begrenzt
+                             über ein gleitendes 60-Minuten-Fenster.
+  ntfy / Telegram            Benachrichtigungen, optional
+
+  MinePower bleibt in beiden Fällen deutlich innerhalb dieser Grenzen: Der
+  Tarifdienst fragt alle 30 Minuten ab (48 Abfragen pro Tag gegenüber 100
+  erlaubten), die Prognose stündlich (24 pro Tag). Beide Abstände sind so
+  gewählt — Stundenpreise ändern sich nicht häufiger, und eine Prognose
+  ebenfalls nicht.
+
+Protokolle und Standards / Protocols and standards
+
+  Modbus                     Offen veröffentlichte Spezifikation der Modbus
+                             Organization. Keine Lizenz erforderlich.
+  SunSpec                    Offener Standard der SunSpec Alliance. MinePower
+                             ist nicht SunSpec-zertifiziert und behauptet das
+                             nirgends.
+  OCPP 1.6J                  Spezifikation der Open Charge Alliance. Die OCA
+                             betreibt ein eigenes Zertifizierungsprogramm;
+                             MinePower hat es nicht durchlaufen und tritt
+                             deshalb nicht als OCPP-zertifiziert oder
+                             OCPP-konform auf, sondern beschreibt lediglich,
+                             dass die für Überschussladen nötige Teilmenge
+                             umgesetzt ist.
+
+  Registerbelegungen der Modbus-Treiber stammen aus Herstellerdokumentation und
+  Community-Quellen. Übernommen wurden ausschließlich Adressen, Skalierungen
+  und Datentypen — also die Schnittstelle selbst, kein Dokumentationstext.
+  Register maps come from vendor documentation and community sources. Only
+  addresses, scalings and data types were adopted — the interface itself, not
+  any documentation text.
+
+Marken: Tesla, Sungrow, my-PV, Fronius, SMA, Huawei, Shelly, go-e, KEBA,
+Tibber, aWATTar und weitere genannte Bezeichnungen sind Marken ihrer jeweiligen
+Inhaber und werden ausschließlich beschreibend verwendet. Es besteht keine
+Verbindung zu, Partnerschaft mit oder Billigung durch diese Unternehmen.
+
+Trademarks: the names above are trademarks of their respective owners, used
+purely descriptively. No affiliation, partnership or endorsement.

@@ -1,0 +1,185 @@
+/* ============================================================================
+   Handy: leichter bedienbar (2.17)
+   ----------------------------------------------------------------------------
+   Aussehen wie bisher. Hier nur, was die Bedienung am Touchscreen sicherer
+   und einfacher macht:
+   • Safe-Area: Kopfzeile unter der Dynamic Island, Querformat mit Home-Indikator.
+   • Kein hängender Hover, kein Zoom in Felder, sichtbares Drücken.
+   • Blätter (Werte einstellen, Bestätigen, 'Mehr") mit Rückgängig-Meldung.
+   • Werte am Touchscreen über Stepper/Blatt statt freiem Regler.
+   Mit Maus (Desktop) greift davon nichts außer den Blättern, die dort nie
+   geöffnet werden.
+   ========================================================================== */
+
+:root {
+  /* Feder mit leichtem Überschwingen (≈ 2 %); Fallback darunter */
+  --spring: linear(0, 0.012 1%, 0.05 2.2%, 0.2 4.8%, 0.42 8.2%, 0.62 11.8%, 0.78 15.6%, 0.89 19.6%,
+                   0.96 24%, 1.005 29%, 1.02 34%, 1.022 39%, 1.012 48%, 1.002 60%, 0.999 75%, 1);
+}
+@supports not (animation-timing-function: linear(0, 1)) {
+  :root { --spring: cubic-bezier(0.2, 0.9, 0.25, 1.02); }
+}
+
+/* ---------------------------------------------------------------- Rahmen */
+
+/* Kopfzeile: Höhe ohne die Safe-Area gerechnet – vorher fraß ein 59-px-Inset
+   (Dynamic Island) die ganzen 56 px Mindesthöhe auf. */
+@media (max-width: 1023px) {
+  .topbar { min-height: calc(56px + var(--safe-top)); }
+}
+@media (max-width: 1023px) and (orientation: landscape) and (max-height: 540px) {
+  .main { padding-bottom: calc(var(--s8) + var(--safe-bottom)); }
+}
+
+/* Nur html sperren: body bliebe sonst eigener Scroll-Container und die
+   klebende Kopfzeile rutschte mit dem Seiteninhalt weg. */
+html.sheet-open { overflow: hidden; overscroll-behavior: none; }
+
+/* Touch: kein hängender Hover, sichtbares Drücken, kein Zoom in Felder */
+@media (hover: none) {
+  .btn:hover:not(:disabled) { background: var(--surface); border-color: var(--line-strong); }
+  .btn.primary:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); filter: none; }
+  .btn.ghost:hover:not(:disabled) { background: transparent; border-color: transparent; }
+  .btn.danger:hover:not(:disabled) { background: var(--surface); border-color: color-mix(in srgb, var(--err) 45%, var(--line)); }
+  .btn.pressed:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent); }
+  .segment button:hover { color: var(--text-dim); }
+  .segment button.active:hover { color: var(--text-strong); }
+  .side-item:hover { background: transparent; color: var(--text-dim); }
+  .side-item.active:hover { background: var(--accent-soft); color: var(--accent); }
+  a.pflow-node:hover { box-shadow: none; }
+}
+@media (pointer: coarse) {
+  input, select, textarea, .input { font-size: 16px; }
+  .tab, .sheet-item, .segment button, .mbtn, .tval-step {
+    -webkit-tap-highlight-color: transparent; transition: transform 140ms var(--ease), background 140ms, border-color 140ms;
+    -webkit-user-select: none; user-select: none;
+  }
+  .tab:active, .sheet-item:active, .segment button:active { transform: scale(0.95); }
+}
+
+/* ---------------------------------------------------------------- Blatt */
+
+.msheet-root { inset: 0; position: fixed; z-index: 70; }
+.msheet-backdrop { animation: fade-in 260ms var(--ease-out) both; background: var(--scrim); inset: 0; position: absolute; }
+.msheet {
+  animation: msheet-in 560ms var(--spring) both;
+  background: var(--surface); border-radius: 26px 26px 0 0; bottom: 0;
+  /* Deckt beim Überschwingen der Feder den Spalt unter dem Blatt */
+  box-shadow: 0 -10px 40px -12px rgba(0, 0, 0, 0.35), 0 60px 0 0 var(--surface);
+  display: flex; flex-direction: column; left: 0; margin: 0 auto; max-height: calc(100dvh - var(--safe-top) - 12px);
+  outline: none; overscroll-behavior: contain; position: absolute; right: 0; width: min(100%, 600px);
+}
+.msheet-root.closing .msheet { animation: msheet-out 240ms cubic-bezier(0.4, 0, 1, 1) both; }
+.msheet-root.closing .msheet-backdrop { animation: fade-out 240ms ease both; }
+@keyframes msheet-in { from { transform: translate3d(0, 100%, 0); } to { transform: translate3d(0, 0, 0); } }
+@keyframes msheet-out { to { transform: translate3d(0, 100%, 0); } }
+@keyframes fade-out { to { opacity: 0; } }
+.msheet-head { cursor: grab; flex-shrink: 0; padding: 8px calc(20px + var(--safe-right)) 4px calc(20px + var(--safe-left)); touch-action: none; }
+.msheet-grip { background: var(--line-strong); border-radius: var(--r-full); height: 5px; margin: 0 auto 6px; width: 40px; }
+.msheet-title-row { align-items: center; display: flex; gap: var(--s3); justify-content: space-between; min-height: 48px; }
+.msheet-title { font-size: 21px; font-weight: 760; letter-spacing: -0.02em; line-height: 1.2; margin: 0; min-width: 0; }
+.msheet-close {
+  align-items: center; background: var(--surface-3); border: 0; border-radius: 50%; color: var(--text-strong); cursor: pointer;
+  display: inline-flex; flex-shrink: 0; height: 40px; justify-content: center; width: 40px;
+}
+.msheet-close::after { content: ""; inset: -4px; position: absolute; }
+.msheet-close { position: relative; }
+.msheet-body {
+  -webkit-overflow-scrolling: touch; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  padding: 6px calc(20px + var(--safe-right)) 18px calc(20px + var(--safe-left));
+}
+.msheet-body:last-child { padding-bottom: calc(18px + max(var(--safe-bottom), 8px)); }
+.msheet-foot {
+  background: var(--surface); border-top: 1px solid var(--line); display: flex; flex-direction: column; flex-shrink: 0; gap: 10px;
+  padding: 12px calc(20px + var(--safe-right)) calc(12px + max(var(--safe-bottom), 8px)) calc(20px + var(--safe-left));
+}
+.more-sheet .sheet-grid { margin-top: 4px; }
+.more-sheet .sheet-row .btn { min-height: 48px; }
+
+/* Knöpfe im Blatt und auf der Startseite */
+.mbtn {
+  align-items: center; background: var(--surface-2); border: 1px solid var(--line-strong); border-radius: 16px;
+  color: var(--text-strong); cursor: pointer; display: inline-flex; font: inherit; font-size: 16px; font-weight: 700;
+  gap: 10px; justify-content: center; min-height: 52px; padding: 0 18px; width: 100%;
+}
+.mbtn:active:not(:disabled) { transform: scale(0.97); }
+.mbtn:disabled { opacity: 0.5; }
+.mbtn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.mbtn.danger { background: var(--err); border-color: var(--err); color: #fff; }
+.mbtn.ghost { background: transparent; border-color: transparent; color: var(--accent); }
+.mbtn.big { justify-content: flex-start; min-height: 68px; text-align: left; }
+.mbtn-two { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.mbtn-two small { color: inherit; font-size: 13px; font-weight: 550; opacity: 0.88; }
+
+/* Bestätigung */
+.confirm-body { align-items: center; display: flex; flex-direction: column; gap: 10px; padding: 4px 0 6px; text-align: center; }
+.confirm-icon {
+  align-items: center; background: var(--accent-soft); border-radius: 50%; color: var(--accent); display: inline-flex;
+  height: 64px; justify-content: center; width: 64px;
+}
+.confirm-icon.danger { background: color-mix(in srgb, var(--err) 14%, transparent); color: var(--err); }
+.confirm-title { font-size: 22px; font-weight: 760; letter-spacing: -0.02em; margin: 0; }
+.confirm-text { color: var(--text); font-size: 15.5px; margin: 0; max-width: 34ch; }
+.confirm-actions { display: grid; gap: 10px; grid-template-columns: 1fr 1.4fr; }
+
+/* Meldung mit 'Rückgängig" */
+.toast.has-action { cursor: default; padding-right: 6px; }
+.toast-action {
+  background: transparent; border: 0; border-radius: var(--r-md); color: var(--accent); cursor: pointer; font: inherit;
+  font-weight: 800; margin-left: 6px; min-height: 40px; padding: 0 12px;
+}
+[data-theme="dark"] .toast-action { color: #0f7a4d; }
+
+/* ---------------------------------------------------------------- Wert einstellen */
+
+.tval { --tone: var(--accent); display: flex; flex-direction: column; gap: 8px; }
+.tval.tone-car { --tone: var(--c-car); } .tval.tone-water { --tone: var(--c-water); }
+.tval.tone-battery { --tone: var(--c-battery); } .tval.tone-pv { --tone: var(--c-pv); } .tval.tone-warn { --tone: var(--warn); }
+.tval + .tval, .slider + .tval, .tval + .slider { margin-top: var(--s5); }
+.tval-head { align-items: baseline; display: flex; gap: var(--s3); justify-content: space-between; }
+.tval-label { color: var(--text-strong); font-size: 15px; font-weight: 680; }
+.tval-value { color: var(--text-strong); font-size: 24px; font-weight: 780; letter-spacing: -0.02em; white-space: nowrap; }
+.tval-row { align-items: center; display: grid; gap: 12px; grid-template-columns: 52px minmax(0, 1fr) 52px; }
+.tval-step {
+  align-items: center; background: var(--surface-2); border: 1px solid var(--line-strong); border-radius: 50%;
+  color: var(--text-strong); cursor: pointer; display: inline-flex; height: 52px; justify-content: center;
+  touch-action: manipulation; width: 52px;
+}
+.tval-step:active:not(:disabled) { background: var(--surface-3); transform: scale(0.9); }
+.tval-step:disabled { opacity: 0.35; }
+.tval-step.big { height: 64px; width: 64px; }
+.tval-bar { background: transparent; border: 0; cursor: pointer; height: 52px; padding: 0; position: relative; touch-action: manipulation; }
+.tval-track { background: var(--surface-3); border-radius: var(--r-full); display: block; height: 10px; overflow: hidden; position: absolute; left: 0; right: 0; top: 21px; }
+.tval-fill { background: var(--tone); display: block; height: 100%; transform-origin: left center; transition: transform 300ms var(--ease-out); }
+.tval-dot {
+  background: var(--surface); border: 3px solid var(--tone); border-radius: 50%; height: 22px; margin-left: -11px;
+  position: absolute; top: 15px; transition: left 300ms var(--ease-out); width: 22px;
+}
+.tval.disabled { opacity: 0.6; }
+
+.tval-sheet { --tone: var(--accent); display: flex; flex-direction: column; gap: 18px; padding-top: 4px; }
+.tval-sheet.tone-car { --tone: var(--c-car); } .tval-sheet.tone-water { --tone: var(--c-water); }
+.tval-sheet.tone-battery { --tone: var(--c-battery); } .tval-sheet.tone-pv { --tone: var(--c-pv); }
+.tval-big { color: var(--text-strong); font-size: 46px; font-weight: 800; letter-spacing: -0.03em; text-align: center; }
+.trange { height: 76px; margin: 0 14px; outline: none; position: relative; touch-action: pan-y; }
+.trange-track { background: var(--surface-3); border-radius: var(--r-full); height: 14px; left: 0; overflow: hidden; position: absolute; right: 0; top: 22px; }
+.trange-fill { background: var(--tone); display: block; height: 100%; transform-origin: left center; }
+.trange-thumb {
+  background: var(--surface); border: 4px solid var(--tone); border-radius: 50%; box-shadow: var(--shadow-md);
+  height: 40px; margin-left: -20px; position: absolute; top: 9px; transition: transform 160ms var(--ease); width: 40px;
+}
+.trange.active .trange-thumb { transform: scale(1.18); }
+.trange:focus-visible .trange-thumb { box-shadow: 0 0 0 5px var(--accent-soft), var(--shadow-md); }
+.trange-hint { bottom: 0; color: var(--text-dim); font-size: 12.5px; font-weight: 600; left: 0; position: absolute; right: 0; text-align: center; }
+.tval-sheet-steps { display: flex; gap: 18px; justify-content: center; }
+.tval-presets { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); }
+.tval-preset {
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; color: var(--text-strong); cursor: pointer;
+  font: inherit; font-size: 15px; font-weight: 700; min-height: 50px;
+}
+.tval-preset.on { background: color-mix(in srgb, var(--tone) 16%, var(--surface)); border-color: var(--tone); }
+
+@media (prefers-reduced-motion: reduce) {
+  .msheet, .msheet-backdrop, .msheet-root.closing .msheet, .msheet-root.closing .msheet-backdrop { animation-duration: 1ms !important; }
+  .tval-fill, .tval-dot { transition: none; }
+}

@@ -1,0 +1,137 @@
+MinePower — Lizenzbedingungen / License Terms
+
+Copyright (c) 2026 Marwin Rentz. Alle Rechte vorbehalten / All rights reserved.
+
+Der deutsche Text ist maßgeblich, die englische Fassung dient der Information.
+The German text is authoritative; the English version is informational.
+
+================================================================================
+DEUTSCH
+================================================================================
+
+Diese Bedingungen gelten für die Software „MinePower" samt Quelltext,
+Docker-Images, Dokumentation und Grafiken. Der Quelltext ist einsehbar,
+MinePower ist aber nicht Open Source im Sinne der Open Source Definition.
+
+ERLAUBT
+
+  - Herunterladen, Einsehen und Studieren.
+  - Forken, Kopieren und Verändern für eigene Zwecke.
+  - Betreiben auf eigener Hardware oder Infrastruktur — privat wie im eigenen
+    Gewerbe, in unveränderter wie in selbst veränderter Fassung, auch aus dem
+    offiziellen Docker-Image.
+  - Eigene Konfiguration, Einstellungen und Daten.
+
+NICHT ERLAUBT (ohne vorherige schriftliche Zustimmung)
+
+  - Weitergabe an Dritte — im Original wie verändert. Dazu zählen
+    Veröffentlichung, Verkauf, Vermietung und Unterlizenzierung.
+  - Bereitstellung für Dritte als Dienstleistung (Hosting, SaaS).
+  - Entfernen oder Verändern von Urheber- und Lizenzhinweisen.
+  - Verwendung des Namens „MinePower" für eigene Angebote.
+
+  Plattform-Vorbehalt: Wo die Bedingungen einer Plattform bestimmte Handlungen
+  zwingend gestatten — etwa das Forken öffentlicher Repositories —, gehen sie
+  vor. Weitergehende Rechte werden dadurch nicht eingeräumt.
+
+RÜCKMELDUNGEN
+
+  Ausdrücklich erwünscht. Wer eine einreicht, räumt dem Rechteinhaber das
+  Recht ein, sie unentgeltlich und ohne Nennungspflicht zu verwenden. Bitte
+  keine Zugangsdaten oder Token mitschicken.
+
+GEWÄHRLEISTUNG UND HAFTUNG
+
+  Die Software wird ohne jede Gewährleistung bereitgestellt. Sie steuert
+  elektrische Verbraucher; der Einsatz erfolgt auf eigene Verantwortung, die
+  Installation gehört in die Hände von Fachpersonal. Haftung nur bei Vorsatz
+  und grober Fahrlässigkeit sowie in Fällen zwingender gesetzlicher Haftung.
+
+  Die meisten Geräteanbindungen liefen nie an echter Hardware, sondern wurden
+  nach Herstellerdokumentation erstellt. Welche das sind, steht in der README
+  und in der Oberfläche an jedem Gerät.
+
+FREMDKOMPONENTEN
+
+  Unterliegen ihren eigenen Lizenzen. Einzelheiten in der Datei NOTICE.
+
+MARKEN UND FREMDSCHNITTSTELLEN
+
+  Tesla, Sungrow, my-PV, Fronius, SMA, Huawei, Shelly, go-e, Tibber, aWATTar
+  und alle weiteren genannten Bezeichnungen sind Marken ihrer jeweiligen
+  Inhaber und werden ausschließlich beschreibend verwendet. Es besteht keine
+  Verbindung, Partnerschaft oder Billigung.
+
+  Wer Fremdschnittstellen nutzt (etwa die Tesla Fleet API), schließt dafür ein
+  eigenes Nutzungsverhältnis mit dem Anbieter. Die Software enthält keine
+  Zugangsdaten.
+
+SCHLUSS
+
+  Es gilt deutsches Recht. Ist eine Bestimmung unwirksam, bleibt der Rest
+  wirksam. Anfragen zu abweichender Nutzung: über das GitHub-Projekt.
+
+================================================================================
+ENGLISH (informational translation)
+================================================================================
+
+These terms cover the software "MinePower" including source code, Docker
+images, documentation and artwork. The source is publicly viewable, but
+MinePower is not Open Source as defined by the Open Source Definition.
+
+PERMITTED
+
+  - Downloading, viewing and studying.
+  - Forking, copying and modifying for your own purposes.
+  - Running it on your own hardware or infrastructure — private or for your
+    own business, unmodified or with your own changes, including from the
+    official Docker image.
+  - Your own configuration, settings and data.
+
+NOT PERMITTED (without prior written consent)
+
+  - Passing it on to third parties — original or modified. This includes
+    publication, sale, rental and sublicensing.
+  - Providing it to third parties as a service (hosting, SaaS).
+  - Removing or altering copyright and license notices.
+  - Using the name "MinePower" for your own offerings.
+
+  Platform proviso: where a platform's terms mandate certain acts — such as
+  forking public repositories — those terms prevail. No further rights are
+  granted thereby.
+
+FEEDBACK
+
+  Expressly welcome. By submitting feedback you grant the copyright holder the
+  right to use it free of charge and without attribution. Please do not
+  include credentials or tokens.
+
+WARRANTY AND LIABILITY
+
+  The software is provided without warranty of any kind. It controls
+  electrical loads; use is at your own risk and installation belongs in the
+  hands of qualified personnel. Liability only for intent, gross negligence,
+  and where mandatory by law.
+
+  Most device integrations have never run against real hardware; they were
+  written from vendor documentation. Which ones is stated in the README and in
+  the user interface at each device.
+
+THIRD-PARTY COMPONENTS
+
+  Governed by their own licenses. Details in the NOTICE file.
+
+TRADEMARKS AND THIRD-PARTY INTERFACES
+
+  Tesla, Sungrow, my-PV, Fronius, SMA, Huawei, Shelly, go-e, Tibber, aWATTar
+  and all other names mentioned are trademarks of their respective owners,
+  used purely descriptively. No affiliation, partnership or endorsement.
+
+  Anyone using third-party interfaces (such as the Tesla Fleet API) enters
+  into their own relationship with that provider. The software contains no
+  credentials.
+
+FINAL
+
+  German law applies. If any provision is invalid, the remainder stays in
+  force. Enquiries regarding different use: via the GitHub project.

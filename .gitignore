@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Env & secrets
+.env
+*.local
+
+# IDE
+.idea/
+.vscode/
+
+# Runtime
+*.log
+data/
+backups/
+
+# Lokaler Frontend-Build (im Docker-Image erzeugt Stage 1 ihn neu)
+backend/static/
+coolerdash-3.2.4-1.fedora.x86_64.rpm
+
+# Lokale Werkzeug-Einstellungen
+.claude/

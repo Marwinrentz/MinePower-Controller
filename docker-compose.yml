@@ -1,0 +1,91 @@
+# MinePower – Plug & Play: `docker compose up -d` reicht, keine .env nötig.
+# Das JWT-Secret wird beim Erststart erzeugt, die Datenbank ist nur intern
+# erreichbar. Für den Produktivbetrieb trotzdem POSTGRES_PASSWORD in einer
+# .env setzen – siehe .env.example.
+#
+# Abweichende Aufbauten (Unraid-Bind-Mount, OCPP-Port, Headless-Konfiguration)
+# sind in der README unter „Betrieb" beschrieben.
+name: minepower
+
+services:
+  db:
+    image: timescale/timescaledb:latest-pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: minepower
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-minepower}
+      POSTGRES_DB: minepower
+      # Nur bei einer frischen Datendatei wirksam (initdb-Zeitpunkt):
+      # Prüfsummen auf jeder Seite, damit eine Beschädigung nach einem
+      # Stromausfall als klarer Fehler auffällt statt als stille
+      # Dateninkonsistenz. Bestehende Installationen bekommen das erst nach
+      # einem Dump/Restore in ein neu initialisiertes Datenverzeichnis.
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U minepower -d minepower"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    # Lokaler Build als Vorgabe; ein fertiges Image lässt sich über
+    # MINEPOWER_IMAGE übersteuern.
+    image: ${MINEPOWER_IMAGE:-marwinrentz1/minepower:latest}
+    build: .
+    restart: unless-stopped
+    # Fail-safe beim Stoppen/Update: MinePower setzt einen Speicher im
+    # Zwangsmodus auf Eigenverbrauch zurück, bevor es sich beendet. Die
+    # Docker-Vorgabe von 10 s ist mit einem trägen WiNet-S-Dongle knapp.
+    stop_grace_period: 30s
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${HTTP_PORT:-8080}:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://minepower:${POSTGRES_PASSWORD:-minepower}@db:5432/minepower
+      JWT_SECRET: ${JWT_SECRET:-}          # leer = automatisch erzeugen & persistieren
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      CONTROL_INTERVAL_S: ${CONTROL_INTERVAL_S:-3}
+      DEMO_MODE: ${DEMO_MODE:-false}
+      HEADLESS_CONFIG: ${HEADLESS_CONFIG:-}
+      MQTT_URL: ${MQTT_URL:-}
+      # Automatische lokale Sicherung (Geräte, Einstellungen, Konten) auf
+      # einem eigenen Volume – überlebt einen Stromausfall auch dann, wenn
+      # die Postgres-Datendatei danach neu angelegt werden muss. Siehe
+      # backend/app/services/backup.py.
+      BACKUP_INTERVAL_H: ${BACKUP_INTERVAL_H:-6}
+      BACKUP_KEEP: ${BACKUP_KEEP:-30}
+      # Schlüssel für gespeicherte Zugangsdaten. Leer = Schlüsseldatei im
+      # Volume app_data. Geht beides verloren, müssen Tokens und Passwörter
+      # neu eingegeben werden.
+      MINEPOWER_SECRET_KEY: ${MINEPOWER_SECRET_KEY:-}
+    volumes:
+      - backup_data:/app/backups
+      - app_data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/system/health',timeout=5).status==200 else 1)"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # Optionaler MQTT-Broker für externe Integration (z. B. Home Assistant).
+  # Start mit: docker compose --profile mqtt up -d
+  mqtt:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    profiles: ["mqtt"]
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./deploy/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mqtt_data:/mosquitto/data
+
+volumes:
+  db_data:
+  backup_data:
+  app_data:
+  mqtt_data:

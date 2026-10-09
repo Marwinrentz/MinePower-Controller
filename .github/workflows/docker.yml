@@ -1,0 +1,54 @@
+# Baut das All-in-One-Image (amd64 + arm64) und publisht es nach Docker Hub:
+#   marwinrentz1/minepower:latest  (+ Versions-Tags bei git-Tags v*)
+#
+# Einmalig im GitHub-Repo unter Settings → Secrets and variables → Actions:
+#   DOCKERHUB_USERNAME = marwinrentz1
+#   DOCKERHUB_TOKEN    = Docker-Hub-Access-Token (hub.docker.com → Account
+#                        Settings → Personal access tokens, Scope: Read & Write)
+name: docker
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - id: version
+        run: echo "version=$(cat VERSION)" >> "$GITHUB_OUTPUT"
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: marwinrentz1/minepower
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=raw,value=${{ steps.version.outputs.version }}
+            type=sha
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APP_VERSION=${{ steps.version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -1,0 +1,55 @@
+# Was NICHT in den Build-Kontext gehört.
+# Ohne diese Datei wandern lokal gebaute Artefakte (node_modules, dist,
+# backend/static) in den Kontext und ins Image – langsam, unnötig groß und
+# im schlimmsten Fall inkonsistent, weil sie auf dem Host für eine andere
+# Architektur gebaut wurden. Das Image baut alles selbst.
+
+# Node
+**/node_modules
+frontend/dist
+
+# Lokaler Frontend-Build (im Image erzeugt Stage 1 ihn neu)
+backend/static
+
+# Python
+**/__pycache__
+**/*.pyc
+.venv
+venv
+.pytest_cache
+.mypy_cache
+*.egg-info
+
+# Lokale Daten & Secrets
+*.db
+.env
+data/
+backups/
+*.log
+
+# VCS / IDE / Doku (CHANGELOG.md und VERSION bleiben: sie gehören ins Image)
+.git
+.gitignore
+.github
+.idea
+.vscode
+.claude
+docs
+README.md
+AUDIT.md
+
+# Entwicklung und Tests – nicht im ausgelieferten Image
+backend/tests
+backend/tools
+backend/scripts
+backend/pytest.ini
+backend/Dockerfile
+frontend/e2e
+**/.pytest_cache
+frontend/tsconfig.tsbuildinfo
+
+# Nicht Teil des Produkts
+ios
+website
+examples
+deploy

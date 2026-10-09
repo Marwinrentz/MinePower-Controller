@@ -1,0 +1,25 @@
+# ============================================================================
+# REFERENZ-BEISPIEL – NICHT Teil des MinePower-Haupt-Stacks!
+#
+# Die meisten Nutzer betreiben TeslaBleHttpProxy bereits auf einem
+# Raspberry Pi in BLE-Reichweite des Fahrzeugs. MinePower verbindet sich
+# nur über das Netzwerk zu diesem extern laufenden Proxy (HTTP-API).
+#
+# Dieses Compose-Beispiel ist nur für Nutzer gedacht, die noch KEINEN
+# Proxy haben. Es muss auf einem Gerät MIT Bluetooth in Reichweite des
+# Autos laufen (z. B. Raspberry Pi) – nicht zwingend auf dem MinePower-Host.
+#
+# Schlüssel-Kopplung (Key-Enrollment) erfolgt im Proxy selbst, siehe:
+# https://github.com/wimaha/TeslaBleHttpProxy
+# ============================================================================
+
+services:
+  tesla-ble-proxy:
+    image: wimaha/tesla-ble-http-proxy:latest
+    restart: unless-stopped
+    network_mode: host          # BLE benötigt Host-Netzwerk/DBus-Zugriff
+    volumes:
+      - ./key:/key              # persistiert das Fahrzeug-Schlüsselpaar
+      - /var/run/dbus:/var/run/dbus
+    # Standard-Port: 8080 → in MinePower als Proxy-Adresse eintragen:
+    # http://<ip-dieses-geraets>:8080
