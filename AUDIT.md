@@ -40,6 +40,8 @@ Offene Entscheidungen stehen am Ende.
   `backend/scripts` und `pytest.ini` landeten im Image. Sie sind jetzt per
   `.dockerignore` ausgeschlossen, ebenso `ios/`, `website/`, `examples/`
   und `frontend/e2e/`.
+- **Lizenz von MinePower:** MIT (Entscheidung zu 3.0.0, vorher eigene
+  Lizenz mit Weitergabeverbot).
 - **Lizenzen der Abhängigkeiten:** alle freizügig (MIT, BSD, Apache-2.0,
   PSF, Unlicense), kein GPL/AGPL im ausgelieferten Code. Neu ist
   `cryptography` (Apache-2.0 / BSD). Prüfbedarf besteht nur bei

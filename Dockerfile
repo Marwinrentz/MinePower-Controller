@@ -21,7 +21,8 @@ FROM python:3.12-slim
 ARG APP_VERSION=unbekannt
 LABEL org.opencontainers.image.title="MinePower" \
       org.opencontainers.image.version="${APP_VERSION}" \
-      org.opencontainers.image.vendor="Marwin Rentz"
+      org.opencontainers.image.vendor="Marwin Rentz" \
+      org.opencontainers.image.licenses="MIT"
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

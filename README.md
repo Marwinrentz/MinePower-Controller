@@ -2,7 +2,7 @@
 
 # MinePower
 
-[![License](https://img.shields.io/badge/license-proprietär%20%2F%20proprietary-lightgrey)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Docker Image](https://img.shields.io/docker/v/marwinrentz1/minepower?sort=semver&label=docker%20hub)](https://hub.docker.com/r/marwinrentz1/minepower)
 [![Build](https://github.com/Marwinrentz/MinePower-Controller/actions/workflows/docker.yml/badge.svg)](https://github.com/Marwinrentz/MinePower-Controller/actions/workflows/docker.yml)
 
@@ -25,10 +25,8 @@ TimescaleDB), braucht keine Cloud-Anbindung und keinen Smart-Home-Hub. Geräte
 werden über eine Plugin-Architektur angebunden; ein neuer Treiber ist eine
 einzelne Python-Datei ohne Änderungen am Kern.
 
-> **Zum Lizenzmodell.** Der Quelltext ist einsehbar, MinePower ist aber nicht
-> Open Source: Forken, Verändern und Betreiben für eigene Zwecke ist erlaubt,
-> die Weitergabe an Dritte nicht. Rückmeldungen sind ausdrücklich erwünscht —
-> siehe [Lizenz und Rechtliches](#lizenz-und-rechtliches).
+> **Lizenz.** MinePower steht unter der MIT-Lizenz. Rückmeldungen sind
+> ausdrücklich erwünscht, siehe [Lizenz und Rechtliches](#lizenz-und-rechtliches).
 
 ## Inhalt
 
@@ -405,9 +403,6 @@ Einzelheiten unter [docs/headless.md](docs/headless.md).
 
 ## Entwicklung
 
-Eigene Änderungen für den Eigenbedarf sind erlaubt; nur die Weitergabe ist es
-nicht (siehe [Lizenz](LICENSE)).
-
 ```bash
 # Backend (Python 3.12)
 cd backend
@@ -460,25 +455,17 @@ Weiterführende Dokumentation:
 
 ## Lizenz und Rechtliches
 
-Copyright © 2026 Marwin Rentz. Alle Rechte vorbehalten.
-
-Der Quelltext ist einsehbar, MinePower ist aber **nicht Open Source**:
-
-- **Erlaubt:** Herunterladen, Forken, Verändern und Betreiben für eigene
-  Zwecke — privat wie im eigenen Gewerbe, auch aus dem offiziellen
-  Docker-Image.
-- **Nicht erlaubt:** Weitergabe an Dritte, im Original wie verändert. Also
-  Veröffentlichen, Verkaufen, Vermieten, Unterlizenzieren oder als
-  Dienstleistung bereitstellen.
+Copyright © 2026 Marwin Rentz. MinePower steht unter der **MIT-Lizenz**:
+Nutzen, Verändern und Weitergeben sind erlaubt, solange der Copyright- und
+Lizenzhinweis erhalten bleibt.
 
 Vollständiger Text: [LICENSE](LICENSE). Fremdkomponenten und ihre Lizenzen:
 [NOTICE](NOTICE).
 
 **Rückmeldungen sind erwünscht.** Fehlerberichte, Messwerte und
 Verbesserungsvorschläge gern über die
-[Issues](https://github.com/Marwinrentz/MinePower-Controller/issues). Wer eine
-Rückmeldung einreicht, räumt dem Rechteinhaber das Recht ein, sie ohne
-Vergütung zu verwenden. Bitte keine Zugangsdaten oder Token mitschicken.
+[Issues](https://github.com/Marwinrentz/MinePower-Controller/issues). Beiträge
+gelten unter der MIT-Lizenz. Bitte keine Zugangsdaten oder Token mitschicken.
 
 **Marken.** Tesla, Sungrow, my-PV, Fronius, SMA, Huawei, Shelly, go-e, KEBA,
 Tibber, aWATTar und alle weiteren genannten Bezeichnungen sind Marken ihrer
@@ -512,10 +499,8 @@ TimescaleDB). No cloud connection and no smart-home hub are required. Devices
 are integrated through a plugin architecture; a new driver is a single Python
 file with no changes to the core.
 
-> **On licensing.** The source is publicly viewable, but MinePower is **not
-> Open Source**: forking, modifying and running it for your own purposes is
-> permitted, passing it on to third parties is not. Feedback is expressly
-> welcome — see [License and legal](#license-and-legal).
+> **License.** MinePower is released under the MIT License. Feedback is
+> expressly welcome, see [License and legal](#license-and-legal).
 
 ## Contents
 
@@ -834,9 +819,6 @@ Details in [docs/headless.md](docs/headless.md).
 
 ## Development
 
-Your own changes for your own use are permitted; only passing them on is not
-(see [LICENSE](LICENSE)).
-
 ```bash
 # Backend (Python 3.12)
 cd backend
@@ -889,24 +871,17 @@ Further documentation:
 
 ## License and legal
 
-Copyright © 2026 Marwin Rentz. All rights reserved.
-
-The source is publicly viewable, but MinePower is **not Open Source**:
-
-- **Permitted:** downloading, forking, modifying and running it for your own
-  purposes — private or for your own business, including from the official
-  Docker image.
-- **Not permitted:** passing it on to third parties, original or modified.
-  That is: publishing, selling, renting, sublicensing, or providing it as a
-  service.
+Copyright © 2026 Marwin Rentz. MinePower is released under the **MIT
+License**: use, modification and distribution are permitted as long as the
+copyright and license notice is kept.
 
 Full text: [LICENSE](LICENSE). Third-party components and their licenses:
 [NOTICE](NOTICE).
 
 **Feedback is welcome.** Bug reports, measurements and suggestions via
-[Issues](https://github.com/Marwinrentz/MinePower-Controller/issues). By
-submitting feedback you grant the copyright holder the right to use it without
-compensation. Please do not include credentials or tokens.
+[Issues](https://github.com/Marwinrentz/MinePower-Controller/issues).
+Contributions are accepted under the MIT License. Please do not include
+credentials or tokens.
 
 **Trademarks.** Tesla, Sungrow, my-PV, Fronius, SMA, Huawei, Shelly, go-e,
 KEBA, Tibber, aWATTar and all other names mentioned are trademarks of their

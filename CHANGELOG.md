@@ -39,6 +39,7 @@ und nach einem Update als Hinweisfenster.
 - Gerätekonfiguration: Feldprüfung mit Feldname und Ursache
 
 ### Geändert
+- Lizenz: MIT
 - Zugangsdaten werden verschlüsselt gespeichert
 - Zugangsdaten werden in der Oberfläche nur noch maskiert angezeigt
 - Export: ohne Zugangsdaten
