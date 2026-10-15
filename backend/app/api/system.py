@@ -18,7 +18,7 @@ from ..security import get_current_user, hash_password, require_role
 from ..services.audit import log_event
 
 log = logging.getLogger(__name__)
-from ..core.secrets import protect_config, protect_settings, strip_config, strip_settings
+from ..core.secrets import protect_config, protect_settings, readable, strip_config, strip_settings
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
@@ -282,7 +282,8 @@ async def diagnostic_report(
 
     tariff = loop.tariff.status() if loop.tariff and hasattr(loop.tariff, "status") else None
     if tariff is not None:
-        tariff["tibber_token_set"] = bool((settings.get("tariff") or {}).get("tibber_token"))
+        stored = (settings.get("tariff") or {}).get("tibber_token")
+        tariff["tibber_token_set"] = bool(stored) and readable(stored)
     snap = loop.snapshot
     return {
         "version": 2,

@@ -4,6 +4,14 @@ Format: eine Version je Abschnitt, Einträge gruppiert in Neu, Geändert und
 Behoben, ein Eintrag je Zeile. Die App zeigt diese Datei unter „Changelog“
 und nach einem Update als Hinweisfenster.
 
+## 3.1.1 (2026-10-15)
+
+### Behoben
+- Strompreis fehlte nach dem Update: Schlüssel für Zugangsdaten ging ohne Volume für /app/data verloren
+- Schlüssel liegt jetzt zusätzlich im Sicherungsordner und überlebt Updates
+- Nicht mehr lesbare Zugangsdaten erscheinen leer statt als gesetzt, mit Hinweis im Ereignisprotokoll
+- Batterie: Werte in der Übersicht überlappten bei schmaler Breite
+
 ## 3.1.0 (2026-10-15)
 
 ### Neu

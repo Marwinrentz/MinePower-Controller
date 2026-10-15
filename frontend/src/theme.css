@@ -661,9 +661,9 @@ strong { color: var(--text-strong); }
 
 /* Kennzahlen */
 .stats { display: grid; gap: var(--s3) var(--s4); grid-template-columns: repeat(auto-fill, minmax(min(100%, 128px), 1fr)); }
-.stat { display: flex; flex-direction: column; gap: 1px; }
+.stat { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .stat-label { color: var(--text-dim); font-size: var(--text-sm); font-weight: 600; }
-.stat-value { color: var(--text-strong); font-size: var(--text-xl); font-weight: 740; letter-spacing: -0.02em; line-height: 1.15; }
+.stat-value { color: var(--text-strong); font-size: var(--text-xl); font-weight: 740; hyphens: auto; letter-spacing: -0.02em; line-height: 1.15; overflow-wrap: break-word; }
 .stat-sub { color: var(--text-dim); font-size: var(--text-xs); }
 .t-pv { color: var(--c-pv) !important; }
 .t-waste { color: var(--c-waste) !important; }
@@ -1003,6 +1003,7 @@ a.pflow-node:hover { box-shadow: var(--shadow-md); }
 .bat-soc small { color: var(--text-dim); font-size: 0.42em; font-weight: 700; letter-spacing: 0; margin-left: 4px; }
 .bat-head-text { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
 .bat-main { display: flex; flex-direction: column; gap: var(--s3); }
+.bat-main .stats { grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr)); }
 .bat-status { color: var(--text-strong); font-size: var(--text-lg); font-weight: 650; margin: 0; }
 
 /* Waagerechte Batterie */

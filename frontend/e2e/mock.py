@@ -157,7 +157,7 @@ def scenario(name: str = "sun") -> dict:
         wh["data"].update(temperature_c=60.0)
         s.update(waste_w=6900.0, waste_reason="Tesla Model Y: state=idle; Speicher voll")
 
-    bat["data"].update(soc=soc, power=bat_w)
+    bat["data"].update(soc=soc, power=bat_w, min_soc=5.0, max_soc=100.0)
     s["battery"] = {"soc": soc, "power": bat_w, "capacity_kwh": 10.0}
     grid = house + car + water + bat_w - pv
     if name == "waste":

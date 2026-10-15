@@ -79,3 +79,38 @@ async def test_migrate_encrypts_plaintext_once():
         assert rows[0].config["access_token"].startswith("enc:v1:")
     assert await secrets.migrate() == 0
 
+
+
+def test_key_kept_in_backup_dir_survives_lost_data_dir(tmp_path, monkeypatch):
+    """Update ohne Volume für /app/data: Schlüssel kommt aus dem Sicherungsordner."""
+    data, backup = tmp_path / "data", tmp_path / "backup"
+    monkeypatch.delenv("MINEPOWER_SECRET_KEY", raising=False)
+    monkeypatch.setenv("DATA_DIR", str(data))
+    monkeypatch.setenv("BACKUP_DIR", str(backup))
+    from app.config import get_settings
+    get_settings.cache_clear()
+    secrets.reset_cache()
+    try:
+        token = secrets.encrypt("tibber-geheim")
+        assert (data / "secret.key").exists() and (backup / "secret.key").exists()
+        (data / "secret.key").unlink()  # Container neu erstellt, Datenverzeichnis leer
+        secrets.reset_cache()
+        assert secrets.decrypt(token) == "tibber-geheim"
+        assert (data / "secret.key").exists()  # wieder angelegt
+    finally:
+        get_settings.cache_clear()
+        secrets.reset_cache()
+
+
+def test_unreadable_secret_is_shown_as_empty(tmp_path, monkeypatch):
+    monkeypatch.setenv("MINEPOWER_SECRET_KEY", "alt")
+    secrets.reset_cache()
+    token = secrets.encrypt("x")
+    monkeypatch.setenv("MINEPOWER_SECRET_KEY", "neu")
+    secrets.reset_cache()
+    try:
+        assert not secrets.readable(token)
+        assert secrets.mask_settings("tariff", {"tibber_token": token})["tibber_token"] == ""
+    finally:
+        monkeypatch.delenv("MINEPOWER_SECRET_KEY")
+        secrets.reset_cache()

@@ -17,7 +17,7 @@ def test_popup_shows_unseen_versions_and_marks_seen(phone):
     sheet = page.locator(".update-sheet")
     sheet.wait_for(state="visible")
     assert VERSION in sheet.inner_text()
-    assert "Neu" in sheet.inner_text()
+    assert any(g in sheet.inner_text() for g in ("Neu", "Geändert", "Behoben"))
     ph.tap(sheet.locator(".msheet-foot .mbtn.primary"))
     page.wait_for_timeout(500)
     assert page.locator(".update-sheet").count() == 0

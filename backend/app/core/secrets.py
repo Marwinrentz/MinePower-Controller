@@ -38,10 +38,18 @@ SETTINGS_SECRETS: dict[str, set[str]] = {
 }
 
 
-def _data_dir() -> Path:
+def _key_dirs() -> list[Path]:
+    """Beschreibbare Ablageorte für die Schlüsseldatei.
+
+    Datenverzeichnis und Sicherungsordner. Ältere Compose-Dateien binden nur
+    den Sicherungsordner als Volume ein; lag der Schlüssel allein im
+    Datenverzeichnis, war er nach einem Update weg und alle gespeicherten
+    Zugangsdaten unlesbar (3.1.0: Tibber-Preise fehlten). Deshalb liegt er
+    in beiden Ordnern und wird aus dem gefunden, der ihn noch hat."""
     from ..config import get_settings
 
     cfg = get_settings()
+    out: list[Path] = []
     for candidate in (cfg.data_dir, cfg.backup_dir):
         path = Path(candidate)
         try:
@@ -49,10 +57,25 @@ def _data_dir() -> Path:
             probe = path / ".write-test"
             probe.write_text("x")
             probe.unlink()
-            return path
+            if path not in out:
+                out.append(path)
         except OSError:
             continue
-    raise RuntimeError("Kein beschreibbares Datenverzeichnis für den Schlüssel")
+    if not out:
+        raise RuntimeError("Kein beschreibbares Datenverzeichnis für den Schlüssel")
+    return out
+
+
+def _data_dir() -> Path:
+    return _key_dirs()[0]
+
+
+def _write_key(path: Path, key: bytes) -> None:
+    try:
+        path.write_bytes(key)
+        path.chmod(0o600)
+    except OSError as exc:
+        log.warning("Schlüsseldatei %s nicht schreibbar: %s", path, exc)
 
 
 @lru_cache
@@ -61,17 +84,28 @@ def _fernet() -> Fernet:
     if env:
         key = base64.urlsafe_b64encode(hashlib.sha256(env.encode()).digest())
         return Fernet(key)
-    path = _data_dir() / "secret.key"
-    if path.exists():
-        return Fernet(path.read_bytes().strip())
-    key = Fernet.generate_key()
-    path.write_bytes(key)
-    try:
-        path.chmod(0o600)
-    except OSError:
-        pass
-    log.info("Schlüssel für Zugangsdaten erzeugt: %s", path)
+    files = [d / "secret.key" for d in _key_dirs()]
+    found = next((f for f in files if f.exists()), None)
+    if found is not None:
+        key = found.read_bytes().strip()
+    else:
+        key = Fernet.generate_key()
+        log.info("Schlüssel für Zugangsdaten erzeugt")
+    for f in files:
+        if not f.exists():
+            _write_key(f, key)
     return Fernet(key)
+
+
+def readable(value: Any) -> bool:
+    """Lässt sich ein gespeicherter Wert mit dem aktuellen Schlüssel lesen?"""
+    if not is_encrypted(value):
+        return True
+    try:
+        _fernet().decrypt(value[len(PREFIX):].encode())
+        return True
+    except InvalidToken:
+        return False
 
 
 def reset_cache() -> None:
@@ -140,7 +174,9 @@ def _mask(keys: set[str], data: dict) -> dict:
     out = dict(data or {})
     for k in keys:
         if k in out:
-            out[k] = MASK if out[k] not in (None, "") else ""
+            # Unlesbar (Schlüssel verloren) gilt als nicht gesetzt: Die Oberfläche
+            # fragt dann nach dem Wert, statt '•••' als gültig anzuzeigen.
+            out[k] = MASK if out[k] not in (None, "") and readable(out[k]) else ""
     return out
 
 
@@ -198,10 +234,12 @@ async def migrate() -> int:
     from ..models import Device, Setting
 
     count = 0
+    lost: list[str] = []
     async with async_session() as session:
         for dev in (await session.scalars(select(Device))).all():
             keys = device_secret_keys(dev.driver_id)
             config = dict(dev.config or {})
+            lost += [f"{dev.name}: {k}" for k in keys if not readable(config.get(k))]
             changed = False
             for k in keys:
                 if config.get(k) not in (None, "") and not is_encrypted(config[k]):
@@ -215,6 +253,7 @@ async def migrate() -> int:
             if row is None or not isinstance(row.value, dict):
                 continue
             value = dict(row.value)
+            lost += [f"{section}: {k}" for k in keys if not readable(value.get(k))]
             changed = False
             for k in keys:
                 if value.get(k) not in (None, "") and not is_encrypted(value[k]):
@@ -226,4 +265,11 @@ async def migrate() -> int:
         await session.commit()
     if count:
         log.info("Zugangsdaten verschlüsselt: %d Einträge", count)
+    if lost:
+        from ..services.audit import log_event
+
+        await log_event(
+            "Zugangsdaten nicht lesbar (Schlüssel geändert): " + ", ".join(lost) + " – neu eintragen",
+            level="warning", category="config",
+        )
     return count

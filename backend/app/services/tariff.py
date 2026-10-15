@@ -110,7 +110,7 @@ class TariffService:
     async def _fetch_tibber(self) -> None:
         token = self.config.get("tibber_token", "")
         if not token:
-            return
+            raise RuntimeError("Tibber-Token fehlt oder ist nicht lesbar – unter Tarif neu eintragen")
         async with aiohttp.ClientSession() as http:
             async with http.post(
                 TIBBER_URL,
