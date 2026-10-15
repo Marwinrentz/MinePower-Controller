@@ -176,7 +176,7 @@ export type Snapshot = {
   house_power: number;
   wallbox_power: number;
   water_power: number;
-  battery: { soc: number; power: number } | null;
+  battery: { soc: number; power: number; capacity_kwh?: number | null } | null;
   surplus: number;
   price_ct: number | null;
   /** Liegt der aktuelle Preis unter der Grenze aus 'Tarif"? */

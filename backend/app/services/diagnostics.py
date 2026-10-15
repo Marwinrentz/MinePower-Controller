@@ -325,9 +325,12 @@ def _behaviour_findings(events: list, devices: list, loop) -> list[dict[str, Any
         pattern = _hours_text([e.time for e in evs])
         dev = by_name.get(name)
         hint = _meta_attr(getattr(dev, "driver_id", "") or "", "own_program_hint")
+        protect = bool(getattr(getattr(loop, "cfg", None), "battery_protect_other_loads", False))
+        battery_note = ("Batterie ist dabei gesperrt." if protect else
+                        "Batterie deckt dabei mit (Einstellung 'Speicher auch bei … sperren' aus).")
         out.append(_finding(
             "info", f"{name} heizt per Geräteprogramm",
-            f"{len(evs)}×{' (' + pattern + ')' if pattern else ''}. Batterie wird dabei nicht entladen.",
+            f"{len(evs)}×{' (' + pattern + ')' if pattern else ''}. {battery_note}",
             hint or "Geräteprogramm in den Geräteeinstellungen prüfen.",
             count=len(evs),
         ))
@@ -359,8 +362,8 @@ def _behaviour_findings(events: list, devices: list, loop) -> list[dict[str, Any
         host = re.search(r"https?://([\d.]+(?::\d+)?)", last)
         out.append(_finding(
             "warn" if len(evs) >= 2 else "info",
-            f"{name}: {'BLE-Proxy' if proxy else 'Gerät'} {len(evs)}× offline",
-            (f"Proxy {host.group(1)} nicht erreichbar." if proxy and host else last[:160]),
+            f"{name}: {'Gateway' if proxy else 'Gerät'} {len(evs)}× offline",
+            (f"Gateway {host.group(1)} nicht erreichbar." if proxy and host else last[:160]),
             _offline_fix(getattr(dev, "driver_id", "") or "", last),
             count=len(evs),
         ))
@@ -370,7 +373,8 @@ def _behaviour_findings(events: list, devices: list, loop) -> list[dict[str, Any
             "info", f"{name}: {len(evs)}× länger nicht erreichbar",
             f"Ø {rate:.1f}× am Tag (unterwegs oder angesteckt eingeschlafen). Angesteckt wird es bei "
             f"Überschuss geweckt.",
-            "Zu Hause oft nicht erreichbar? Abstand BLE-Proxy ↔ Auto verkleinern.",
+            _meta_attr(getattr(by_name.get(name), "driver_id", "") or "", "offline_hint")
+            or "Zu Hause oft nicht erreichbar? Funkverbindung zum Fahrzeug prüfen.",
             count=len(evs),
         ))
     return out

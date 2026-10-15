@@ -185,6 +185,16 @@ async def test_connection(body: TestConnectionRequest, db: AsyncSession = Depend
             pass
 
 
+WALLBOX_MODES = ("pv_only", "min_pv", "pv_price", "price", "target")
+WATER_MODES = ("off", "pv_only", "pv_price", "price", "schedule")
+
+
+def _check_mode(value, allowed: tuple[str, ...]) -> None:
+    """Unbekannte Betriebsarten ablehnen statt sie still zu speichern."""
+    if str(value) not in allowed:
+        raise HTTPException(422, f"Unbekannte Betriebsart '{value}'. Erlaubt: {', '.join(allowed)}")
+
+
 @router.post("/{device_id}/action")
 async def device_action(
     device_id: int,
@@ -208,6 +218,7 @@ async def device_action(
         elif action == "auto":
             dev.controller.set_override(None)
         elif action == "set_mode":
+            _check_mode(body.value, WALLBOX_MODES)
             dev.controller.s.mode = str(body.value)
             await _persist_mode(device_id, str(body.value))
             dev.settings["mode"] = str(body.value)
@@ -236,6 +247,7 @@ async def device_action(
             dev.controller.boost = False
             await loop.save_runtime()
         elif action == "set_mode":
+            _check_mode(body.value, WATER_MODES)
             dev.controller.s.mode = str(body.value)
             await _persist_mode(device_id, str(body.value))
             # Auch im Speicher des Loops nachziehen: Sonst unterscheidet sich

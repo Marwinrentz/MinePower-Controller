@@ -8,7 +8,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { BatteryGauge, type GaugeMark } from "../components/BatteryGauge";
+import { BatteryGauge, batteryEta, type GaugeMark } from "../components/BatteryGauge";
 import { SocChart } from "../components/charts";
 import { Icon } from "../components/icons";
 import {
@@ -17,7 +17,7 @@ import {
 import { useI18n } from "../i18n";
 import { confirmTouch } from "../components/Confirm";
 import { post } from "../lib/api";
-import { fmtDuration, fmtPct, fmtW } from "../lib/format";
+import { fmtDuration, fmtW } from "../lib/format";
 import type { BatteryMode, SnapshotDevice } from "../lib/types";
 import { useLive } from "../store/live";
 import { useSettings } from "../store/settings";
@@ -201,27 +201,33 @@ export function Battery() {
     : p > 30 ? t("bat.sCharging", { power: fmtW(p) })
     : p < -30 ? t("bat.sDischarging", { power: fmtW(-p) }) : t("bat.sIdle");
   const planText = plan && plan.intent !== "auto" ? plan.reason : null;
+  const eta = batteryEta(soc, p, bat?.capacity_kwh, reserve);
 
   return (
     <div className="page">
       <PageHead title={t("bat.title")} sub={t("bat.sub")} />
 
       <Card className="bat-hero">
-        <div className="bat-art">
-          <BatteryGauge soc={soc} power={p} gridCharging={snapshot.battery_grid_charging} marks={marks} label={t("bat.title")} />
-        </div>
-        <div className="bat-main">
-          <div className="row wrap tight">
-            <Badge tone={plan && plan.intent !== "auto" ? "accent" : undefined}>{plan?.label ?? t("bat.act.auto")}</Badge>
-            {snapshot.battery_manual && <Badge tone="info">{t("bat.manualBadge")}</Badge>}
+        <div className="bat-head">
+          <div className="bat-soc num" aria-hidden="true">{soc != null ? Math.round(soc) : "–"}<small>%</small></div>
+          <div className="bat-head-text">
+            <p className="bat-status">{status}</p>
+            <div className="row wrap tight">
+              <Badge tone={plan && plan.intent !== "auto" ? "accent" : undefined}>{plan?.label ?? t("bat.act.auto")}</Badge>
+              {snapshot.battery_manual && <Badge tone="info">{t("bat.manualBadge")}</Badge>}
+            </div>
           </div>
-          <p className="bat-status">{status}</p>
+        </div>
+        <BatteryGauge soc={soc} power={p} gridCharging={snapshot.battery_grid_charging} marks={marks} label={t("bat.title")} />
+        <div className="bat-main">
           {planText && <p className="bat-plan">{planText}</p>}
           <p className="field-help">{snapshot.battery_gate_reason}</p>
           <div className="stats">
-            <Stat label={t("car.soc")} value={soc != null ? fmtPct(soc) : "–"} tone="battery" />
             <Stat label={t("car.power")} value={fmtW(Math.abs(p))}
                   sub={p > 30 ? t("flow.charging") : p < -30 ? t("flow.discharging") : t("flow.idle")} />
+            {eta && (
+              <Stat label={t(eta.to === "full" ? "bat.etaFull" : "bat.etaReserve")} value={fmtDuration(eta.hours * 3600)} />
+            )}
             {readback && (
               <Stat label={t("bat.inverterMode")} value={t(`bat.mode.${readback}`)}
                     sub={differs ? (dev?.mode_settling ? t("bat.settling") : t("bat.mismatch")) : undefined} />

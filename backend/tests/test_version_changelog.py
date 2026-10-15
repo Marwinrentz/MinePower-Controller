@@ -76,7 +76,8 @@ async def test_upgrade_from_217_shows_changes_until_seen():
         row = await db.get(User, 1)
         assert row.last_seen_version == "2.17.0"
         data = await changelog(user=row)
-        assert [e["version"] for e in data["unseen"]] == [__version__]
+        versions = [e["version"] for e in data["unseen"]]
+        assert versions[0] == __version__ and "3.0.0" in versions and "2.17.0" not in versions
         out = await mark_version_seen(db=db, user=row)
         assert out.last_seen_version == __version__
         assert (await changelog(user=row))["unseen"] == []

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from ..core import runtime
 from ..db import async_session
 from ..models import User
-from ..security import authenticate_websocket, get_current_user
+from ..security import authenticate_websocket, get_current_user, require_role
 from ..services.ws import ws_manager
 
 router = APIRouter(prefix="/api", tags=["status"])
@@ -18,14 +18,14 @@ async def live_status(_: User = Depends(get_current_user)):
 
 
 @router.post("/status/pause")
-async def pause_regulation(_: User = Depends(get_current_user)):
+async def pause_regulation(_: User = Depends(require_role("user"))):
     """Globaler Not-Aus: Regelung pausieren (Lasten werden sicher gestoppt)."""
     runtime.get_loop().paused = True
     return {"ok": True, "paused": True}
 
 
 @router.post("/status/resume")
-async def resume_regulation(_: User = Depends(get_current_user)):
+async def resume_regulation(_: User = Depends(require_role("user"))):
     runtime.get_loop().paused = False
     return {"ok": True, "paused": False}
 

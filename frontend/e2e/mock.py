@@ -31,6 +31,14 @@ API = json.loads((FIXTURES / "api.json").read_text(encoding="utf-8"))
 BASE = json.loads((FIXTURES / "snapshot.json").read_text(encoding="utf-8"))
 USER = API["auth/me"]
 LIMITS = {"meter": 1, "battery": 1}
+MCP_TOOLS = [
+    {"name": "get_live_status", "title": "Aktueller Zustand", "role": "readonly", "description": ""},
+    {"name": "get_charge_sessions", "title": "Ladeliste", "role": "readonly", "description": ""},
+    {"name": "set_mode", "title": "Betriebsart setzen", "role": "user", "description": ""},
+    {"name": "battery_command", "title": "Batterie von Hand", "role": "user", "description": ""},
+    {"name": "add_device", "title": "Gerät hinzufügen", "role": "admin", "description": ""},
+    {"name": "create_schedule", "title": "Zeitfenster anlegen", "role": "admin", "description": ""},
+]
 CHANGELOG_FILE = Path(__file__).resolve().parents[2] / "CHANGELOG.md"
 
 
@@ -150,7 +158,7 @@ def scenario(name: str = "sun") -> dict:
         s.update(waste_w=6900.0, waste_reason="Tesla Model Y: state=idle; Speicher voll")
 
     bat["data"].update(soc=soc, power=bat_w)
-    s["battery"] = {"soc": soc, "power": bat_w}
+    s["battery"] = {"soc": soc, "power": bat_w, "capacity_kwh": 10.0}
     grid = house + car + water + bat_w - pv
     if name == "waste":
         grid = -s["waste_w"]
@@ -194,6 +202,8 @@ class Mock:
                  unseen: bool = False):
         self.page = page
         self.unseen = unseen
+        self.tokens: list[dict] = [{"id": 1, "name": "Claude Desktop", "prefix": "mp_Qx7k", "role": "user",
+                                     "created_at": NOON, "last_used_at": NOON}]
         self.snapshot = scenario(name)
         self.writes: list[tuple[str, str, object]] = []
         self.sockets: list = []
@@ -220,6 +230,11 @@ class Mock:
             except Exception:  # noqa: BLE001
                 body = req.post_data
             self.writes.append((req.method, path, body))
+            if path == "mcp/tokens" and req.method == "POST":
+                tok = {"id": 2, "name": (body or {}).get("name", "KI"), "prefix": "mp_Ab3x", "role": (body or {}).get("role", "readonly"),
+                       "created_at": NOON, "last_used_at": None, "token": "mp_Ab3xBEISPIELNURFUERTESTS0000000000000000"}
+                self.tokens.append({k: v for k, v in tok.items() if k != "token"})
+                return route.fulfill(status=200, json=tok)
             m = re.fullmatch(r"devices/(\d+)", path)
             if m and req.method == "PATCH":
                 dev = next((d for d in API.get("devices", []) if d["id"] == int(m.group(1))), {})
@@ -235,6 +250,10 @@ class Mock:
             return route.fulfill(json=_history(fields, hours))
         if path == "statistics":
             return route.fulfill(json=STATS)
+        if path == "mcp/tokens":
+            return route.fulfill(json=self.tokens)
+        if path == "mcp/tools":
+            return route.fulfill(json=MCP_TOOLS)
         if path == "devices/limits":
             return route.fulfill(json=LIMITS)
         if path == "system/changelog":

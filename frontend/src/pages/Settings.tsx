@@ -17,9 +17,11 @@ import { DevicesPanel } from "./settings/DevicesPanel";
 import {
   AppearanceSettings, BackupSettings, InfoSettings, NotificationSettings, PrioritySettings, UsersSettings,
 } from "./settings/OtherSettings";
+import { McpSettings } from "./settings/McpSettings";
 import { RegulationSettings } from "./settings/RegulationSettings";
 
-type Tab = "regulation" | "battery" | "priority" | "devices" | "notifications" | "users" | "appearance" | "backup" | "info";
+type Tab = "regulation" | "battery" | "priority" | "devices" | "notifications" | "users" | "appearance" | "backup" | "mcp"
+  | "info";
 
 const TABS: { key: Tab; icon: IconName; admin?: boolean }[] = [
   { key: "regulation", icon: "auto" },
@@ -30,6 +32,7 @@ const TABS: { key: Tab; icon: IconName; admin?: boolean }[] = [
   { key: "users", icon: "lock", admin: true },
   { key: "appearance", icon: "display" },
   { key: "backup", icon: "download", admin: true },
+  { key: "mcp", icon: "ai" },
   { key: "info", icon: "info" },
 ];
 
@@ -72,6 +75,7 @@ export function Settings() {
           {tab === "users" && <UsersSettings />}
           {tab === "appearance" && <AppearanceSettings />}
           {tab === "backup" && <BackupSettings />}
+          {tab === "mcp" && <McpSettings />}
           {tab === "info" && <InfoSettings />}
         </div>
       )}

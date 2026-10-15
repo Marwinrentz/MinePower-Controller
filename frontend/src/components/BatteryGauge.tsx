@@ -1,53 +1,67 @@
-/** Batterie als Grafik – bewusst schlicht.
+/** Batterie als waagerechter Füllstand.
  *
- *  Ein Umriss, eine flache Füllung, eine Linie für die Reserve. Mehr braucht
- *  es nicht, um auf einen Blick zu sehen: wie voll, ob er lädt oder entlädt,
- *  und wie weit es noch bis zur Reserve ist. Lädt er aus dem Netz, ist die
- *  Füllung blau statt gelb. Bewegung nur als leises Pulsieren des Pfeils
- *  (prefers-reduced-motion: aus).
+ *  Breite Zelle mit Pol rechts, Füllung bis zum Ladestand, Markierungen für
+ *  Reserve und 'Batterie zuerst bis'. Laden und Entladen zeigt ein langsam
+ *  wanderndes Streifenmuster in Flussrichtung (prefers-reduced-motion: aus).
+ *  Netzladen färbt die Füllung blau. Waagerecht passt die Grafik ohne
+ *  Leerraum auf Handy und Desktop.
  */
-import { spreadLabels } from "../lib/spread";
-
 export type GaugeMark = { soc: number; label: string; kind: "reserve" | "priority" | "inverter" };
 
-const TOP = 40;
-const BOTTOM = 262;
-const X = 66;
-const W = 92;
-const yFor = (soc: number) => BOTTOM - (Math.max(0, Math.min(100, soc)) / 100) * (BOTTOM - TOP);
+const clamp = (v: number) => Math.max(0, Math.min(100, v));
+
+/** Beschriftungen, die sich überdecken würden, auseinanderschieben (in %). */
+function spread(positions: number[], gap = 18): number[] {
+  const order = positions.map((p, i) => [p, i] as const).sort((a, b) => a[0] - b[0]);
+  const out = [...positions];
+  let last = -Infinity;
+  for (const [p, i] of order) {
+    const v = Math.max(p, last + gap);
+    out[i] = Math.min(v, 100);
+    last = out[i];
+  }
+  return out;
+}
 
 export function BatteryGauge({ soc, power, gridCharging, marks, label }: {
   soc: number | null; power: number; gridCharging?: boolean; marks: GaugeMark[]; label: string;
 }) {
-  const flow = power > 30 ? "up" : power < -30 ? "down" : "none";
-  const level = soc == null ? BOTTOM : yFor(soc);
-  const shown = marks.filter((m) => m.kind !== "inverter");
-  const ys = shown.map((m) => yFor(m.soc));
-  const textY = spreadLabels(ys, 18);
-  const textInFill = level < 140;
-
+  const flow = power > 30 ? "in" : power < -30 ? "out" : "idle";
+  const level = soc == null ? 0 : clamp(soc);
+  const shown = marks.filter((m) => m.kind !== "inverter").map((m) => ({ ...m, soc: clamp(m.soc) }));
+  const labelPos = spread(shown.map((m) => m.soc));
   return (
-    <svg className={`bgauge flow-${flow} ${gridCharging ? "grid" : ""}`} viewBox="0 0 280 300" role="img" aria-label={label}>
-      <rect className="bg-cap" x={X + W / 2 - 18} y="16" width="36" height="12" rx="4" />
-      <rect className="bg-cell" x={X - 10} y="28" width={W + 20} height={BOTTOM - TOP + 22} rx="22" />
-      {soc != null && soc > 0.5 && (
-        <rect className="bg-fill" x={X} y={level} width={W} height={Math.max(0, BOTTOM - level)} rx="12" />
-      )}
-
-      {shown.map((m, i) => (
-        <g key={m.kind} className={`bg-mark ${m.kind}`}>
-          <path d={`M${X} ${ys[i]} H${X + W}`} />
-          <path className="bg-mark-tick" d={`M${X + W + 14} ${ys[i]} L${X + W + 20} ${textY[i]} H${X + W + 26}`} />
-          <text x={X + W + 30} y={textY[i] + 4}>{m.label}</text>
-        </g>
-      ))}
-
-      <text className={`bg-soc ${textInFill ? "on-fill" : ""}`} x={X + W / 2} y={textInFill ? level + 44 : level - 16}
-            textAnchor="middle">{soc != null ? `${Math.round(soc)} %` : "–"}</text>
-      {flow !== "none" && (
-        <path className="bg-arrow" transform={`translate(${X + W / 2 - 9} ${textInFill ? level + 54 : level - 70})`}
-              d={flow === "up" ? "M9 16V2m0 0-6 6m6-6 6 6" : "M9 2v14m0 0-6-6m6 6 6-6"} />
-      )}
-    </svg>
+    <div className={`bgauge flow-${flow} ${gridCharging ? "grid" : ""}`} role="img"
+         aria-label={`${label}: ${soc != null ? Math.round(soc) : "–"} %`}>
+      <div className="bg-cell">
+        <div className="bg-fill" style={{ width: `${level}%` }}>
+          <span className="bg-stripes" aria-hidden="true" />
+        </div>
+        {shown.map((m) => (
+          <span key={m.kind} className={`bg-mark ${m.kind}`} style={{ left: `${m.soc}%` }} aria-hidden="true" />
+        ))}
+      </div>
+      <span className="bg-pole" aria-hidden="true" />
+      <div className="bg-labels" aria-hidden="true">
+        {shown.map((m, i) => (
+          <span key={m.kind} style={{ left: `${labelPos[i]}%` }}
+                className={`bg-label ${m.kind} ${labelPos[i] < 12 ? "start" : labelPos[i] > 88 ? "end" : ""}`}>
+            {m.label}
+          </span>
+        ))}
+      </div>
+    </div>
   );
+}
+
+/** Restzeit bis voll (Laden) bzw. bis zur Reserve (Entladen); null ohne Kapazität. */
+export function batteryEta(soc: number | null, power: number, capacityKwh: number | null | undefined,
+                           reserve: number): { hours: number; to: "full" | "reserve" } | null {
+  if (soc == null || !capacityKwh || Math.abs(power) < 50) return null;
+  if (power > 0) {
+    if (soc >= 99.5) return null;
+    return { hours: ((100 - soc) / 100) * capacityKwh * 1000 / power, to: "full" };
+  }
+  if (soc <= reserve) return null;
+  return { hours: ((soc - reserve) / 100) * capacityKwh * 1000 / -power, to: "reserve" };
 }

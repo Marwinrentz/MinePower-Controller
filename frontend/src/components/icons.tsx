@@ -19,7 +19,7 @@ export type IconName =
   | "moon" | "display" | "flask" | "bolt"
   | "chevron" | "info" | "price" | "pulse" | "more" | "flame" | "thermo" | "clock"
   | "plug" | "refresh" | "download" | "import" | "lock" | "garage" | "arrowDown" | "shield"
-  | "plus" | "minus" | "github";
+  | "plus" | "minus" | "github" | "ai";
 
 /** Pfaddaten im 24×24-Raster. Bewusst nur Striche, keine Flächen. */
 const PATHS: Record<IconName, string> = {
@@ -69,6 +69,7 @@ const PATHS: Record<IconName, string> = {
   garage: "M3 10 12 4l9 6v10H3V10Zm4 10v-7h10v7M7 16h10",
   plus: "M12 5v14M5 12h14",
   minus: "M5 12h14",
+  ai: "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Zm6.5 11 .7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2Z",
   github: "M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 4 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4M9 18c-4.51 2-5-2-7-2",
 };
 

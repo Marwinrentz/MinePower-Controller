@@ -50,6 +50,24 @@ class User(Base):
     last_seen_version: Mapped[str | None] = mapped_column(String(20), nullable=True, default=_current_version)
 
 
+class ApiToken(Base):
+    """Zugangsschlüssel für KI-Assistenten (MCP). Gespeichert wird nur der
+    SHA-256-Hash; der Schlüssel selbst wird genau einmal angezeigt."""
+
+    __tablename__ = "api_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(80))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    #: Erste Zeichen zum Wiedererkennen in der Liste (z. B. mp_Ab3x)
+    prefix: Mapped[str] = mapped_column(String(16))
+    #: Rechte des Schlüssels, höchstens die des Kontos: readonly | user | admin
+    role: Mapped[str] = mapped_column(String(20), default="readonly")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class Device(Base):
     """Ein konfiguriertes Gerät. `driver_id` referenziert einen registrierten
     Treiber (drivers/registry.py); `config` enthält dessen Verbindungsdaten,

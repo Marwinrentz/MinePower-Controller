@@ -146,6 +146,8 @@ OBEY_WARN_REPEAT_S = 6 * 3600.0
 WAKE_SURPLUS_CONFIRM_S = 300.0
 #: … und höchstens so oft (Wecken kostet das Auto selbst etwas Energie).
 WAKE_RETRY_S = 1800.0
+#: Wecken ab diesem Anteil der Mindestleistung des Ladepunkts
+WAKE_MIN_SHARE = 0.75
 WAKE_TIMEOUT_S = 45.0
 #: Verschenkt-Protokoll: Episoden ab dieser Leistung zählen, ab dieser Menge
 #: wird eine Zeile ins Ereignisprotokoll geschrieben.
@@ -1085,10 +1087,11 @@ class ControlLoop:
         fine_loads: list[tuple[ManagedDevice, WaterHeaterDecision]] = []
         #: Warum blieb Überschuss liegen? (für die Kennzahl 'verschenkt')
         blockers: list[str] = []
-        if battery_first and bat_power_s > 0:
-            blockers.append(
-                f"Batterie lädt mit {bat_power_s:.0f} W – sie hat Vorrang"
-            )
+        # Lädt der Speicher mit Vorrang, nimmt er seinen Teil schon vor dem
+        # Netzpunkt. Was trotzdem eingespeist wird, hat er nicht verursacht:
+        # Die Gründe der Lasten zählen zuerst, der Speicher nur ohne andere.
+        battery_note = (f"Batterie lädt mit {bat_power_s:.0f} W – sie hat Vorrang"
+                        if battery_first and bat_power_s > 0 else None)
         if battery_guard > 0:
             blockers.append(
                 f"Batterie entlädt mit {battery_guard:.0f} W – das ist kein Solarüberschuss"
@@ -1179,7 +1182,8 @@ class ControlLoop:
             pv_power, float(grid_power), battery, wb_power, wh_power,
             budget=budget, price_ct=price_ct, price_cheap=cheap,
             waste_w=waste_w,
-            waste_reason=self._waste_reason(waste_w, blockers, wallboxes + heaters),
+            waste_reason=self._waste_reason(waste_w, blockers + ([battery_note] if battery_note else []),
+                                            wallboxes + heaters),
             gap_filled_w=filled_w,
         )
 
@@ -1252,8 +1256,10 @@ class ControlLoop:
             return
         # Wecken lohnt, wenn sonst Überschuss ins Netz geht – oder ein
         # günstiges Preisfenster läuft, in dem das Auto laden soll.
+        # Schon ab drei Vierteln der Mindestleistung: Die fehlenden Watt
+        # liefert meist die nächste Minute, und ohne Wecken bleibt alles im Netz.
         wants_power = (
-            getattr(dev, "last_avail_w", 0.0) >= ctrl._min_power()
+            getattr(dev, "last_avail_w", 0.0) >= WAKE_MIN_SHARE * ctrl._min_power()
             or (ctrl.s.mode in ("price", "pv_price") and self.price_cheap_now)
         )
         eligible = (
@@ -2370,7 +2376,9 @@ class ControlLoop:
             "house_power": round(house, 1),
             "wallbox_power": round(wb_power, 1),
             "water_power": round(wh_power, 1),
-            "battery": {"soc": battery.soc, "power": battery.power} if battery else None,
+            "battery": {"soc": battery.soc, "power": battery.power,
+                        "capacity_kwh": (battery.capacity_kwh or self.cfg.battery_capacity_kwh or None)}
+            if battery else None,
             "surplus": round(budget, 1),
             "price_ct": price_ct,
             # Ob die aktuelle Stunde günstig ist, entscheidet der eingestellte

@@ -4,6 +4,26 @@ Format: eine Version je Abschnitt, Einträge gruppiert in Neu, Geändert und
 Behoben, ein Eintrag je Zeile. Die App zeigt diese Datei unter „Changelog“
 und nach einem Update als Hinweisfenster.
 
+## 3.1.0 (2026-10-15)
+
+### Neu
+- KI-Assistenten über MCP (Model Context Protocol): Werte lesen, Geräte steuern und einrichten
+- MCP-Funktionen: Ladeliste als CSV mit Summen, Zeitfenster, Betriebsarten, Batterie, Einstellungen
+- Einstellungen: Tab KI-Assistent mit Zugangsschlüsseln je Anwendung und Rechtestufe
+- Anleitungen für Claude, ChatGPT, Grok, Le Chat, Codex, Cursor, VS Code, Windsurf, Gemini CLI, LM Studio, Open WebUI, Continue
+- Adresse mit Schlüssel für Konnektoren, die nur eine URL annehmen
+- Batterie: Restzeit bis voll bzw. bis zur Reserve
+
+### Geändert
+- Batterie: waagerechte Füllstandsanzeige mit Flussrichtung
+- Fahrzeug wird schon ab drei Vierteln der Mindestleistung geweckt
+
+### Behoben
+- Verschenkter Strom wurde der Batterie zugeschrieben statt dem eigentlichen Grund (z. B. Fahrzeug nicht erreichbar)
+- Diagnose meldete bei Geräteprogrammen 'Batterie wird nicht entladen', auch wenn sie mitlief
+- Regelung pausieren war auch mit der Rolle 'Nur lesen' möglich
+- Unbekannte Betriebsarten wurden ohne Fehlermeldung gespeichert
+
 ## 3.0.0 (2026-10-09)
 
 ### Neu

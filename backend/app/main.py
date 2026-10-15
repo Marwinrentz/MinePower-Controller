@@ -15,6 +15,7 @@ from .api import (
     drivers,
     events,
     history,
+    mcp,
     sessions,
     settings_api,
     statistics,
@@ -107,7 +108,7 @@ app.add_middleware(
 )
 
 for router_module in (auth, drivers, devices, battery, settings_api, status, history,
-                      sessions, events, vehicles, system, statistics):
+                      sessions, events, vehicles, system, statistics, mcp):
     app.include_router(router_module.router)
 
 
@@ -141,7 +142,8 @@ if STATIC_DIR.is_dir():
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def spa_fallback(full_path: str) -> FileResponse:
-        if full_path.startswith("api/"):
+        # API, MCP und OAuth-Erkundung (KI-Konnektoren) nie mit index.html beantworten
+        if full_path.startswith(("api/", "mcp", ".well-known/")):
             raise HTTPException(404)
         candidate = (STATIC_DIR / full_path).resolve()
         if candidate.is_file() and str(candidate).startswith(str(STATIC_DIR.resolve())):

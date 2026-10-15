@@ -401,6 +401,18 @@ Einzelheiten unter [docs/headless.md](docs/headless.md).
 **Produktivbetrieb.** `.env.example` nach `.env` kopieren und ein eigenes
 `POSTGRES_PASSWORD` setzen.
 
+## KI-Assistent (MCP)
+
+MinePower ist ein MCP-Server (Model Context Protocol, Transport Streamable
+HTTP) unter `/mcp`. Eine KI kann damit Werte und Verlauf lesen, die Ladeliste
+als CSV auswerten, Betriebsarten, Boost und Batterie steuern, Zeitfenster
+anlegen und Geräte einrichten. Zugangsschlüssel und Anleitungen für viele
+KI-Anwendungen stehen unter Einstellungen → KI-Assistent. Jeder Schlüssel hat
+eine Rechtestufe (Lesen, Steuern, Einrichten); Aktionen erscheinen im
+Ereignisprotokoll. Konnektoren, die nur eine URL annehmen, nutzen
+`/mcp/k/<Schlüssel>`; dafür muss MinePower per HTTPS aus dem Internet
+erreichbar sein.
+
 ## Entwicklung
 
 ```bash
@@ -816,6 +828,16 @@ Details in [docs/headless.md](docs/headless.md).
 
 **Production.** Copy `.env.example` to `.env` and set your own
 `POSTGRES_PASSWORD`.
+
+## AI assistant (MCP)
+
+MinePower is an MCP server (Model Context Protocol, Streamable HTTP transport)
+at `/mcp`. An AI can read values and history, analyse the charge list as CSV,
+control modes, boost and battery, create time windows and set up devices.
+Access keys and guides for many AI applications are under Settings → AI
+assistant. Every key has a permission level (read, control, set up); actions
+appear in the event log. Connectors that accept only a URL use
+`/mcp/k/<key>`; MinePower must then be reachable from the internet via HTTPS.
 
 ## Development
 
