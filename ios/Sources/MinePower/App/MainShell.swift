@@ -8,6 +8,7 @@ import SwiftUI
 struct MainShell: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(Router.self) private var router
+    @Environment(AppSession.self) private var session
 
     var body: some View {
         @Bindable var router = router
@@ -17,6 +18,16 @@ struct MainShell: View {
             } else {
                 TabShell()
             }
+        }
+        // Leerer Server: Assistent einmal je Sitzung von selbst anbieten.
+        .task(id: session.setup?.needsDevices) {
+            guard session.setup?.needsDevices == true, session.canConfigure, !router.wizardOffered else { return }
+            router.wizardOffered = true
+            router.showWizard = true
+        }
+        .fullScreenCover(isPresented: $router.showWizard) {
+            SetupWizardView(api: session.api)
+                .environment(session)
         }
         .overlay(alignment: .top) { ConnectionBanner() }
         .fullScreenCover(isPresented: $router.showWall) {

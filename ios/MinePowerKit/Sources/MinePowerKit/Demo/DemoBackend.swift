@@ -22,6 +22,8 @@ public final class DemoBackend: Sendable {
         case night
         /// Wolken: Netzbezug, Gerät offline, Hinweis aktiv.
         case attention
+        /// Frisch installierter Server ohne Geräte (Einrichtungsassistent).
+        case fresh
     }
 
     struct State: Sendable {
@@ -78,6 +80,11 @@ public final class DemoBackend: Sendable {
         state.withLock { s in
             s = fresh
             s.scenario = scenario
+            if scenario == .fresh {
+                s.devices = []
+                s.vehicles = []
+                s.schedules = []
+            }
         }
     }
 
@@ -112,7 +119,9 @@ public final class DemoBackend: Sendable {
         case ("GET", "api/system/health"):
             return ok(Health(status: "ok", controlLoop: "running", version: "3.1.1", time: .now))
         case ("GET", "api/system/setup-state"):
-            return ok(SetupState(needsAdmin: false, needsDevices: false, hasGridMeasurement: true))
+            let devices = state.current.devices
+            return ok(SetupState(needsAdmin: false, needsDevices: devices.isEmpty,
+                                 hasGridMeasurement: devices.contains { $0.category == .meter || $0.category == .inverter }))
         case ("POST", "api/auth/login"), ("POST", "api/auth/refresh"):
             return ok(TokenResponse(token: Self.token, user: me))
         case ("GET", "api/auth/me"), ("POST", "api/auth/me/seen"):
@@ -233,7 +242,14 @@ public final class DemoBackend: Sendable {
         case ("GET", "api/system/export"):
             let export: JSONObject = ["version": "3.1.1", "settings": .object(state.current.settings)]
             return ok(export)
-        case ("POST", "api/system/import"), ("POST", "api/system/demo"):
+        case ("POST", "api/system/import"):
+            return okMessage()
+        case ("POST", "api/system/demo"):
+            // Server-Demo: Simulationsgeräte anlegen (wie das Backend).
+            state.withLock { s in
+                if s.devices.isEmpty { s.devices = Self.initialState().devices }
+                if s.scenario == .fresh { s.scenario = .sunny }
+            }
             return okMessage()
         case ("GET", "api/mcp/tokens"):
             return ok(state.current.mcpTokens)
@@ -365,6 +381,10 @@ public final class DemoBackend: Sendable {
             batterySoc = 46
             carSoc = 68
             waterTemp = 54
+        case .fresh:
+            pv = 0
+            house = 0
+            presence = .away
         case .attention:
             pv = 1900 + wobble(11, 600)
             house = 1150 + wobble(17, 200)
@@ -394,7 +414,8 @@ public final class DemoBackend: Sendable {
         snap.batteryManual = s.batteryManual.map { BatteryManual(intent: $0.rawValue, mode: $0.rawValue) }
         snap.weather = s.scenario == .attention ? "wechselhaft" : "stabil"
 
-        snap.devices = snap.devices?.map { device in
+        let configured = Set(s.devices.map(\.id))
+        snap.devices = snap.devices?.filter { configured.contains($0.id) }.map { device in
             var d = device
             d.lastSeen = now
             switch d.category {

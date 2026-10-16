@@ -67,6 +67,10 @@ final class Router {
     private(set) var request: Request?
     /// Wandanzeige (Vollbild, ohne Bedienung).
     var showWall = false
+    /// Einrichtungsassistent (Vollbild).
+    var showWizard = false
+    /// Automatisch höchstens einmal je Sitzung anbieten.
+    var wizardOffered = false
 
     func show(_ section: AppSection) {
         showWall = false

@@ -47,6 +47,19 @@ final class ScreenshotTests: XCTestCase {
         }
     }
 
+    func testSetupWizard() throws {
+        let app = launch(variant: .light, scenario: "fresh")
+        XCTAssertTrue(app.buttons["wizardNext"].waitForExistence(timeout: 10))
+        attach(name: "light_wizard_welcome")
+        app.buttons["wizardNext"].tap()
+        XCTAssertTrue(app.buttons["driver"].waitForExistence(timeout: 5))
+        sleep(1)
+        attach(name: "light_wizard_inverter")
+        app.buttons["driver"].tap()
+        sleep(1)
+        attach(name: "light_wizard_drivers")
+    }
+
     func testConnectScreen() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-UITest"]
