@@ -226,12 +226,12 @@ public struct Explanation: Sendable, Equatable {
         return !mode.isEmpty
     }
 
-    static func batteryAction(_ intent: String) -> String {
+    public static func batteryAction(_ intent: String) -> String {
         switch intent {
         case "charge": Loc.t("Laden", "Charge")
         case "discharge": Loc.t("Entladen", "Discharge")
         case "no_discharge": Loc.t("Entladen sperren", "Block discharge")
-        case "hold": Loc.t("Halten", "Hold")
+        case "hold": Loc.t("Komplett sperren", "Block completely")
         default: Loc.t("Automatik", "Automatic")
         }
     }

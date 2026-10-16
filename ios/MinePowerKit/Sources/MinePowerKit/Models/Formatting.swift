@@ -169,3 +169,23 @@ public extension JSONEncoder {
         return e
     }
 }
+
+public extension Fmt {
+    /// Zahl aus Eingabetext: "1.400" (Tausenderpunkt), "0,5", "0.5", "-12", "1 400".
+    /// Ein Punkt gilt als Tausendertrenner, wenn danach genau drei Ziffern folgen
+    /// und kein Komma vorkommt; sonst als Dezimalpunkt.
+    static func parseNumber(_ raw: String) -> Double? {
+        var text = raw.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "\u{00A0}", with: "")
+        guard !text.isEmpty else { return nil }
+        if text.contains(",") {
+            text = text.replacingOccurrences(of: ".", with: "").replacingOccurrences(of: ",", with: ".")
+        } else if let dot = text.lastIndex(of: "."), text.filter({ $0 == "." }).count >= 1 {
+            let tail = text[text.index(after: dot)...]
+            if tail.count == 3, tail.allSatisfy(\.isNumber), text.first(where: { $0 != "-" }) != "." {
+                text = text.replacingOccurrences(of: ".", with: "")
+            }
+        }
+        return Double(text)
+    }
+}

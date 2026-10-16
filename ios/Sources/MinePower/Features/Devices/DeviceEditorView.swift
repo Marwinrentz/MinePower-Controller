@@ -13,17 +13,6 @@ extension DeviceCategory {
         }
     }
 
-    var symbol: String {
-        switch self {
-        case .inverter: "sun.max"
-        case .meter: "gauge.with.dots.needle.33percent"
-        case .wallbox: "ev.charger"
-        case .battery: "battery.75percent"
-        case .waterHeater: "drop.degreesign"
-        case .unknown: "questionmark.square"
-        }
-    }
-
     var domain: DomainColor { Palette.category(self) }
 }
 
@@ -100,7 +89,7 @@ struct DeviceEditorView: View {
                 pickDriver = true
             } label: {
                 HStack(spacing: Space.m) {
-                    DomainIcon(symbol: editor.draft.category.symbol, color: editor.draft.category.domain, size: 36)
+                    DomainIcon(icon: editor.draft.category.webIcon, color: editor.draft.category.domain, size: 40)
                     VStack(alignment: .leading, spacing: 2) {
                         if let driver = editor.driver {
                             Text(driver.name).font(Typo.bodyMedium).foregroundStyle(.primary)
@@ -153,7 +142,7 @@ struct DeviceEditorView: View {
                     Text(notes).font(Typo.footnote).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } label: {
-                    Label("Hinweise zum Gerät", systemImage: "info.circle").font(Typo.subheadlineMedium)
+                    Label("Hinweise zum Gerät", web: .info).font(Typo.subheadlineMedium)
                 }
             }
         }
@@ -167,7 +156,7 @@ struct DeviceEditorView: View {
                 Button {
                     Task { await editor.test() }
                 } label: {
-                    Label(editor.isTesting ? "Teste …" : "Verbindung testen", systemImage: "antenna.radiowaves.left.and.right")
+                    Label(editor.isTesting ? "Teste …" : "Verbindung testen", web: .pulse)
                 }
                 .buttonStyle(.secondary)
                 .disabled(editor.isTesting)
@@ -176,7 +165,7 @@ struct DeviceEditorView: View {
                     Button {
                         Task { await editor.test(includeWrite: true) }
                     } label: {
-                        Label("Mit Schaltbefehl", systemImage: "switch.2")
+                        Label("Mit Schaltbefehl", web: .power)
                     }
                     .buttonStyle(.secondary)
                     .disabled(editor.isTesting)

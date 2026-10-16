@@ -174,3 +174,42 @@ struct ChargeListTests {
         #expect(ChargeList(csv: csv).rows.isEmpty)
     }
 }
+
+@Suite("Beschriftungen verteilen")
+struct SpreadTests {
+    @Test func keepsOrderAndGap() {
+        #expect(spreadLabels([100, 104, 50], gap: 16) == [100, 116, 50])
+        #expect(spreadLabels([95, 90], gap: 18, limit: 100) == [100, 90])
+    }
+}
+
+@Suite("Einstellungs-Entwurf")
+struct SettingsDraftTests {
+    @Test func dirtyResetAndRebase() {
+        var draft = SettingsDraft(["min_current": 6, "mode": "pv_only"])
+        #expect(!draft.isDirty)
+        draft.set("min_current", 8.0)
+        #expect(draft.isDirty)
+        #expect(draft.changes == ["min_current": 8])
+        #expect(draft.number("max_current", 16) == 16)
+        draft.rebase(["min_current": 6, "mode": "min_pv"])
+        #expect(draft.string("mode", "") == "min_pv")
+        #expect(draft.number("min_current", 0) == 8)
+        draft.reset()
+        #expect(!draft.isDirty)
+    }
+}
+
+@Suite("Zahlen aus Eingaben")
+struct ParseNumberTests {
+    @Test(arguments: [("1.400", 1400.0), ("0,5", 0.5), ("0.5", 0.5), ("-12", -12.0), ("1 400", 1400.0),
+                      ("1.234,5", 1234.5), ("2.25", 2.25)] as [(String, Double)])
+    func parses(raw: String, expected: Double) {
+        #expect(Fmt.parseNumber(raw) == expected)
+    }
+
+    @Test func rejectsGarbage() {
+        #expect(Fmt.parseNumber("") == nil)
+        #expect(Fmt.parseNumber("abc") == nil)
+    }
+}

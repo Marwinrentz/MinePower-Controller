@@ -32,13 +32,13 @@ struct SignInView: View {
                         Button {
                             session.addAnotherServer()
                         } label: {
-                            Label("Anderer Server", systemImage: "server.rack")
+                            Label("Anderer Server", web: .display)
                         }
                         if session.server != nil {
                             Button(role: .destructive) {
                                 confirmRemoval = true
                             } label: {
-                                Label("Server entfernen", systemImage: "trash")
+                                Label("Server entfernen", web: .close)
                             }
                         }
                     } label: {
@@ -92,7 +92,7 @@ struct CompatibilityNotice: View {
         case .serverTooOld(let minimum, let server):
             Card {
                 VStack(alignment: .leading, spacing: Space.s) {
-                    Label("Server-Update nötig", systemImage: "arrow.up.circle.fill")
+                    Label("Server-Update nötig", web: .download)
                         .font(Typo.headline)
                         .foregroundStyle(Palette.warn.ink)
                     Text("Dein Server hat Version \(server.description), die App braucht mindestens \(minimum.description). Einige Bereiche funktionieren sonst nicht.")

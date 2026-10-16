@@ -1,10 +1,12 @@
 import MinePowerKit
 import SwiftUI
 
-/// Hauptnavigation: iPhone (kompakt) mit Tab-Leiste, iPad (regulär) mit Seitenleiste.
+/// Hauptnavigation wie die Weboberfläche, in iOS-Struktur.
 ///
-/// Entscheidet nach Größenklasse, nicht nach Gerät: Ein iPad in Slide Over
-/// oder schmalem Stage-Manager-Fenster bekommt die iPhone-Navigation.
+/// iPhone (kompakt): Tab-Leiste unten mit den Web-Symbolen – Übersicht,
+/// Auto, Warmwasser, Batterie und "Mehr" (wie `AppShell.tsx`), auf iOS 26 als
+/// Liquid Glass. iPad (regulär): Seitenleiste mit allen Bereichen. Entschieden
+/// wird nach Größenklasse: Ein iPad in Slide Over bekommt die Tab-Leiste.
 struct MainShell: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(Router.self) private var router
@@ -29,12 +31,15 @@ struct MainShell: View {
             SetupWizardView(api: session.api)
                 .environment(session)
         }
-        .overlay(alignment: .top) { ConnectionBanner() }
         .fullScreenCover(isPresented: $router.showWall) {
             WallView()
         }
+        .environment(session.settings)
     }
 }
+
+/// Projektseite (wie `GITHUB_URL` in `frontend/src/lib/links.ts`).
+let githubURL = URL(string: "https://github.com/Marwinrentz/MinePower-Controller")!
 
 // MARK: - iPhone
 
@@ -54,16 +59,17 @@ private struct TabShell: View {
                 NavigationStack {
                     SectionView(section: section)
                 }
-                .tabItem { Label(section.title, systemImage: section.symbol) }
+                .tabItem { Label(section.title, web: section.icon) }
                 .tag(Tab.section(section))
             }
             NavigationStack(path: $morePath) {
                 MoreList()
                     .navigationDestination(for: AppSection.self) { SectionView(section: $0) }
             }
-            .tabItem { Label("Mehr", systemImage: "ellipsis.circle") }
+            .tabItem { Label("Mehr", web: .more) }
             .tag(Tab.more)
         }
+        .tint(Palette.accent)
         .minimizingTabBar()
         .onChange(of: router.request, initial: true) { _, request in
             guard let section = request?.section else { return }
@@ -83,32 +89,67 @@ private struct TabShell: View {
     }
 }
 
-/// "Mehr": alle weiteren Bereiche plus Wandanzeige.
+/// "Mehr" wie das Blatt im Web: weitere Bereiche, Wand-Ansicht, GitHub, Konto.
 private struct MoreList: View {
     @Environment(Router.self) private var router
     @Environment(AppSession.self) private var session
 
     var body: some View {
-        List {
-            Section {
-                ForEach(AppSection.more) { section in
-                    NavigationLink(value: section) {
-                        Label { Text(section.title) } icon: { DomainIcon(symbol: section.symbol, color: section.domain, size: 30) }
+        Page {
+            Card(padding: Space.s) {
+                VStack(spacing: 0) {
+                    ForEach(AppSection.more) { section in
+                        NavigationLink(value: section) {
+                            MoreRow(icon: section.icon, title: section.title, tone: section.domain)
+                        }
+                        .buttonStyle(.plain)
+                        if section != AppSection.more.last { Divider().overlay(Web.line).padding(.leading, 60) }
                     }
                 }
             }
-            Section {
-                Button {
-                    router.showWall = true
-                } label: {
-                    Label { Text("Wandanzeige") } icon: { DomainIcon(symbol: "rectangle.on.rectangle", color: Palette.house, size: 30) }
+            Card(padding: Space.s) {
+                VStack(spacing: 0) {
+                    Button { router.showWall = true } label: {
+                        MoreRow(icon: .fullscreen, title: "Wand-Ansicht", tone: nil)
+                    }
+                    .buttonStyle(.plain)
+                    Divider().overlay(Web.line).padding(.leading, 60)
+                    Link(destination: githubURL) {
+                        MoreRow(icon: .github, title: "GitHub", tone: nil, external: true)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .foregroundStyle(.primary)
-            } footer: {
-                Text("Vollbild für ein festes Display, gut lesbar aus der Entfernung.")
+            }
+            if let user = session.user {
+                Text("Angemeldet als \(user.name) · \(session.server?.name ?? "")")
+                    .font(Typo.subheadline)
+                    .foregroundStyle(Web.textDim)
+                    .padding(.horizontal, Space.s)
             }
         }
         .navigationTitle("Mehr")
+        .toolbar { BrandToolbar() }
+    }
+}
+
+private struct MoreRow: View {
+    let icon: WebIcon
+    let title: LocalizedStringKey
+    let tone: DomainColor?
+    var external = false
+
+    var body: some View {
+        HStack(spacing: Space.m) {
+            DomainIcon(icon: icon, color: tone, size: 40)
+            Text(title).font(Typo.bodyMedium).foregroundStyle(Web.textStrong)
+            Spacer()
+            Icon(external ? .export : .chevron, size: 16)
+                .foregroundStyle(Web.textDim)
+                .rotationEffect(.degrees(external ? 45 : 0))
+        }
+        .padding(.horizontal, Space.s)
+        .frame(minHeight: 56)
+        .contentShape(.rect)
     }
 }
 
@@ -116,16 +157,15 @@ private struct MoreList: View {
 
 private struct SplitShell: View {
     @Environment(Router.self) private var router
-    @Environment(AppSession.self) private var session
     @State private var visibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
-        @Bindable var router = router
         NavigationSplitView(columnVisibility: $visibility) {
             List(selection: Binding<AppSection?>(get: { router.selection }, set: { if let s = $0 { router.selection = s } })) {
                 Section {
                     ForEach(AppSection.allCases) { section in
-                        Label(section.title, systemImage: section.symbol)
+                        Label(section.title, web: section.icon)
+                            .font(Typo.bodyMedium)
                             .tag(section)
                     }
                 }
@@ -133,12 +173,18 @@ private struct SplitShell: View {
                     Button {
                         router.showWall = true
                     } label: {
-                        Label("Wandanzeige", systemImage: "rectangle.on.rectangle")
+                        Label("Wand-Ansicht", web: .fullscreen).font(Typo.bodyMedium)
+                    }
+                    Link(destination: githubURL) {
+                        Label("GitHub", web: .github).font(Typo.bodyMedium)
                     }
                 }
             }
+            .tint(Palette.accent)
+            .scrollContentBackground(.hidden)
+            .background(Web.surface)
             .navigationTitle("MinePower")
-            .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
+            .navigationSplitViewColumnWidth(min: 220, ideal: 248, max: 300)
             .safeAreaInset(edge: .bottom) { SidebarFooter() }
         } detail: {
             NavigationStack {
@@ -157,14 +203,13 @@ private struct SidebarFooter: View {
     var body: some View {
         if let server = session.server {
             HStack(spacing: Space.s) {
-                Image(systemName: session.isDemo ? "play.rectangle" : "server.rack")
-                    .foregroundStyle(.secondary)
+                BrandMark(size: 28)
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(server.name).font(Typo.subheadlineMedium)
-                    Text(session.user?.name ?? server.displayAddress)
-                        .font(Typo.caption).foregroundStyle(.secondary)
+                    Text(server.name).font(Typo.subheadlineMedium).foregroundStyle(Web.textStrong)
+                    Text(session.user?.name ?? server.displayAddress).font(Typo.caption2).foregroundStyle(Web.textDim)
                 }
                 Spacer()
+                LiveIndicator()
             }
             .padding(Space.m)
             .accessibilityElement(children: .combine)
@@ -189,35 +234,6 @@ struct SectionView: View {
         case .settings: SettingsView()
         case .changelog: ChangelogView()
         }
-    }
-}
-
-// MARK: - Verbindung
-
-/// Hinweis, wenn die Werte nicht live sind. Bei bestehender Verbindung unsichtbar.
-private struct ConnectionBanner: View {
-    @Environment(AppSession.self) private var session
-
-    var body: some View {
-        let connection = session.live.connection
-        if session.isOffline || connection == .offline || connection == .reconnecting {
-            Label(text(connection), systemImage: connection == .reconnecting ? "arrow.triangle.2.circlepath" : "wifi.slash")
-                .font(Typo.caption)
-                .padding(.horizontal, Space.m)
-                .padding(.vertical, 6)
-                .glassControl(interactive: false)
-                .padding(.top, 2)
-                .transition(.move(edge: .top).combined(with: .opacity))
-                .accessibilityAddTraits(.updatesFrequently)
-        }
-    }
-
-    private func text(_ connection: LiveStore.Connection) -> LocalizedStringKey {
-        if connection == .reconnecting { return "Verbindung wird wiederhergestellt …" }
-        if let age = session.live.age(), age.isFinite {
-            return "Offline – Werte von vor \(Fmt().duration(age))"
-        }
-        return "Server nicht erreichbar"
     }
 }
 

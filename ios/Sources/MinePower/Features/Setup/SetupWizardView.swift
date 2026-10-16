@@ -214,7 +214,7 @@ private struct WelcomeStep: View {
             VStack(alignment: .leading, spacing: Space.m) {
                 ForEach(DeviceCategory.setupOrder, id: \.self) { category in
                     HStack(spacing: Space.m) {
-                        DomainIcon(symbol: category.symbol, color: category.domain, size: 34)
+                        DomainIcon(icon: category.webIcon, color: category.domain, size: 36)
                         Text(category.title).font(Typo.bodyMedium)
                         Spacer()
                         if SetupFlow.Step.device(category).isOptional {
@@ -226,7 +226,7 @@ private struct WelcomeStep: View {
             }
             Card {
                 VStack(alignment: .leading, spacing: Space.m) {
-                    Label("Erst einmal ausprobieren?", systemImage: "play.circle")
+                    Label("Erst einmal ausprobieren?", web: .play)
                         .font(Typo.headline)
                     Text("Der Server simuliert eine komplette Anlage ohne Hardware. Echte Geräte kannst du jederzeit ergänzen.")
                         .font(Typo.subheadline)
@@ -250,7 +250,7 @@ private struct DeviceStep: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Space.l) {
             HStack(spacing: Space.m) {
-                DomainIcon(symbol: category.symbol, color: category.domain, size: 48)
+                DomainIcon(icon: category.webIcon, color: category.domain, size: 48)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(category.title)
                         .font(Typo.title)
@@ -280,7 +280,7 @@ private struct DeviceStep: View {
             }
             if wizard.savedInStep {
                 HStack {
-                    Label("Gespeichert", systemImage: "checkmark.seal.fill")
+                    Label("Gespeichert", web: .check)
                         .font(Typo.headline)
                         .foregroundStyle(Palette.ok.ink)
                     Spacer()
@@ -350,7 +350,7 @@ struct PriorityList: View {
                             .font(Typo.headline).monospacedDigit()
                             .frame(width: 30, height: 30)
                             .background(Palette.accent.opacity(0.14), in: .circle)
-                        DomainIcon(symbol: device.category.symbol, color: device.category.domain, size: 34)
+                        DomainIcon(icon: device.category.webIcon, color: device.category.domain, size: 36)
                         Text(device.name).font(Typo.bodyMedium)
                         Spacer(minLength: Space.s)
                         VStack(spacing: 0) {

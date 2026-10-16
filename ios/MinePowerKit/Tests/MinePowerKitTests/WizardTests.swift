@@ -169,4 +169,30 @@ extension DemoBacked {
             #expect(settings.section("priority")["order"]?.array?.compactMap(\.int) == chosen)
         }
     }
+
+    @Suite("Einstellungen bearbeiten")
+    @MainActor
+    struct SettingsEditorTests {
+        let api = APIClient(session: .demo(), baseURL: DemoBackend.baseURL, token: DemoBackend.token)
+
+        init() { DemoBackend.shared.reset() }
+
+        @Test func editSaveAndDiscard() async {
+            let editor = SettingsEditor(api: api)
+            await editor.load()
+            #expect(editor.isLoaded)
+            #expect(!editor.isDirty)
+            editor.update("tariff") { $0.set("grid_charge_limit_ct", 21.5) }
+            #expect(editor.isDirty)
+            #expect(await editor.save())
+            #expect(!editor.isDirty)
+            #expect(editor.section("tariff").number("grid_charge_limit_ct", 0) == 21.5)
+            let reloaded = SettingsEditor(api: api)
+            await reloaded.load()
+            #expect(reloaded.section("tariff").number("grid_charge_limit_ct", 0) == 21.5)
+            reloaded.update("regulation") { $0.set("grid_target_w", 100.0) }
+            reloaded.discard()
+            #expect(!reloaded.isDirty)
+        }
+    }
 }

@@ -122,7 +122,7 @@ struct ConnectView: View {
                 Button {
                     showHelp = true
                 } label: {
-                    Label("Wo finde ich die Adresse?", systemImage: "questionmark.circle")
+                    Label("Wo finde ich die Adresse?", web: .info)
                         .labelStyle(.iconOnly)
                         .frame(width: 44, height: 44)
                 }
@@ -158,7 +158,7 @@ struct ConnectView: View {
             Button {
                 Task { await session.startDemo() }
             } label: {
-                Label("Demo ansehen", systemImage: "play.circle")
+                Label("Demo ansehen", web: .play)
             }
             .buttonStyle(.secondary)
             .accessibilityIdentifier("demo")
@@ -178,7 +178,7 @@ struct ConnectView: View {
                     } label: {
                         ServerRow(name: profile.name, address: profile.displayAddress,
                                   detail: profile.lastVersion.map { "MinePower \($0)" },
-                                  symbol: profile.isDemo ? "play.rectangle" : "server.rack")
+                                  icon: profile.isDemo ? .play : .display)
                     }
                     .buttonStyle(.plain)
                 }
@@ -217,12 +217,11 @@ struct ServerRow: View {
     var name: String
     var address: String
     var detail: String?
-    var symbol = "server.rack"
-    var trailing = "chevron.right"
+    var icon: WebIcon = .display
 
     var body: some View {
         HStack(spacing: Space.m) {
-            DomainIcon(symbol: symbol, color: Palette.pv, size: 40)
+            DomainIcon(icon: icon, color: Palette.pv, size: 40)
             VStack(alignment: .leading, spacing: 2) {
                 Text(name).font(Typo.bodyMedium).foregroundStyle(.primary)
                 Text(address).font(Typo.footnote).foregroundStyle(.secondary)
@@ -231,10 +230,8 @@ struct ServerRow: View {
                 }
             }
             Spacer(minLength: Space.s)
-            Image(systemName: trailing)
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(.tertiary)
-                .accessibilityHidden(true)
+            Icon(.chevron, size: 16)
+                .foregroundStyle(Web.textDim)
         }
         .padding(Space.m)
         .frame(minHeight: 64)
@@ -295,28 +292,29 @@ struct AppTextField: View {
         self.identifier = identifier
     }
 
+    @FocusState private var focused: Bool
+
+    /// `.input`: Fläche, kräftige Kante, Akzentrand mit Schein beim Bearbeiten.
     var body: some View {
-        HStack(spacing: Space.s) {
-            if let symbol {
-                Image(systemName: symbol)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 22)
-                    .accessibilityHidden(true)
+        Group {
+            if secure {
+                SecureField(text: $text, prompt: prompt) { prompt }
+            } else {
+                TextField(text: $text, prompt: prompt) { prompt }
             }
-            Group {
-                if secure {
-                    SecureField(text: $text, prompt: prompt) { prompt }
-                } else {
-                    TextField(text: $text, prompt: prompt) { prompt }
-                }
-            }
-            .font(Typo.body)
-            .accessibilityIdentifier(identifier ?? "")
         }
+        .font(.custom(Typo.Weight.regular.rawValue, size: 16, relativeTo: .body))
+        .foregroundStyle(Web.textStrong)
+        .focused($focused)
+        .accessibilityIdentifier(identifier ?? "")
         .padding(.horizontal, Space.m)
-        .frame(minHeight: 50)
-        .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color(uiColor: .separator), lineWidth: 0.5))
+        .frame(minHeight: 48)
+        .background(Web.surface, in: .rect(cornerRadius: Radius.medium, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Radius.medium, style: .continuous)
+            .strokeBorder(focused ? Palette.accent : Web.lineStrong, lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: Radius.medium + 3, style: .continuous)
+            .fill(focused ? Web.accentSoft : .clear).padding(-3))
+        .animation(.snappy(duration: 0.12), value: focused)
     }
 }
 

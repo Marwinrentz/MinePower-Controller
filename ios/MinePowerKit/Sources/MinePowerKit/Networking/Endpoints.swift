@@ -96,8 +96,11 @@ public extension APIClient {
         try await get("api/statistics", query: ["range": range.rawValue])
     }
 
-    func history(_ range: HistoryRange, fields: [String]) async throws -> HistorySeries {
-        try await get("api/history", query: ["range": range.rawValue, "fields": fields.joined(separator: ",")])
+    /// Verlauf; `source` z. B. "device:4" für Werte eines einzelnen Geräts.
+    func history(_ range: HistoryRange, fields: [String], source: String? = nil) async throws -> HistorySeries {
+        var query = ["range": range.rawValue, "fields": fields.joined(separator: ",")]
+        if let source { query["source"] = source }
+        return try await get("api/history", query: query)
     }
 
     func sessions(limit: Int = 100) async throws -> [ChargeSession] {

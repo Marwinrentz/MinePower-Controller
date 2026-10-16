@@ -19,25 +19,26 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable, Codable {
         case .car: "Auto"
         case .water: "Warmwasser"
         case .battery: "Batterie"
-        case .tariff: "Strompreis"
+        case .tariff: "Tarif"
         case .statistics: "Statistik"
         case .diagnose: "Diagnose"
         case .settings: "Einstellungen"
-        case .changelog: "Neuigkeiten"
+        case .changelog: "Changelog"
         }
     }
 
-    var symbol: String {
+    /// Symbole wie die Navigation der Weboberfläche (`AppShell.tsx`).
+    var icon: WebIcon {
         switch self {
-        case .dashboard: "bolt.horizontal.circle"
-        case .car: "car"
-        case .water: "drop"
-        case .battery: "battery.75percent"
-        case .tariff: "eurosign.circle"
-        case .statistics: "chart.bar.xaxis"
-        case .diagnose: "stethoscope"
-        case .settings: "gearshape"
-        case .changelog: "sparkles"
+        case .dashboard: .dashboard
+        case .car: .car
+        case .water: .water
+        case .battery: .battery
+        case .tariff: .price
+        case .statistics: .statistics
+        case .diagnose: .pulse
+        case .settings: .settings
+        case .changelog: .events
         }
     }
 

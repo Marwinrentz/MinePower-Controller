@@ -50,6 +50,8 @@ public final class AppSession {
     public let directory: ServerDirectory
     public let live: LiveStore
     public private(set) var api: APIClient
+    /// Globale Einstellungen (Tarif, Regelung …), geteilt von allen Seiten.
+    public private(set) var settings: SettingsEditor
 
     @ObservationIgnored private let secrets: any SecretStore
     @ObservationIgnored private let registry: TrustRegistry
@@ -76,7 +78,9 @@ public final class AppSession {
         let session = makeSession(false)
         self.networkSession = session
         self.urlSession = session
-        self.api = APIClient(session: session, registry: registry)
+        let api = APIClient(session: session, registry: registry)
+        self.api = api
+        self.settings = SettingsEditor(api: api)
         self.directory = ServerDirectory(defaults: defaults)
         self.live = LiveStore()
         live.onAuthExpired = { [weak self] in self?.sessionExpired() }
@@ -399,6 +403,7 @@ public final class AppSession {
     private func configureTransport(demo: Bool) {
         urlSession = demo ? demoSession : networkSession
         api = APIClient(session: urlSession, registry: registry)
+        settings = SettingsEditor(api: api)
     }
 
     /// Token verlängern (30 Tage gültig); Fehler sind hier egal.

@@ -5,16 +5,12 @@ import SwiftUI
 struct PendingSection: View {
     let section: AppSection
     var body: some View {
-        ContentUnavailableView(section.title, systemImage: section.symbol)
+        Page { Card { EmptyState(icon: section.icon, title: section.title, message: "Folgt im nächsten Schritt.") } }
             .navigationTitle(section.title)
     }
 }
 
 struct WallView: View { var body: some View { PendingSection(section: .dashboard).accessibilityIdentifier("wall") } }
-struct CarView: View { var body: some View { PendingSection(section: .car) } }
-struct WaterView: View { var body: some View { PendingSection(section: .water) } }
-struct BatteryView: View { var body: some View { PendingSection(section: .battery) } }
-struct TariffView: View { var body: some View { PendingSection(section: .tariff) } }
 struct StatisticsView: View { var body: some View { PendingSection(section: .statistics) } }
 struct DiagnoseView: View { var body: some View { PendingSection(section: .diagnose) } }
 struct SettingsView: View { var body: some View { PendingSection(section: .settings) } }
