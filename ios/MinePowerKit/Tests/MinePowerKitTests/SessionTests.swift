@@ -133,6 +133,49 @@ extension DemoBacked {
             session.live.stop()
         }
 
+        @Test func connectFlowProbeAdoptSignIn() async throws {
+            let session = makeDemoSession()
+            await session.launch()
+            #expect(session.phase == .needsServer)
+            let result = try await session.probe(DemoBackend.baseURL.absoluteString)
+            #expect(result.health.version == "3.1.1")
+            #expect(result.setup?.needsAdmin == false)
+            let profile = session.adopt(result, name: "Testanlage")
+            #expect(session.phase == .signedOut)
+            #expect(session.directory.active?.id == profile.id)
+            try await session.signIn(email: "demo@minepower.de", password: "x")
+            #expect(session.phase == .signedIn)
+            #expect(session.directory.active?.email == "demo@minepower.de")
+            #expect(session.directory.active?.lastUserName == "Demo")
+            session.live.stop()
+        }
+
+        @Test func invalidAddressIsRejectedBeforeNetwork() async {
+            let session = makeDemoSession()
+            await #expect(throws: APIError.invalidAddress) { _ = try await session.probe("ftp://x") }
+        }
+
+        @Test func addingAnotherServerKeepsTheActiveOne() async {
+            let session = makeDemoSession()
+            await session.startDemo()
+            let demoID = session.directory.activeID
+            session.addAnotherServer()
+            #expect(session.phase == .needsServer)
+            await session.cancelAddingServer()
+            #expect(session.phase == .signedIn)
+            #expect(session.directory.activeID == demoID)
+            session.live.stop()
+        }
+
+        @Test func removingLastServerReturnsToConnect() async throws {
+            let session = makeDemoSession()
+            await session.startDemo()
+            let id = try #require(session.directory.activeID)
+            await session.removeServer(id)
+            #expect(session.phase == .needsServer)
+            #expect(session.directory.profiles.isEmpty)
+        }
+
         @Test func freshInstallNeedsServer() async {
             let session = makeDemoSession()
             await session.launch()

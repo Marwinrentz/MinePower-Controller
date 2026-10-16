@@ -189,6 +189,9 @@ public final class AppSession {
         }
     }
 
+    /// Prüfer für die Netzsuche (teilt Session und Zertifikatsliste).
+    public var serverProbe: ServerProbe { ServerProbe(session: networkSession, registry: registry) }
+
     /// Selbstsigniertes Zertifikat nach Bestätigung durch den Nutzer merken.
     public func trust(host: String, fingerprint: String) {
         registry.pin(host: host, fingerprint: fingerprint)

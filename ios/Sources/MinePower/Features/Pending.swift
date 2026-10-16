@@ -10,9 +10,6 @@ struct PendingSection: View {
     }
 }
 
-struct ConnectView: View { var body: some View { PendingSection(section: .settings) } }
-struct SignInView: View { var body: some View { PendingSection(section: .settings) } }
-struct LockView: View { var body: some View { PendingSection(section: .settings) } }
 struct WallView: View { var body: some View { PendingSection(section: .dashboard).accessibilityIdentifier("wall") } }
 struct DashboardView: View { var body: some View { PendingSection(section: .dashboard) } }
 struct CarView: View { var body: some View { PendingSection(section: .car) } }
