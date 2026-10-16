@@ -12,22 +12,55 @@ import Security
 ///   Gerätecode). Der Schlüsselbund selbst verlangt die Bestätigung; ein
 ///   bloßes `LAContext`-Ja würde das Token nicht schützen.
 ///
+/// Geschützte und ungeschützte Einträge liegen unter getrennten Kontonamen
+/// (`<schlüssel>` und `<schlüssel>#geschützt`). Der Schutz einer bestehenden
+/// Zugriffskontrolle lässt sich per Update nicht ändern und ohne
+/// Face-ID-Abfrage auch nicht sicher erkennen; mit zwei Namen wird beim
+/// Umschalten erst der neue Eintrag geschrieben, dann der alte gelöscht –
+/// es gibt keinen Moment ohne Token.
+///
 /// Ein eigener Aktor, damit `SecItem*` nie auf dem Hauptthread blockiert.
 actor KeychainStore: SecretStore {
     private let service: String
+    /// Zuletzt bestätigter Face-ID-Kontext: Ein direkt folgendes Schreiben
+    /// (Token-Verlängerung nach dem Entsperren) fragt nicht ein zweites Mal.
+    private var authenticatedContext: LAContext?
 
     init(service: String = "de.minepower.app") {
         self.service = service
     }
 
     func secret(for key: String) async throws -> String? {
-        var query = identity(key)
-        query[kSecReturnData] = true
-        query[kSecMatchLimit] = kSecMatchLimitOne
+        if let plain = try read(account: key, context: nil) { return plain }
         let context = LAContext()
         context.localizedReason = String(localized: "Zugang zu deiner Anlage entsperren")
-        query[kSecUseAuthenticationContext] = context
+        let value = try read(account: Self.protectedAccount(key), context: context)
+        if value != nil { authenticatedContext = context }
+        return value
+    }
 
+    func setSecret(_ value: String, for key: String, protected: Bool) async throws {
+        let target = protected ? Self.protectedAccount(key) : key
+        let other = protected ? key : Self.protectedAccount(key)
+        try write(Data(value.utf8), account: target, protected: protected)
+        try delete(account: other)
+    }
+
+    func removeSecret(for key: String) async throws {
+        try delete(account: key)
+        try delete(account: Self.protectedAccount(key))
+        authenticatedContext = nil
+    }
+
+    // MARK: - Intern
+
+    private static func protectedAccount(_ key: String) -> String { key + "#geschützt" }
+
+    private func read(account: String, context: LAContext?) throws -> String? {
+        var query = identity(account)
+        query[kSecReturnData] = true
+        query[kSecMatchLimit] = kSecMatchLimitOne
+        if let context { query[kSecUseAuthenticationContext] = context }
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
         switch status {
@@ -43,13 +76,9 @@ actor KeychainStore: SecretStore {
         }
     }
 
-    func setSecret(_ value: String, for key: String, protected: Bool) async throws {
-        let data = Data(value.utf8)
-        // Wechsel des Schutzes lässt sich nicht per Update ändern: nur dann neu anlegen.
-        if protected != isProtected(key) {
-            try removeSecret(key)
-        }
-        var add = identity(key)
+    /// Anlegen oder ersetzen (kein Löschen-und-neu im Normalfall).
+    private func write(_ data: Data, account: String, protected: Bool) throws {
+        var add = identity(account)
         add[kSecValueData] = data
         if protected {
             var error: Unmanaged<CFError>?
@@ -58,6 +87,7 @@ actor KeychainStore: SecretStore {
                 throw SecretStoreError.unavailable(status: errSecParam)
             }
             add[kSecAttrAccessControl] = access
+            if let authenticatedContext { add[kSecUseAuthenticationContext] = authenticatedContext }
         } else {
             add[kSecAttrAccessible] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         }
@@ -66,45 +96,31 @@ actor KeychainStore: SecretStore {
         case errSecSuccess:
             return
         case errSecDuplicateItem:
-            let status = SecItemUpdate(identity(key) as CFDictionary, [kSecValueData: data] as CFDictionary)
-            guard status == errSecSuccess else { throw SecretStoreError.unavailable(status: status) }
+            var query = identity(account)
+            if protected, let authenticatedContext { query[kSecUseAuthenticationContext] = authenticatedContext }
+            let status = SecItemUpdate(query as CFDictionary, [kSecValueData: data] as CFDictionary)
+            switch status {
+            case errSecSuccess: return
+            case errSecUserCanceled, errSecAuthFailed: throw SecretStoreError.userCancelled
+            default: throw SecretStoreError.unavailable(status: status)
+            }
         case let status:
             throw SecretStoreError.unavailable(status: status)
         }
     }
 
-    func removeSecret(for key: String) async throws {
-        try removeSecret(key)
-    }
-
-    // MARK: - Intern
-
-    private func removeSecret(_ key: String) throws {
-        let status = SecItemDelete(identity(key) as CFDictionary)
+    private func delete(account: String) throws {
+        let status = SecItemDelete(identity(account) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw SecretStoreError.unavailable(status: status)
         }
     }
 
-    /// Ist der Eintrag mit Zugriffskontrolle angelegt? (Ohne Face-ID-Abfrage.)
-    private func isProtected(_ key: String) -> Bool {
-        var query = identity(key)
-        query[kSecReturnAttributes] = true
-        query[kSecMatchLimit] = kSecMatchLimitOne
-        let context = LAContext()
-        context.interactionNotAllowed = true
-        query[kSecUseAuthenticationContext] = context
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-        // Geschützte Einträge melden ohne Interaktion "nicht erlaubt".
-        return status == errSecInteractionNotAllowed
-    }
-
-    private func identity(_ key: String) -> [CFString: Any] {
+    private func identity(_ account: String) -> [CFString: Any] {
         [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: service,
-            kSecAttrAccount: key,
+            kSecAttrAccount: account,
         ]
     }
 }

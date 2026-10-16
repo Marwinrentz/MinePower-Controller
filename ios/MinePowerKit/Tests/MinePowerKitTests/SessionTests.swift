@@ -112,6 +112,27 @@ extension DemoBacked {
     struct AppSessionTests {
         init() { DemoBackend.shared.reset() }
 
+        @Test func launchStartsOnlyOnceForSeveralWindows() {
+            let session = makeDemoSession()
+            #expect(session.beginLaunch())
+            #expect(!session.beginLaunch())
+        }
+
+        @Test func foregroundKeepsRunningConnection() async throws {
+            let session = makeDemoSession()
+            await session.startDemo()
+            try await session.live.refresh()
+            #expect(session.live.connection == .live)
+            // Kontrollzentrum: aktiv → inaktiv → aktiv, ohne Hintergrund.
+            await session.enterForeground()
+            #expect(session.live.connection == .live)
+            session.enterBackground()
+            #expect(session.live.connection == .idle)
+            await session.enterForeground()
+            #expect(session.live.connection != .idle)
+            session.live.stop()
+        }
+
         @Test func freshInstallNeedsServer() async {
             let session = makeDemoSession()
             await session.launch()

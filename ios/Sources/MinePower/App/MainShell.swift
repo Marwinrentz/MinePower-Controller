@@ -54,13 +54,20 @@ private struct TabShell: View {
             .tag(Tab.more)
         }
         .minimizingTabBar()
-        .onChange(of: router.selection, initial: true) { _, section in
+        .onChange(of: router.request, initial: true) { _, request in
+            guard let section = request?.section else { return }
             if AppSection.primary.contains(section) {
                 tab = .section(section)
             } else {
                 tab = .more
                 morePath = [section]
             }
+        }
+        .onChange(of: tab) { _, tab in
+            if case .section(let section) = tab { router.selection = section }
+        }
+        .onChange(of: morePath) { _, path in
+            if let section = path.last { router.selection = section }
         }
     }
 }

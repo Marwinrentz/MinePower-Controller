@@ -54,6 +54,41 @@
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
+		<!-- NSAllowsLocalNetworking deckt IP-Adressen, .local und Namen ohne
+		     Punkt ab, aber nicht die Heimnetz-Endungen der Router (FRITZ!Box:
+		     name.fritz.box, viele andere: .lan, .home, .home.arpa). Nur diese
+		     Endungen sind ausgenommen, kein öffentlicher Name. -->
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>fritz.box</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+			<key>lan</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+			<key>home</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+			<key>home.arpa</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+		</dict>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>MinePower sucht deinen MinePower-Server im Heimnetz und verbindet sich mit ihm, um Live-Werte anzuzeigen und Geräte zu steuern.</string>

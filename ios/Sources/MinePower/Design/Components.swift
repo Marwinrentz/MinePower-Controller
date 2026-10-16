@@ -272,7 +272,12 @@ struct NoticeBanner: View {
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isStaticText)
         .task(id: notice.id) {
-            try? await Task.sleep(for: .seconds(notice.kind == .error ? 6 : 4))
+            // Abgebrochen (neue Meldung, Ansicht weg): nichts schließen.
+            do {
+                try await Task.sleep(for: .seconds(notice.kind == .error ? 6 : 4))
+            } catch {
+                return
+            }
             dismiss()
         }
     }

@@ -82,13 +82,15 @@ public actor APIClient {
     public private(set) var baseURL: URL?
     public private(set) var token: String?
     private let session: URLSession
+    private let registry: TrustRegistry
     private let decoder = JSONDecoder.minePower()
     private let encoder = JSONEncoder.minePower()
 
-    public init(session: URLSession, baseURL: URL? = nil, token: String? = nil) {
+    public init(session: URLSession, baseURL: URL? = nil, token: String? = nil, registry: TrustRegistry = .shared) {
         self.session = session
         self.baseURL = baseURL
         self.token = token
+        self.registry = registry
     }
 
     public func configure(baseURL: URL?, token: String?) {
@@ -181,7 +183,7 @@ public actor APIClient {
         do {
             (data, response) = try await session.data(for: request)
         } catch {
-            throw Self.map(error, host: request.url?.host ?? "")
+            throw Self.map(error, host: request.url?.host ?? "", registry: registry)
         }
         guard let http = response as? HTTPURLResponse else { throw APIError.decoding("kein HTTP") }
         switch http.statusCode {
@@ -207,7 +209,7 @@ public actor APIClient {
         }
     }
 
-    static func map(_ error: any Error, host: String) -> APIError {
+    static func map(_ error: any Error, host: String, registry: TrustRegistry = .shared) -> APIError {
         if error is CancellationError { return .cancelled }
         if let api = error as? APIError { return api }
         guard let url = error as? URLError else { return .unreachable(error.localizedDescription) }
@@ -217,7 +219,7 @@ public actor APIClient {
         case .notConnectedToInternet, .dataNotAllowed, .internationalRoamingOff: return .offline
         case .serverCertificateUntrusted, .serverCertificateHasUnknownRoot, .serverCertificateNotYetValid,
              .serverCertificateHasBadDate, .secureConnectionFailed, .clientCertificateRejected:
-            return .untrustedCertificate(host: host, fingerprint: TrustRegistry.shared.lastPresented(for: host))
+            return .untrustedCertificate(host: host, fingerprint: registry.lastPresented(for: host))
         default: return .unreachable(url.localizedDescription)
         }
     }

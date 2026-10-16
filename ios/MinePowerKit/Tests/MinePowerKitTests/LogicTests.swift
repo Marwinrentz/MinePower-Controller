@@ -47,6 +47,8 @@ struct ServerAddressTests {
         ("unraid", "http://unraid:8080"),
         ("https://energie.example.de/minepower/", "https://energie.example.de/minepower"),
         ("energie.example.de", "https://energie.example.de"),
+        ("energie.example.de:8443", "https://energie.example.de:8443"),
+        ("minepower.fritz.box", "http://minepower.fritz.box:8080"),
         ("  http://10.0.0.2:8080/  ", "http://10.0.0.2:8080"),
     ])
     func normalizes(input: String, expected: String) {

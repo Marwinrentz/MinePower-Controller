@@ -26,9 +26,11 @@ on:
 permissions:
   contents: read
 
+# Neue Pushes ersetzen ältere Läufe – aber nie einen von Hand gestarteten
+# (TestFlight-Upload darf nicht mittendrin abbrechen).
 concurrency:
-  group: ios-${{ github.ref }}
-  cancel-in-progress: true
+  group: ios-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 jobs:
   # Schnell und billig: Modelle, Netzwerk, Sitzung und Demo-Anlage laufen

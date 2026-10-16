@@ -45,17 +45,26 @@ public final class DemoBackend: Sendable {
 
     private let state = Locked(State())
     private let encoder = JSONEncoder.minePower()
+    /// Einmal geladene Vorlagen (Live-Momentaufnahme, Treiberliste).
+    private let liveTemplate: Snapshot
+    private let drivers: [JSONValue]
 
     public init() {
-        state.withLock { s in
-            s.settings = Self.load(SettingsEnvelope.self, "settings")?.values ?? [:]
-            s.devices = Self.load([Device].self, "devices") ?? []
-            s.users = Self.load([User].self, "users") ?? []
-            s.vehicles = [Vehicle(id: 1, name: Loc.t("Familienauto", "Family car"), capacityKwh: 64,
-                                  wallboxDeviceId: 3, socSource: "wallbox", defaultTargetSoc: 80)]
-            s.schedules = [Schedule(id: 1, deviceId: 4, daysMask: Weekdays.workdays.rawValue, startTime: "05:30",
-                                    endTime: "06:30", enabled: true)]
-        }
+        liveTemplate = Self.load(Snapshot.self, "live") ?? Snapshot()
+        drivers = Self.load([JSONValue].self, "drivers") ?? []
+        state.withLock { $0 = Self.initialState() }
+    }
+
+    static func initialState() -> State {
+        var s = State()
+        s.settings = load(SettingsEnvelope.self, "settings")?.values ?? [:]
+        s.devices = load([Device].self, "devices") ?? []
+        s.users = load([User].self, "users") ?? []
+        s.vehicles = [Vehicle(id: 1, name: Loc.t("Familienauto", "Family car"), capacityKwh: 64,
+                              wallboxDeviceId: 3, socSource: "wallbox", defaultTargetSoc: 80)]
+        s.schedules = [Schedule(id: 1, deviceId: 4, daysMask: Weekdays.workdays.rawValue, startTime: "05:30",
+                                endTime: "06:30", enabled: true)]
+        return s
     }
 
     public var scenario: Scenario {
@@ -65,9 +74,9 @@ public final class DemoBackend: Sendable {
 
     /// Auf Ausgangszustand zurück (UI-Tests).
     public func reset(scenario: Scenario = .sunny) {
-        let fresh = DemoBackend()
+        let fresh = Self.initialState()
         state.withLock { s in
-            s = fresh.state.current
+            s = fresh
             s.scenario = scenario
         }
     }
@@ -131,9 +140,8 @@ public final class DemoBackend: Sendable {
         case ("GET", "api/devices/limits"):
             return raw("limits")
         case ("GET", "api/drivers"):
-            let all = Self.load([JSONValue].self, "drivers") ?? []
-            guard let category = query["category"] else { return ok(all) }
-            return ok(all.filter { $0.object?.string("category") == category })
+            guard let category = query["category"] else { return ok(drivers) }
+            return ok(drivers.filter { $0.object?.string("category") == category })
         case ("POST", "api/devices/test"):
             return ok(TestResult(ok: true, message: Loc.t("Verbindung erfolgreich (Demo)", "Connection OK (demo)"),
                                  values: ["power": 1234], warnings: nil, writeTest: nil))
@@ -331,7 +339,7 @@ public final class DemoBackend: Sendable {
     /// Momentaufnahme nach Szenario. Kleine Schwankungen, damit der Fluss lebt.
     public func snapshot(at now: Date = .now) -> Snapshot {
         let s = state.current
-        guard var snap = Self.load(Snapshot.self, "live") else { return Snapshot() }
+        var snap = liveTemplate
         let t = now.timeIntervalSince1970
         let wobble = { (period: Double, amount: Double) in sin(t / period) * amount }
         let elapsed = now.timeIntervalSince(s.started)

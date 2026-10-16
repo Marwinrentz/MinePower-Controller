@@ -14,11 +14,12 @@ public enum ServerAddress {
         var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !text.contains(" ") else { return nil }
         if !text.contains("://") {
-            // Ohne Schema: Heimnetz-Adressen per http, Domains mit Punkt und ohne Port per https.
+            // Ohne Schema: Heimnetz-Adressen per http, alles andere per https.
             let hostPart = text.split(separator: "/").first.map(String.init) ?? text
             let looksLocal = isLocalHost(hostPart.split(separator: ":").first.map(String.init) ?? hostPart)
-            let hasPort = hostPart.contains(":")
-            text = (looksLocal || hasPort ? "http://" : "https://") + text
+            // Öffentliche Namen immer per https, auch mit Port (z. B. :8443 am Reverse-Proxy):
+            // Klartext ins Internet würde ATS ohnehin blockieren.
+            text = (looksLocal ? "http://" : "https://") + text
         }
         guard var comps = URLComponents(string: text), let scheme = comps.scheme?.lowercased(),
               ["http", "https"].contains(scheme), let host = comps.host, !host.isEmpty else { return nil }
@@ -36,7 +37,7 @@ public enum ServerAddress {
     /// Private IPv4-Bereiche, `.local`, `localhost` und Namen ohne Punkt.
     public static func isLocalHost(_ host: String) -> Bool {
         let h = host.lowercased()
-        if h == "localhost" || h.hasSuffix(".local") || h.hasSuffix(".lan") || h.hasSuffix(".home") || h.hasSuffix(".fritz.box") {
+        if h == "localhost" || [".local", ".lan", ".home", ".home.arpa", ".fritz.box"].contains(where: h.hasSuffix) {
             return true
         }
         let parts = h.split(separator: ".").compactMap { Int($0) }
@@ -79,7 +80,11 @@ public struct ServerProbe: Sendable {
     }
 
     private let session: URLSession
-    public init(session: URLSession) { self.session = session }
+    private let registry: TrustRegistry
+    public init(session: URLSession, registry: TrustRegistry = .shared) {
+        self.session = session
+        self.registry = registry
+    }
 
     /// Antwortet unter `url` ein MinePower? Bei Erfolg auch den Einrichtungszustand.
     public func check(_ url: URL, timeout: TimeInterval = 6) async throws -> Result {
@@ -103,7 +108,7 @@ public struct ServerProbe: Sendable {
         do {
             (data, response) = try await session.data(for: request)
         } catch {
-            throw APIClient.map(error, host: url.host ?? "")
+            throw APIClient.map(error, host: url.host ?? "", registry: registry)
         }
         guard let http = response as? HTTPURLResponse else { throw APIError.notMinePower }
         guard (200..<300).contains(http.statusCode) else {

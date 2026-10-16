@@ -13,7 +13,7 @@ import CryptoKit
 ///
 /// `@unchecked Sendable` ist hier begründet: Jeder Zugriff läuft über `NSLock`.
 /// `Mutex` (Synchronization) gibt es erst ab iOS 18, die App unterstützt iOS 17.
-public final class Locked<Value>: @unchecked Sendable {
+public final class Locked<Value: Sendable>: @unchecked Sendable {
     private let lock = NSLock()
     private var value: Value
 
@@ -103,7 +103,10 @@ public final class PinningDelegate: NSObject, URLSessionDelegate, Sendable {
             return (.useCredential, URLCredential(trust: trust))
         }
         registry.recordPresented(host: host, fingerprint: fingerprint)
-        return (.cancelAuthenticationChallenge, nil)
+        // Standardbehandlung statt Abbruch: Das System lehnt dann mit einem
+        // Zertifikatsfehler ab (nicht mit "abgebrochen"), und die App kann den
+        // Abdruck zur Bestätigung anzeigen.
+        return (.performDefaultHandling, nil)
     }
 
     static func leafFingerprint(_ trust: SecTrust) -> String? {

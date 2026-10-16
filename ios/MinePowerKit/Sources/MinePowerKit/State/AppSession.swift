@@ -54,9 +54,14 @@ public final class AppSession {
     @ObservationIgnored private let secrets: any SecretStore
     @ObservationIgnored private let registry: TrustRegistry
     @ObservationIgnored private let defaults: UserDefaults
+    /// Je eine Session für echte Server und für die Demo, einmal erzeugt und
+    /// wiederverwendet: Eine URLSession mit Delegate lebt bis zur Invalidierung.
+    @ObservationIgnored private let networkSession: URLSession
+    @ObservationIgnored private lazy var demoSession: URLSession = makeSession(true)
     @ObservationIgnored private let makeSession: @Sendable (Bool) -> URLSession
     @ObservationIgnored private var urlSession: URLSession
     @ObservationIgnored private var backgroundedAt: Date?
+    @ObservationIgnored private var didBeginLaunch = false
 
     static let lockKey = "security.biometricLock"
     static let lockAfter: TimeInterval = 5 * 60
@@ -69,8 +74,9 @@ public final class AppSession {
         self.registry = registry
         self.makeSession = makeSession
         let session = makeSession(false)
+        self.networkSession = session
         self.urlSession = session
-        self.api = APIClient(session: session)
+        self.api = APIClient(session: session, registry: registry)
         self.directory = ServerDirectory(defaults: defaults)
         self.live = LiveStore()
         live.onAuthExpired = { [weak self] in self?.sessionExpired() }
@@ -93,6 +99,14 @@ public final class AppSession {
     public var biometricLock: Bool { defaults.bool(forKey: Self.lockKey) }
 
     // MARK: - Start
+
+    /// Liefert nur beim ersten Aufruf `true`: Mehrere Fenster (iPad) teilen
+    /// sich die Sitzung und dürfen sie nicht doppelt starten.
+    public func beginLaunch() -> Bool {
+        guard !didBeginLaunch else { return false }
+        didBeginLaunch = true
+        return true
+    }
 
     public func launch() async {
         registry.load(directory.pins)
@@ -163,7 +177,7 @@ public final class AppSession {
     public func probe(_ address: String) async throws -> ServerProbe.Result {
         guard let url = ServerAddress.normalize(address) else { throw APIError.invalidAddress }
         configureTransport(demo: false)
-        let probe = ServerProbe(session: urlSession)
+        let probe = ServerProbe(session: urlSession, registry: registry)
         do {
             return try await probe.check(url)
         } catch APIError.unreachable(let reason) where url.scheme == "http" && url.port == ServerAddress.defaultPort {
@@ -311,17 +325,19 @@ public final class AppSession {
     }
 
     public func enterForeground() async {
-        defer { backgroundedAt = nil }
-        guard phase == .signedIn, let server = directory.active else { return }
-        if biometricLock, let since = backgroundedAt, Date.now.timeIntervalSince(since) > Self.lockAfter {
+        let since = backgroundedAt
+        backgroundedAt = nil
+        guard phase == .signedIn else { return }
+        if biometricLock, let since, Date.now.timeIntervalSince(since) > Self.lockAfter {
             live.reset()
             phase = .locked
             return
         }
-        guard let token = try? await secrets.secret(for: server.tokenKey) else {
-            phase = .locked
-            return
-        }
+        // Nur neu verbinden, wenn wirklich im Hintergrund (Kontrollzentrum,
+        // Mitteilungen lassen die Verbindung bestehen). Das Token kommt aus dem
+        // Speicher, nicht erneut aus dem Schlüsselbund: sonst fragte Face ID
+        // bei jeder Rückkehr.
+        guard since != nil || live.connection == .idle, let token = await api.token else { return }
         startLive(token: token)
         if isOffline { await refreshUser() }
     }
@@ -374,8 +390,8 @@ public final class AppSession {
     }
 
     private func configureTransport(demo: Bool) {
-        urlSession = makeSession(demo)
-        api = APIClient(session: urlSession)
+        urlSession = demo ? demoSession : networkSession
+        api = APIClient(session: urlSession, registry: registry)
     }
 
     /// Token verlängern (30 Tage gültig); Fehler sind hier egal.
