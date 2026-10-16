@@ -33,7 +33,26 @@ public final class DeviceEditor {
 
     public var driver: DriverMeta? {
         guard let id = draft.driverId else { return nil }
-        return drivers.value?.first { $0.id == id }
+        if let known = drivers.value?.first(where: { $0.id == id }) { return known }
+        // Treiber nach Server-Update unbekannt: mit den gespeicherten Feldern weiter bearbeitbar.
+        guard drivers.value != nil, let existing else { return nil }
+        return Self.fallbackDriver(for: existing)
+    }
+
+    nonisolated static func fallbackDriver(for device: Device) -> DriverMeta {
+        let fields = device.config.keys.sorted().map { key -> ConfigField in
+            let value = device.config[key]
+            let type: ConfigField.FieldType = switch value {
+            case .bool: .boolean
+            case .number: .number
+            case .string(let text) where text == secretMask: .password
+            default: .text
+            }
+            return ConfigField(key: key, label: key, type: type, required: false)
+        }
+        return DriverMeta(id: device.driverId, name: device.driverId, category: device.category, fields: fields,
+                          notes: Loc.t("Dieser Treiber ist dem Server nicht mehr bekannt. Name und Werte lassen sich weiter ändern.",
+                                       "The server no longer knows this driver. Name and values can still be changed."))
     }
 
     /// Steuerbare Lasten bieten den Test mit Schreibbefehl an.
@@ -116,12 +135,15 @@ public final class SetupWizard {
     public var priority: [Int] = []
     public private(set) var hasGridMeasurement: Bool?
     public private(set) var isWorking = false
+    /// Schrittwechsel läuft (Doppeltipp darf keinen Schritt überspringen).
+    public private(set) var isTransitioning = false
     public private(set) var error: APIError?
 
     @ObservationIgnored private let api: APIClient
 
-    public init(api: APIClient) {
+    public init(api: APIClient, start: SetupFlow.Step = .welcome) {
         self.api = api
+        flow = SetupFlow(start: start)
         devices = Resource { try await api.devices() }
         limits = Resource { try await api.deviceLimits() }
     }
@@ -160,7 +182,13 @@ public final class SetupWizard {
         prepareStep()
     }
 
+    /// Beschäftigt: Schrittwechsel, Speichern oder Server-Demo laufen.
+    public var isBusy: Bool { isTransitioning || isWorking || editor?.isSaving == true }
+
     public func next() async {
+        guard !isBusy else { return }
+        isTransitioning = true
+        defer { isTransitioning = false }
         error = nil
         if flow.step == .priority {
             guard await savePriority() else { return }
@@ -170,6 +198,9 @@ public final class SetupWizard {
     }
 
     public func back() async {
+        guard !isBusy else { return }
+        isTransitioning = true
+        defer { isTransitioning = false }
         error = nil
         flow.back()
         await enterStep()
@@ -184,7 +215,7 @@ public final class SetupWizard {
     /// Formular speichern; danach "Gespeichert" anzeigen.
     @discardableResult
     public func saveDevice() async -> Bool {
-        guard let editor, await editor.save() != nil else { return false }
+        guard let editor, !editor.isSaving, !isTransitioning, await editor.save() != nil else { return false }
         savedInStep = true
         self.editor = nil
         await devices.reload()
@@ -205,9 +236,6 @@ public final class SetupWizard {
             error = apiError
         } catch {}
     }
-
-    /// Nur für Tests: direkt zu einem Schritt springen.
-    func flowJumpForTests(_ step: SetupFlow.Step) { flow.jump(to: step) }
 
     // MARK: - Intern
 
@@ -236,8 +264,6 @@ public final class SetupWizard {
 
     private func savePriority() async -> Bool {
         guard loads.count >= 2 else { return true }
-        isWorking = true
-        defer { isWorking = false }
         do {
             try await api.setPriority(priority)
             return true

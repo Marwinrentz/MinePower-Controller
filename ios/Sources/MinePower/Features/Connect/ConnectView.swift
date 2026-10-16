@@ -269,12 +269,31 @@ private struct FoundServerRow: View {
 
 /// Eingabefeld im App-Stil: mindestens 16 pt (kein Zoom), 50 pt hoch.
 struct AppTextField: View {
-    var title: LocalizedStringKey
+    var prompt: Text
     @Binding var text: String
     var symbol: String?
     var secure = false
     /// Kennung für UI-Tests, direkt am Eingabefeld (nicht am Rahmen).
     var identifier: String?
+
+    init(title: LocalizedStringKey, text: Binding<String>, symbol: String? = nil, secure: Bool = false,
+         identifier: String? = nil) {
+        self.init(prompt: Text(title), text: text, symbol: symbol, secure: secure, identifier: identifier)
+    }
+
+    /// Platzhalter wörtlich (z. B. vom Server), ohne Übersetzung und Markdown.
+    init(verbatim: String, text: Binding<String>, symbol: String? = nil, secure: Bool = false,
+         identifier: String? = nil) {
+        self.init(prompt: Text(verbatim: verbatim), text: text, symbol: symbol, secure: secure, identifier: identifier)
+    }
+
+    init(prompt: Text, text: Binding<String>, symbol: String?, secure: Bool, identifier: String?) {
+        self.prompt = prompt
+        _text = text
+        self.symbol = symbol
+        self.secure = secure
+        self.identifier = identifier
+    }
 
     var body: some View {
         HStack(spacing: Space.s) {
@@ -286,9 +305,9 @@ struct AppTextField: View {
             }
             Group {
                 if secure {
-                    SecureField(title, text: $text)
+                    SecureField(text: $text, prompt: prompt) { prompt }
                 } else {
-                    TextField(title, text: $text)
+                    TextField(text: $text, prompt: prompt) { prompt }
                 }
             }
             .font(Typo.body)

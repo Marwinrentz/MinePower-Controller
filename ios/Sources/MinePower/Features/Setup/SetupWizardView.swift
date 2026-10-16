@@ -42,13 +42,13 @@ struct SetupWizardView: View {
                 if wizard.step != .done {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Später") { dismiss() }
+                            .disabled(wizard.isBusy)
                             .accessibilityHint(Text("Den Assistenten schließen. Er bleibt unter Einstellungen erreichbar."))
                     }
                 }
             }
         }
         .task { await wizard.start() }
-        .interactiveDismissDisabled(wizard.editor?.isSaving == true)
     }
 
     // MARK: - Schritte
@@ -80,6 +80,7 @@ struct SetupWizardView: View {
                 }
                 .buttonStyle(.plain)
                 .glassControl()
+                .disabled(wizard.isBusy)
                 .accessibilityLabel(Text("Zurück"))
             }
             primaryButton
@@ -109,36 +110,48 @@ struct SetupWizardView: View {
             .buttonStyle(.primary)
             .accessibilityIdentifier("wizardFinish")
         case .device where wizard.editor?.driver != nil && !wizard.savedInStep:
-            // Formular offen: Speichern ist die Hauptaktion, Überspringen nebenan.
-            HStack(spacing: Space.s) {
-                Button("Überspringen") { go(back: false) }
-                    .buttonStyle(.secondary)
-                    .frame(maxWidth: 160)
-                Button {
-                    Task { await wizard.saveDevice() }
-                } label: {
-                    HStack {
-                        if wizard.editor?.isSaving == true { ProgressView().tint(.white) }
-                        Text("Speichern")
-                    }
-                }
-                .buttonStyle(.primary)
-                .accessibilityIdentifier("wizardSave")
+            // Formular offen: Speichern ist die Hauptaktion, Überspringen nebenan
+            // (bei großer Schrift untereinander statt abgeschnitten).
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Space.s) { skipButton; saveButton }
+                VStack(spacing: Space.s) { saveButton; skipButton }
             }
         default:
             Button {
                 go(back: false)
             } label: {
                 HStack {
-                    if wizard.isWorking { ProgressView().tint(.white) }
+                    if wizard.isBusy { ProgressView().tint(.white) }
                     Text(nextTitle)
                     Image(systemName: "chevron.right")
                 }
             }
             .buttonStyle(.primary)
-            .disabled(wizard.isWorking)
+            .disabled(wizard.isBusy)
             .accessibilityIdentifier("wizardNext")
         }
+    }
+
+    private var skipButton: some View {
+        Button("Überspringen") { go(back: false) }
+            .buttonStyle(.secondary)
+            .disabled(wizard.isBusy)
+            .layoutPriority(0)
+    }
+
+    private var saveButton: some View {
+        Button {
+            Task { await wizard.saveDevice() }
+        } label: {
+            HStack {
+                if wizard.editor?.isSaving == true { ProgressView().tint(.white) }
+                Text("Speichern")
+            }
+        }
+        .buttonStyle(.primary)
+        .disabled(wizard.isBusy)
+        .layoutPriority(1)
+        .accessibilityIdentifier("wizardSave")
     }
 
     private var nextTitle: LocalizedStringKey {

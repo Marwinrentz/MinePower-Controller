@@ -80,6 +80,13 @@ public struct DeviceDraft: Sendable, Equatable {
     public func issues(for driver: DriverMeta) -> [DriverForm.Issue] {
         var list = DriverForm.validate(config(for: driver).filter { $0.value.string != secretMask },
                                        fields: driver.fields, editing: isEditing)
+        // Unlesbare Zahl nicht stillschweigend verwerfen (fiele sonst aus der Konfiguration).
+        for field in driver.fields where field.type == .number {
+            let raw = (text[field.key] ?? "").trimmingCharacters(in: .whitespaces)
+            if !raw.isEmpty, DriverForm.value(raw, for: field) == nil, !list.contains(where: { $0.key == field.key }) {
+                list.append(.init(key: field.key, message: Loc.t("Zahl erwartet", "Number expected")))
+            }
+        }
         if name.trimmingCharacters(in: .whitespaces).isEmpty {
             list.insert(.init(key: "name", message: Loc.t("Bitte einen Namen eingeben", "Please enter a name")), at: 0)
         }

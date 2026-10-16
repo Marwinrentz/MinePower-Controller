@@ -55,6 +55,26 @@ struct DeviceDraftTests {
         #expect(draft.testRequest(driver: driver, includeWrite: true).deviceId == 7)
     }
 
+    @Test func unreadableOptionalNumberIsReported() {
+        var draft = DeviceDraft(category: .wallbox)
+        draft.select(driver)
+        draft.text["host"] = "192.0.2.7"
+        draft.text["password"] = "x"
+        draft.text["port"] = "50x"
+        #expect(draft.issues(for: driver).map(\.key) == ["port"])
+    }
+
+    @Test func unknownDriverStaysEditable() {
+        let device = Device(id: 3, name: "Alt", category: .meter, driverId: "entfernt",
+                            config: ["host": "192.0.2.9", "port": 502, "token": .string(secretMask), "invert": true])
+        let fallback = DeviceEditor.fallbackDriver(for: device)
+        #expect(fallback.fields.map(\.type) == [.text, .boolean, .number, .password])
+        var draft = DeviceDraft(editing: device, driver: fallback)
+        draft.name = "Neu"
+        #expect(draft.issues(for: fallback).isEmpty)
+        #expect(draft.updateRequest(driver: fallback).config?["token"] == .string(secretMask))
+    }
+
     @Test func missingRequiredFieldsAndName() {
         var draft = DeviceDraft(category: .wallbox)
         draft.select(driver)
@@ -136,11 +156,10 @@ extension DemoBacked {
 
         @Test func priorityKeepsUserOrderAndAddsNewLoads() async throws {
             DemoBackend.shared.reset(scenario: .sunny)
-            let wizard = SetupWizard(api: api)
+            let wizard = SetupWizard(api: api, start: .device(.waterHeater))
             await wizard.start()
-            wizard.flowJumpForTests(.priority)
-            await wizard.back()
             await wizard.next()
+            #expect(wizard.step == .priority)
             #expect(Set(wizard.priority) == Set(wizard.loads.map(\.id)))
             wizard.priority.reverse()
             let chosen = wizard.priority

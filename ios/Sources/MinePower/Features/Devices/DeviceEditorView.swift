@@ -128,7 +128,12 @@ struct DeviceEditorView: View {
             .disabled(editor.draft.isEditing || editor.drivers.value == nil)
             .accessibilityIdentifier("driver")
             if let error = editor.drivers.error {
-                InlineError(error: error)
+                HStack {
+                    InlineError(error: error)
+                    Spacer()
+                    Button("Erneut laden") { Task { await editor.drivers.reload() } }
+                        .font(Typo.subheadlineMedium)
+                }
             }
         }
     }
@@ -206,7 +211,8 @@ private struct FieldInput: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             case .select:
                 Picker(field.label, selection: textBinding) {
-                    if !field.required { Text("–").tag("") }
+                    // Immer ein leerer Eintrag: Ohne Standardwert gäbe es sonst keine gültige Auswahl.
+                    Text(field.required ? "Bitte wählen" : "–").tag("")
                     ForEach(field.options ?? []) { option in
                         Text(option.label).tag(option.value)
                     }
@@ -216,13 +222,17 @@ private struct FieldInput: View {
                 .padding(.horizontal, Space.s)
                 .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: 14, style: .continuous))
             case .password:
-                AppTextField(title: placeholder, text: textBinding, symbol: "key", secure: true, identifier: field.key)
-                    .textContentType(.password)
+                // Kein .password: Gerätezugänge sollen nicht mit eigenen Logins vorgeschlagen
+                // oder im Passwörter-Programm gespeichert werden.
+                AppTextField(prompt: placeholder, text: textBinding, symbol: "key", secure: true, identifier: field.key)
+                    .textContentType(nil)
+                    .privacySensitive()
             case .number:
-                AppTextField(title: placeholder, text: textBinding, identifier: field.key)
-                    .keyboardType(.decimalPad)
+                // Mit Minus (Offsets, Vorzeichen); decimalPad hätte keins.
+                AppTextField(prompt: placeholder, text: textBinding, symbol: nil, secure: false, identifier: field.key)
+                    .keyboardType(.numbersAndPunctuation)
             case .text:
-                AppTextField(title: placeholder, text: textBinding, identifier: field.key)
+                AppTextField(prompt: placeholder, text: textBinding, symbol: nil, secure: false, identifier: field.key)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(field.key.contains("host") || field.key.contains("ip") ? .URL : .default)
@@ -234,9 +244,9 @@ private struct FieldInput: View {
         field.required ? field.label : field.label + " " + String(localized: "(optional)")
     }
 
-    private var placeholder: LocalizedStringKey {
-        if field.type == .password, editor.draft.isEditing { return "unverändert" }
-        return LocalizedStringKey(field.placeholder ?? "")
+    private var placeholder: Text {
+        if field.type == .password, editor.draft.isEditing { return Text("unverändert") }
+        return Text(verbatim: field.placeholder ?? "")
     }
 
     private var textBinding: Binding<String> {
@@ -342,7 +352,7 @@ struct TestReport: View {
 
     private func display(_ value: JSONValue?) -> String {
         guard let value, !value.isNull else { return "–" }
-        if let number = value.double, value.string != nil, case .number = value {
+        if case .number(let number) = value {
             return Fmt().number(number, digits: number.rounded() == number ? 0 : 2)
         }
         return value.string ?? "–"
