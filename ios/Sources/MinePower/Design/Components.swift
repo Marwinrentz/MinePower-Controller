@@ -20,7 +20,7 @@ struct Card<Content: View>: View {
 /// Seite mit gruppiertem Hintergrund, angenehmer Lesebreite und Pull-to-Refresh.
 struct Page<Content: View>: View {
     var maxWidth: CGFloat = 760
-    var refresh: (@Sendable () async -> Void)?
+    var refresh: (@MainActor () async -> Void)?
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -35,7 +35,15 @@ struct Page<Content: View>: View {
         }
         .background(Color(uiColor: .systemGroupedBackground))
         .softScrollEdges()
-        .refreshable { await refresh?() }
+        .refreshableIf(refresh)
+    }
+}
+
+private extension View {
+    /// Ziehen zum Aktualisieren nur, wenn die Seite etwas nachladen kann.
+    @ViewBuilder
+    func refreshableIf(_ action: (@MainActor () async -> Void)?) -> some View {
+        if let action { refreshable { await action() } } else { self }
     }
 }
 
