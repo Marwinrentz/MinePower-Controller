@@ -1,0 +1,5 @@
+version: 1
+bundleID: de.minepower.app
+product: MinePower
+infoPath: App/Info.plist
+iconPath: App/Icon-1024.png

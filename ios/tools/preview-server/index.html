@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MinePower iOS Vorschau</title>
+<style>
+  :root {
+    --bg: #f3f5f8; --text: #0f172a; --dim: #64748b; --card: #fff; --line: #e1e7ee; --accent: #0f7a4d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0d1015; --text: #f2f5f9; --dim: #8592a5; --card: #161b23; --line: #262e3a; --accent: #3ddc97; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 Inter, system-ui, -apple-system, sans-serif; }
+  header { position: sticky; top: 0; z-index: 2; background: color-mix(in srgb, var(--bg) 85%, transparent);
+           backdrop-filter: blur(16px); padding: 16px 24px; border-bottom: 1px solid var(--line);
+           display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; }
+  h1 { font-size: 18px; margin: 0; }
+  .status { color: var(--dim); font-size: 13px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 999px;
+          padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+  .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  a { color: var(--accent); }
+  main { padding: 24px; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 32px 24px; }
+  figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  figcaption { font-size: 13px; color: var(--dim); text-align: center; }
+  .device { position: relative; background: #0b0d10; border-radius: 46px; padding: 11px;
+            box-shadow: 0 20px 50px -18px rgba(15, 23, 42, .35), inset 0 0 0 2px #2b313a; }
+  .device img { display: block; border-radius: 36px; width: 100%; height: auto; }
+  .device.iphone { width: 250px; }
+  .device.iphone.landscape { width: 100%; max-width: 520px; }
+  .device.iphone::after { content: ""; position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+                          width: 30%; height: 4.2%; background: #000; border-radius: 999px; }
+  .device.iphone.landscape::after { top: 50%; left: 20px; transform: translateY(-50%); width: 4.2%; height: 30%; }
+  .device.ipad { width: 100%; max-width: 560px; border-radius: 28px; padding: 14px; }
+  .device.ipad img { border-radius: 16px; }
+  main.wide { grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); }
+  .empty { grid-column: 1 / -1; text-align: center; color: var(--dim); padding: 80px 16px; }
+  code { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>MinePower iOS – Simulator-Screenshots</h1>
+  <div class="chips" id="devices"></div>
+  <div class="chips" id="variants"></div>
+  <span class="status" id="status">Lade …</span>
+  <a href="approximation.html">HTML-Annäherung (kein Screenshot) →</a>
+</header>
+<main id="grid"></main>
+<script>
+  const VARIANT_LABEL = { light: "Hell", dark: "Dunkel", large: "Große Schrift", landscape: "Querformat" };
+  const SECTION_LABEL = {
+    dashboard: "Übersicht", car: "Auto", water: "Warmwasser", battery: "Batterie", tariff: "Strompreis",
+    statistics: "Statistik", diagnose: "Diagnose", settings: "Einstellungen", changelog: "Neuigkeiten",
+    connect: "Verbinden", wall: "Wandanzeige"
+  };
+  const state = { device: "alle", variant: "alle", files: [], version: null };
+
+  function parse(name) {
+    const base = name.replace(/\.png$/, "");
+    const [device, variant, ...rest] = base.split("_");
+    return { name, device, variant, section: rest.join("_") || variant };
+  }
+
+  function chips(el, values, key, labels) {
+    el.innerHTML = "";
+    for (const value of ["alle", ...values]) {
+      const b = document.createElement("button");
+      b.className = "chip";
+      b.textContent = value === "alle" ? "Alle" : (labels[value] || value);
+      b.setAttribute("aria-pressed", String(state[key] === value));
+      b.onclick = () => { state[key] = value; render(); };
+      el.append(b);
+    }
+  }
+
+  function render() {
+    const items = state.files.map(parse);
+    chips(document.getElementById("devices"), [...new Set(items.map(i => i.device))], "device", { iphone: "iPhone", ipad: "iPad" });
+    chips(document.getElementById("variants"), [...new Set(items.map(i => i.variant))], "variant", VARIANT_LABEL);
+    const grid = document.getElementById("grid");
+    const shown = items.filter(i => (state.device === "alle" || i.device === state.device) &&
+                                    (state.variant === "alle" || i.variant === state.variant));
+    grid.className = shown.some(i => i.device === "ipad" || i.variant === "landscape" || i.section === "wall") ? "wide" : "";
+    grid.innerHTML = shown.length ? "" :
+      `<p class="empty">Noch keine Screenshots. <code>ios/tools/preview.sh</code> holt sie aus dem letzten CI-Lauf.</p>`;
+    for (const i of shown) {
+      const fig = document.createElement("figure");
+      const wide = i.variant === "landscape" || i.section === "wall";
+      fig.innerHTML = `<div class="device ${i.device} ${wide ? "landscape" : ""}">
+          <img loading="lazy" alt="${i.name}" src="shots/${i.name}?v=${state.version}"></div>
+        <figcaption>${i.device === "ipad" ? "iPad" : "iPhone"} · ${VARIANT_LABEL[i.variant] || i.variant} ·
+          ${SECTION_LABEL[i.section] || i.section}</figcaption>`;
+      grid.append(fig);
+    }
+  }
+
+  async function poll() {
+    try {
+      const res = await fetch("api/shots", { cache: "no-store" });
+      const data = await res.json();
+      if (data.version !== state.version) {
+        state.files = data.files;
+        state.version = data.version;
+        render();
+      }
+      document.getElementById("status").textContent = `${data.files.length} Bilder · aktualisiert ${new Date().toLocaleTimeString("de-DE")}`;
+    } catch {
+      document.getElementById("status").textContent = "Server nicht erreichbar";
+    }
+  }
+  poll();
+  setInterval(poll, 2000);
+</script>
+</body>
+</html>

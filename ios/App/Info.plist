@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>de</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>de</string>
+		<string>en</string>
+	</array>
+	<key>CFBundleDisplayName</key>
+	<string>MinePower</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>de.minepower.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>minepower</string>
+			</array>
+		</dict>
+	</array>
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<true/>
+	</dict>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<!-- App Transport Security: nur das Heimnetz darf Klartext.
+	     MinePower läuft meist unter http://192.168.x.x:8080; dafür gibt es kein
+	     öffentliches Zertifikat. NSAllowsLocalNetworking erlaubt genau das und
+	     nichts sonst. Fernzugriff geht über https (Reverse-Proxy, VPN); ein
+	     selbstsigniertes Zertifikat bestätigt der Nutzer einmalig in der App
+	     (Fingerabdruck, siehe MinePowerKit/Trust.swift). -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>MinePower sucht deinen MinePower-Server im Heimnetz und verbindet sich mit ihm, um Live-Werte anzuzeigen und Geräte zu steuern.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_minepower._tcp</string>
+		<string>_http._tcp</string>
+	</array>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Mit Face ID schützt du den Zugang zu deiner Anlage, wenn die App-Sperre eingeschaltet ist.</string>
+	<!-- Nur HTTPS/TLS des Systems, keine eigene Kryptografie: exportrechtlich befreit. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+</dict>
+</plist>

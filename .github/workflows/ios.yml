@@ -1,0 +1,209 @@
+# iOS-App: Tests, Simulator-Build, Screenshots und (auf Anforderung) TestFlight.
+#
+# Ohne Mac ist das der einzige Weg, die App zu sehen: Die UI-Tests starten die
+# eingebaute Demo-Anlage im Simulator und speichern Screenshots aller Bereiche
+# (iPhone und iPad, Hell/Dunkel, große Schrift, Querformat). Sie liegen danach
+# als Artefakt "screenshots" am Lauf; `ios/tools/preview.sh` holt sie ab.
+#
+# TestFlight läuft nur von Hand (Actions → ios → Run workflow → testflight)
+# und braucht einmalig eingerichtete Secrets, siehe ios/README.md.
+
+name: ios
+
+on:
+  push:
+    branches: [main]
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  pull_request:
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  workflow_dispatch:
+    inputs:
+      testflight:
+        description: "Build zu TestFlight hochladen"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Schnell und billig: Modelle, Netzwerk, Sitzung und Demo-Anlage laufen
+  # unter Linux. Bricht hier etwas, startet der teure macOS-Job gar nicht.
+  kit:
+    name: MinePowerKit (Linux)
+    runs-on: ubuntu-latest
+    container: swift:6.3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tests
+        working-directory: ios/MinePowerKit
+        run: swift test
+
+  lint:
+    name: Prüfungen
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Keine typografischen Anführungszeichen im Code
+        run: python3 ios/tools/no-typographic-quotes.py --check
+      - name: Plists gültig
+        run: |
+          python3 - <<'EOF'
+          import plistlib, pathlib
+          for p in ["ios/App/Info.plist", "ios/App/PrivacyInfo.xcprivacy", "ios/tools/ExportOptions.plist"]:
+              plistlib.load(open(p, "rb"))
+              print("ok", p)
+          EOF
+
+  app:
+    name: App bauen, UI-Tests, Screenshots
+    needs: [kit, lint]
+    runs-on: macos-26
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Neuestes Xcode wählen
+        run: |
+          XCODE=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+          xcrun simctl list runtimes | grep -i ios
+
+      - name: XcodeGen
+        run: brew install xcodegen && cd ios && xcodegen generate
+
+      - name: Simulatoren wählen
+        id: sims
+        run: |
+          # Neuestes "Pro"-iPhone und größtes iPad Pro des Runners statt fester Namen.
+          pick() {
+            xcrun simctl list devices available -j | python3 -c '
+          import json, re, sys
+          pattern = re.compile(sys.argv[1])
+          data = json.load(sys.stdin)["devices"]
+          runtimes = sorted((r for r in data if "iOS" in r), key=lambda r: [int(x) for x in re.findall(r"\d+", r)])
+          for runtime in reversed(runtimes):
+              names = sorted((d for d in data[runtime] if pattern.search(d["name"])), key=lambda d: d["name"])
+              if names:
+                  print(names[-1]["udid"]); break
+          ' "$1"
+          }
+          echo "iphone=$(pick '^iPhone \d+ Pro$')" >> "$GITHUB_OUTPUT"
+          echo "ipad=$(pick '^iPad Pro 13')" >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
+
+      - name: Bauen für Tests
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing \
+            -project MinePower.xcodeproj -scheme MinePower \
+            -destination "id=${{ steps.sims.outputs.iphone }}" \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO | xcbeautify
+
+      - name: UI-Tests iPhone
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building \
+            -project MinePower.xcodeproj -scheme MinePower \
+            -destination "id=${{ steps.sims.outputs.iphone }}" \
+            -derivedDataPath build -resultBundlePath results/iphone.xcresult | xcbeautify
+
+      - name: UI-Tests iPad
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project MinePower.xcodeproj -scheme MinePower \
+            -destination "id=${{ steps.sims.outputs.ipad }}" \
+            -derivedDataPath build -resultBundlePath results/ipad.xcresult \
+            CODE_SIGNING_ALLOWED=NO | xcbeautify
+
+      - name: Screenshots exportieren
+        if: always()
+        working-directory: ios
+        run: |
+          for r in results/*.xcresult; do
+            python3 tools/export_screenshots.py "$r" screenshots
+          done
+          ls screenshots | head -100
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: ios/screenshots
+          if-no-files-found: warn
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: xcresult
+          path: ios/results
+
+  testflight:
+    name: TestFlight
+    if: github.event_name == 'workflow_dispatch' && inputs.testflight
+    needs: app
+    runs-on: macos-26
+    # Umgebung mit Freigabe: Upload erst nach Bestätigung im GitHub-Interface.
+    environment: testflight
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Neuestes Xcode wählen
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+
+      - name: XcodeGen
+        run: brew install xcodegen && cd ios && xcodegen generate
+
+      - name: App-Store-Connect-Schlüssel
+        env:
+          ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/keys"
+          echo "$ASC_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8"
+
+      - name: Archivieren und hochladen
+        working-directory: ios
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -o pipefail
+          BUILD=$(git rev-list --count HEAD)
+          AUTH=(-allowProvisioningUpdates
+                -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8"
+                -authenticationKeyID "$ASC_KEY_ID"
+                -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+          xcodebuild archive -project MinePower.xcodeproj -scheme MinePower \
+            -destination 'generic/platform=iOS' -archivePath build/MinePower.xcarchive \
+            DEVELOPMENT_TEAM="$TEAM_ID" CURRENT_PROJECT_VERSION="$BUILD" "${AUTH[@]}" | xcbeautify
+          sed "s/TEAM_ID/$TEAM_ID/" tools/ExportOptions.plist > build/ExportOptions.plist
+          xcodebuild -exportArchive -archivePath build/MinePower.xcarchive \
+            -exportOptionsPlist build/ExportOptions.plist -exportPath build/export "${AUTH[@]}" | xcbeautify
+          echo "Build $BUILD hochgeladen."
+
+      - name: Testhinweise aus ios/CHANGELOG.md setzen
+        continue-on-error: true
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          python3 -m pip install --quiet pyjwt cryptography
+          python3 ios/tools/testflight_notes.py --key "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8" \
+            --build "$(git rev-list --count HEAD)" --bundle-id de.minepower.app --changelog ios/CHANGELOG.md
+
+      - name: Schlüssel entfernen
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/keys"
