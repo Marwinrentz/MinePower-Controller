@@ -1,0 +1,167 @@
+{
+  "type": "snapshot",
+  "data": {
+    "time": "2026-09-17T13:34:25.129720+00:00",
+    "pv_power": 4555.0,
+    "grid_power": -4302.0,
+    "house_power": 253.0,
+    "wallbox_power": 0.0,
+    "water_power": 0.0,
+    "battery": {
+      "soc": 55.0,
+      "power": 0.0
+    },
+    "surplus": 4302.0,
+    "price_ct": null,
+    "price_cheap": null,
+    "grid_price_window": false,
+    "battery_locked": true,
+    "safety": null,
+    "paused": false,
+    "waste_w": 4302.0,
+    "waste_reason": "Wallbox (Simulation): warte auf Überschuss (4302 W); Heizstab (Simulation): warte auf Überschuss (4302 W)",
+    "gap_filled_w": 0.0,
+    "deadband_w": 50.0,
+    "weather": "stabil",
+    "devices": [
+      {
+        "id": 1,
+        "name": "PV-Anlage (Simulation)",
+        "category": "inverter",
+        "driver_id": "sim_inverter",
+        "enabled": true,
+        "online": true,
+        "last_error": null,
+        "command_error": null,
+        "uncontrolled": false,
+        "decision": {},
+        "capabilities": [],
+        "data": {
+          "pv_power": 4555.0,
+          "daily_yield_kwh": null,
+          "total_yield_kwh": null,
+          "grid_power": null,
+          "status": "ok",
+          "battery_soc": null,
+          "battery_power": null,
+          "battery_capacity_kwh": null,
+          "extra": {}
+        }
+      },
+      {
+        "id": 2,
+        "name": "Netzzähler (Simulation)",
+        "category": "meter",
+        "driver_id": "sim_meter",
+        "enabled": true,
+        "online": true,
+        "last_error": null,
+        "command_error": null,
+        "uncontrolled": false,
+        "decision": {},
+        "capabilities": [],
+        "data": {
+          "grid_power": -4302.0,
+          "power_l1": -1434.0,
+          "power_l2": -1434.0,
+          "power_l3": -1434.0,
+          "energy_import_kwh": null,
+          "energy_export_kwh": null,
+          "extra": {}
+        }
+      },
+      {
+        "id": 3,
+        "name": "Wallbox (Simulation)",
+        "category": "wallbox",
+        "driver_id": "sim_wallbox",
+        "enabled": true,
+        "online": true,
+        "last_error": null,
+        "command_error": null,
+        "uncontrolled": false,
+        "decision": {
+          "enable": false,
+          "current_a": 0,
+          "phases": null,
+          "reason": "warte auf Überschuss (4302 W)"
+        },
+        "capabilities": [
+          "charge_limit",
+          "phase_switch",
+          "soc"
+        ],
+        "data": {
+          "state": "connected",
+          "power": 0.0,
+          "current_set": 6.0,
+          "phases_active": 1,
+          "voltage": null,
+          "energy_session_kwh": 0.0,
+          "soc": 42.0,
+          "charge_limit_soc": 80.0,
+          "vehicle_reachable": null,
+          "rfid_tag": null,
+          "extra": {}
+        },
+        "mode": "pv_only",
+        "override": null,
+        "phases": 1,
+        "charge_limit_soc": 80.0
+      },
+      {
+        "id": 4,
+        "name": "Heizstab (Simulation)",
+        "category": "water_heater",
+        "driver_id": "sim_water_heater",
+        "enabled": true,
+        "online": true,
+        "last_error": null,
+        "command_error": null,
+        "uncontrolled": false,
+        "decision": {
+          "power_w": 0,
+          "reason": "warte auf Überschuss (4302 W)"
+        },
+        "capabilities": [
+          "modulation",
+          "temperature"
+        ],
+        "data": {
+          "power": 0.0,
+          "temperature_c": 44.0,
+          "is_on": false,
+          "extra": {}
+        },
+        "mode": "pv_only",
+        "boost": false,
+        "target_temp_c": 60.0,
+        "boost_temp_c": 65.0
+      },
+      {
+        "id": 5,
+        "name": "Hausbatterie (Simulation)",
+        "category": "battery",
+        "driver_id": "sim_battery",
+        "enabled": true,
+        "online": true,
+        "last_error": null,
+        "command_error": null,
+        "uncontrolled": false,
+        "decision": {},
+        "capabilities": [
+          "battery_control"
+        ],
+        "data": {
+          "soc": 55.0,
+          "power": 0.0,
+          "mode": "auto",
+          "temperature_c": null,
+          "capacity_kwh": 9.6,
+          "status": "ok",
+          "extra": {}
+        }
+      }
+    ]
+  }
+}

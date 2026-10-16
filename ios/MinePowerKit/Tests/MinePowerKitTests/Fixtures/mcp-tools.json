@@ -1,0 +1,170 @@
+[
+ {
+  "name": "get_live_status",
+  "title": "Aktueller Zustand",
+  "role": "readonly",
+  "description": "Live-Werte der Anlage: PV, Netz (+ Bezug, − Einspeisung), Hausverbrauch, Batterie, Lasten, Strompreis, Überschuss, Warnungen und je Gerät Zustand und Regelentscheidung."
+ },
+ {
+  "name": "list_devices",
+  "title": "Geräte",
+  "role": "readonly",
+  "description": "Alle eingerichteten Geräte mit ID, Name, Klasse, Treiber, aktiv, Status und Einstellungen. Zugangsdaten sind maskiert. Enthält auch die Höchstzahl aktiver Geräte je Klasse."
+ },
+ {
+  "name": "get_battery",
+  "title": "Batterie",
+  "role": "readonly",
+  "description": "Batteriezustand: Ladestand, Leistung, Modus im Wechselrichter, Grenzen, laufender Handbefehl."
+ },
+ {
+  "name": "get_history",
+  "title": "Verlauf",
+  "role": "readonly",
+  "description": "Zeitreihen. Felder: pv_power, grid_power, house_power, wallbox_power, water_power, battery_power, battery_soc, surplus, waste_power, price_ct, water_temp."
+ },
+ {
+  "name": "get_statistics",
+  "title": "Kennzahlen",
+  "role": "readonly",
+  "description": "Kennzahlen für einen Zeitraum: PV, Bezug, Einspeisung, Autarkie, Eigenverbrauch, geladene Energie, Solaranteil, Ersparnis, verschenkter Solarstrom."
+ },
+ {
+  "name": "get_charge_sessions",
+  "title": "Ladeliste",
+  "role": "readonly",
+  "description": "Ladevorgänge als CSV (wie der Export in der App, Semikolon, Dezimalkomma) samt Summen, oder als JSON-Liste."
+ },
+ {
+  "name": "get_events",
+  "title": "Ereignisse",
+  "role": "readonly",
+  "description": "Ereignisprotokoll, neueste zuerst. Kategorien: control, battery, waste, device, config, auth."
+ },
+ {
+  "name": "get_findings",
+  "title": "Diagnose-Befunde",
+  "role": "readonly",
+  "description": "Automatische Befunde der Diagnose mit Ursache und Abhilfe (Geräte offline, verschenkter Strom …)."
+ },
+ {
+  "name": "get_tariff",
+  "title": "Strompreise",
+  "role": "readonly",
+  "description": "Dynamische Strompreise (ct/kWh) der nächsten Stunden und die eingestellte Preisgrenze."
+ },
+ {
+  "name": "get_forecast",
+  "title": "PV-Prognose",
+  "role": "readonly",
+  "description": "PV-Ertragsprognose, falls eingerichtet."
+ },
+ {
+  "name": "get_settings",
+  "title": "Einstellungen",
+  "role": "readonly",
+  "description": "Einstellungen, optional nur ein Abschnitt (z. B. regulation, tariff, notifications, ui). Zugangsdaten sind maskiert."
+ },
+ {
+  "name": "list_schedules",
+  "title": "Zeitfenster",
+  "role": "readonly",
+  "description": "Zeitfenster für Warmwasser im Modus 'schedule'. days_mask: Bit 0 = Montag … Bit 6 = Sonntag."
+ },
+ {
+  "name": "list_drivers",
+  "title": "Treiberkatalog",
+  "role": "readonly",
+  "description": "Verfügbare Treiber je Klasse (inverter, meter, battery, wallbox, water_heater) mit Konfigurationsfeldern. Grundlage für add_device."
+ },
+ {
+  "name": "set_mode",
+  "title": "Betriebsart setzen",
+  "role": "user",
+  "description": "Betriebsart eines Geräts. Wallbox/Fahrzeug: pv_only (nur PV), min_pv (Mindeststrom + PV), pv_price (PV, unter Preisgrenze auch Netz), target (Zielladung). Warmwasser: off, pv_only, pv_price, schedule (Zeitfenster)."
+ },
+ {
+  "name": "vehicle_command",
+  "title": "Laden sofort/aus/automatisch",
+  "role": "user",
+  "description": "Wallbox/Fahrzeug: fast = sofort mit voller Leistung (auch Netz), stop = Laden aus, auto = zurück zur Betriebsart, wake = Fahrzeug wecken."
+ },
+ {
+  "name": "set_charge_limit",
+  "title": "Ladegrenze",
+  "role": "user",
+  "description": "Ladegrenze im Fahrzeug in Prozent (50–100), sofern der Treiber das unterstützt."
+ },
+ {
+  "name": "water_boost",
+  "title": "Warmwasser-Boost",
+  "role": "user",
+  "description": "Boost starten (volle Leistung bis Boost-Temperatur/Dauer laut Geräteeinstellung) oder beenden."
+ },
+ {
+  "name": "battery_command",
+  "title": "Batterie von Hand",
+  "role": "user",
+  "description": "Batterie zeitlich begrenzt steuern: charge (laden, auch aus dem Netz), discharge (entladen), no_discharge (Entladung sperren), hold (weder laden noch entladen), auto (zurück zur Automatik)."
+ },
+ {
+  "name": "pause_regulation",
+  "title": "Regelung pausieren",
+  "role": "user",
+  "description": "Regelung anhalten: Wallbox und Warmwasser werden sicher abgeschaltet."
+ },
+ {
+  "name": "resume_regulation",
+  "title": "Regelung fortsetzen",
+  "role": "user",
+  "description": "Pausierte Regelung wieder starten."
+ },
+ {
+  "name": "create_schedule",
+  "title": "Zeitfenster anlegen",
+  "role": "admin",
+  "description": "Zeitfenster für Warmwasser (Modus 'schedule'): volle Leistung bis Zieltemperatur. Über Mitternacht erlaubt."
+ },
+ {
+  "name": "delete_schedule",
+  "title": "Zeitfenster löschen",
+  "role": "admin",
+  "description": "Ein Zeitfenster löschen."
+ },
+ {
+  "name": "set_priority",
+  "title": "Reihenfolge der Lasten",
+  "role": "admin",
+  "description": "Reihenfolge, in der Wallboxen und Warmwasser Überschuss bekommen (erste ID zuerst)."
+ },
+ {
+  "name": "test_device",
+  "title": "Verbindung testen",
+  "role": "admin",
+  "description": "Verbindung mit einem Treiber und einer Konfiguration testen, ohne etwas zu speichern. Liefert gelesene Werte oder die Fehlerursache."
+ },
+ {
+  "name": "add_device",
+  "title": "Gerät hinzufügen",
+  "role": "admin",
+  "description": "Gerät anlegen. Felder laut list_drivers. Die Konfiguration wird geprüft; vorher test_device ausführen."
+ },
+ {
+  "name": "update_device",
+  "title": "Gerät ändern",
+  "role": "admin",
+  "description": "Name, Konfiguration, Einstellungen oder Aktiv-Status eines Geräts ändern. Maskierte Zugangsdaten ('•••') bleiben unverändert."
+ },
+ {
+  "name": "delete_device",
+  "title": "Gerät löschen",
+  "role": "admin",
+  "description": "Gerät endgültig löschen. Nur mit confirm=true. Zum vorübergehenden Abschalten update_device mit enabled=false."
+ },
+ {
+  "name": "update_settings",
+  "title": "Einstellungen ändern",
+  "role": "admin",
+  "description": "Werte eines Einstellungsabschnitts ändern (z. B. section='regulation', values={'grid_target_w': 0}). Nicht genannte Werte bleiben erhalten."
+ }
+]

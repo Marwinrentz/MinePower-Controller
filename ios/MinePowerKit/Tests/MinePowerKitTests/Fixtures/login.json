@@ -1,0 +1,13 @@
+{
+ "token": "<token>",
+ "user": {
+  "id": 1,
+  "email": "demo@minepower.de",
+  "name": "Demo",
+  "role": "admin",
+  "rfid_tag": null,
+  "language": "de",
+  "disabled": false,
+  "last_seen_version": "3.1.1"
+ }
+}

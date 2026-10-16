@@ -1,0 +1,83 @@
+[
+ {
+  "id": 1,
+  "name": "PV-Anlage",
+  "category": "inverter",
+  "driver_id": "sim_inverter",
+  "config": {
+   "kwp": 9.8
+  },
+  "settings": {},
+  "enabled": true,
+  "status": "online",
+  "last_error": null,
+  "last_seen": "2026-10-16T20:50:13.379198Z"
+ },
+ {
+  "id": 2,
+  "name": "Netzzähler",
+  "category": "meter",
+  "driver_id": "sim_meter",
+  "config": {},
+  "settings": {},
+  "enabled": true,
+  "status": "online",
+  "last_error": null,
+  "last_seen": "2026-10-16T20:50:13.379233Z"
+ },
+ {
+  "id": 3,
+  "name": "Wallbox Garage",
+  "category": "wallbox",
+  "driver_id": "sim_wallbox",
+  "config": {
+   "max_current": 16,
+   "car_capacity_kwh": 62
+  },
+  "settings": {
+   "mode": "pv_only",
+   "min_current": 6,
+   "max_current": 16,
+   "phases_mode": "auto"
+  },
+  "enabled": true,
+  "status": "online",
+  "last_error": null,
+  "last_seen": "2026-10-16T20:50:13.379263Z"
+ },
+ {
+  "id": 4,
+  "name": "Warmwasser",
+  "category": "water_heater",
+  "driver_id": "sim_water_heater",
+  "config": {
+   "rated_power": 3000
+  },
+  "settings": {
+   "mode": "pv_only",
+   "max_power_w": 3000
+  },
+  "enabled": true,
+  "status": "online",
+  "last_error": null,
+  "last_seen": "2026-10-16T20:50:13.379283Z"
+ },
+ {
+  "id": 5,
+  "name": "Hausbatterie",
+  "category": "battery",
+  "driver_id": "sim_battery",
+  "config": {
+   "capacity_kwh": 9.6,
+   "max_power": 5000,
+   "allow_active_control": true
+  },
+  "settings": {
+   "manage_reserve": true
+  },
+  "enabled": true,
+  "status": "online",
+  "last_error": null,
+  "last_seen": "2026-10-16T20:50:13.379671Z"
+ }
+]

@@ -1,0 +1,5693 @@
+[
+ {
+  "id": "fronius_inverter",
+  "name": "Fronius Wechselrichter / GEN24 (Solar API)",
+  "category": "inverter",
+  "description": "Fronius GEN24 (Plus), Symo und Primo über die lokale Solar API. Liefert PV-Leistung und – mit Fronius Smart Meter – die Netzleistung; beim GEN24 Plus zusätzlich Batterie-Ladestand und -leistung (nur lesend, der Wechselrichter regelt die Batterie selbst).",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.20",
+    "help": "IP des Fronius-Wechselrichters. Die Solar API muss aktiv sein – bei GEN24 unter Kommunikation → Solar API (ab Firmware 1.14 standardmäßig deaktiviert!)."
+   }
+  ],
+  "capabilities": [
+   "hybrid",
+   "battery_monitor",
+   "grid_meter"
+  ],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "fronius_meter",
+  "name": "Fronius Smart Meter (via Wechselrichter)",
+  "category": "meter",
+  "description": "Netzmessung des Fronius Smart Meters, gelesen über die Solar API des Wechselrichters (gleiche IP wie der Wechselrichter).",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.20",
+    "help": "IP des Fronius-Wechselrichters. Die Solar API muss aktiv sein – bei GEN24 unter Kommunikation → Solar API (ab Firmware 1.14 standardmäßig deaktiviert!)."
+   }
+  ],
+  "capabilities": [],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "http_meter",
+  "name": "HTTP/JSON (generisch)",
+  "category": "meter",
+  "description": "Netzleistung aus einer HTTP-Antwort (JSON oder Zahl).",
+  "fields": [
+   {
+    "key": "url",
+    "label": "URL",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "http://192.0.2.10/status",
+    "help": null
+   },
+   {
+    "key": "power_path",
+    "label": "Pfad Netzleistung",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": "power",
+    "help": "JSON-Pfad, z. B. data.power; leer = ganze Antwort"
+   },
+   {
+    "key": "scale",
+    "label": "Faktor",
+    "type": "number",
+    "required": false,
+    "default": 1.0,
+    "options": null,
+    "placeholder": null,
+    "help": "Rohwert × Faktor = Watt (z. B. 1000 bei kW)"
+   },
+   {
+    "key": "invert",
+    "label": "Vorzeichen umkehren",
+    "type": "boolean",
+    "required": false,
+    "default": false,
+    "options": null,
+    "placeholder": null,
+    "help": "+ muss Netzbezug sein"
+   },
+   {
+    "key": "auth_header",
+    "label": "Authorization-Header",
+    "type": "password",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "z. B. Bearer <Token>"
+   }
+  ],
+  "capabilities": [],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "http_inverter",
+  "name": "HTTP/JSON (generisch)",
+  "category": "inverter",
+  "description": "PV-Leistung, optional Netz- und Batteriewerte, aus einer HTTP-Antwort.",
+  "fields": [
+   {
+    "key": "url",
+    "label": "URL",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "http://192.0.2.10/status",
+    "help": null
+   },
+   {
+    "key": "pv_path",
+    "label": "Pfad PV-Leistung",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "pv.power",
+    "help": "JSON-Pfad, z. B. data.power; leer = ganze Antwort"
+   },
+   {
+    "key": "scale",
+    "label": "Faktor",
+    "type": "number",
+    "required": false,
+    "default": 1.0,
+    "options": null,
+    "placeholder": null,
+    "help": "Rohwert × Faktor = Watt (z. B. 1000 bei kW)"
+   },
+   {
+    "key": "grid_path",
+    "label": "Pfad Netzleistung",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "JSON-Pfad, z. B. data.power; leer = ganze Antwort"
+   },
+   {
+    "key": "soc_path",
+    "label": "Pfad Batterie-Ladestand",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "JSON-Pfad, z. B. data.power; leer = ganze Antwort"
+   },
+   {
+    "key": "battery_path",
+    "label": "Pfad Batterieleistung",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "JSON-Pfad, z. B. data.power; leer = ganze Antwort"
+   },
+   {
+    "key": "battery_invert",
+    "label": "Batterie: Vorzeichen umkehren",
+    "type": "boolean",
+    "required": false,
+    "default": false,
+    "options": null,
+    "placeholder": null,
+    "help": "+ muss Laden sein"
+   },
+   {
+    "key": "auth_header",
+    "label": "Authorization-Header",
+    "type": "password",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "z. B. Bearer <Token>"
+   }
+  ],
+  "capabilities": [
+   "battery_monitor"
+  ],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "http_battery",
+  "name": "HTTP/JSON (generisch, lesend)",
+  "category": "battery",
+  "description": "Ladestand und Leistung aus einer HTTP-Antwort. Nur lesend.",
+  "fields": [
+   {
+    "key": "url",
+    "label": "URL",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "http://192.0.2.10/status",
+    "help": null
+   },
+   {
+    "key": "soc_path",
+    "label": "Pfad Ladestand",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "soc",
+    "help": "JSON-Pfad, z. B. data.power; leer = ganze Antwort"
+   },
+   {
+    "key": "battery_path",
+    "label": "Pfad Leistung",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "power",
+    "help": "JSON-Pfad, z. B. data.power; leer = ganze Antwort"
+   },
+   {
+    "key": "scale",
+    "label": "Faktor",
+    "type": "number",
+    "required": false,
+    "default": 1.0,
+    "options": null,
+    "placeholder": null,
+    "help": "Rohwert × Faktor = Watt (z. B. 1000 bei kW)"
+   },
+   {
+    "key": "battery_invert",
+    "label": "Vorzeichen umkehren",
+    "type": "boolean",
+    "required": false,
+    "default": false,
+    "options": null,
+    "placeholder": null,
+    "help": "+ muss Laden sein"
+   },
+   {
+    "key": "auth_header",
+    "label": "Authorization-Header",
+    "type": "password",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "z. B. Bearer <Token>"
+   }
+  ],
+  "capabilities": [
+   "battery_monitor"
+  ],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "http_relay_heater",
+  "name": "Schaltaktor über HTTP (generisch)",
+  "category": "water_heater",
+  "description": "Ein/Aus über zwei URLs, Zustand optional aus einer dritten.",
+  "fields": [
+   {
+    "key": "on_url",
+    "label": "URL Ein",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "http://192.0.2.11/relay/0?turn=on",
+    "help": null
+   },
+   {
+    "key": "off_url",
+    "label": "URL Aus",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "http://192.0.2.11/relay/0?turn=off",
+    "help": null
+   },
+   {
+    "key": "state_url",
+    "label": "URL Zustand",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": "http://192.0.2.11/relay/0",
+    "help": null
+   },
+   {
+    "key": "state_path",
+    "label": "Pfad Zustand",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": "ison",
+    "help": "JSON-Pfad, z. B. data.power; leer = ganze Antwort"
+   },
+   {
+    "key": "power_path",
+    "label": "Pfad Leistung",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "JSON-Pfad, z. B. data.power; leer = ganze Antwort"
+   },
+   {
+    "key": "rated_power",
+    "label": "Nennleistung (W)",
+    "type": "number",
+    "required": true,
+    "default": 3000,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "auth_header",
+    "label": "Authorization-Header",
+    "type": "password",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "z. B. Bearer <Token>"
+   }
+  ],
+  "capabilities": [
+   "relay",
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "generic_modbus_meter",
+  "name": "Generischer Modbus-Zähler",
+  "category": "meter",
+  "description": "Beliebiger Modbus-TCP-Zähler: Register, Datentyp und Skalierung frei konfigurierbar. Vorbelegung passt für Eastron SDM630 (Gesamtwirkleistung).",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.30",
+    "help": "IP des Modbus-TCP-Geräts oder -Gateways."
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": "Modbus-TCP-Port, Standard 502."
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 1,
+    "options": null,
+    "placeholder": null,
+    "help": "Modbus-Slave-Adresse des Zählers."
+   },
+   {
+    "key": "register",
+    "label": "Register-Adresse",
+    "type": "number",
+    "required": true,
+    "default": 52,
+    "options": null,
+    "placeholder": null,
+    "help": "0-basierte Adresse der Gesamtwirkleistung. SDM630: 52 (Input, float32)."
+   },
+   {
+    "key": "register_type",
+    "label": "Register-Typ",
+    "type": "select",
+    "required": true,
+    "default": "input",
+    "options": [
+     {
+      "value": "input",
+      "label": "Input (FC04)"
+     },
+     {
+      "value": "holding",
+      "label": "Holding (FC03)"
+     }
+    ],
+    "placeholder": null,
+    "help": "Welcher Modbus-Funktionscode zum Lesen verwendet wird."
+   },
+   {
+    "key": "data_type",
+    "label": "Datentyp",
+    "type": "select",
+    "required": true,
+    "default": "float32",
+    "options": [
+     {
+      "value": "float32",
+      "label": "float32"
+     },
+     {
+      "value": "s32",
+      "label": "int32 (signed)"
+     },
+     {
+      "value": "u32",
+      "label": "uint32"
+     },
+     {
+      "value": "s16",
+      "label": "int16 (signed)"
+     },
+     {
+      "value": "u16",
+      "label": "uint16"
+     }
+    ],
+    "placeholder": null,
+    "help": "Datentyp des Leistungsregisters."
+   },
+   {
+    "key": "word_order",
+    "label": "Word-Reihenfolge",
+    "type": "select",
+    "required": true,
+    "default": "big",
+    "options": [
+     {
+      "value": "big",
+      "label": "Big-Endian (High zuerst)"
+     },
+     {
+      "value": "little",
+      "label": "Little-Endian (Low zuerst)"
+     }
+    ],
+    "placeholder": null,
+    "help": "Nur für 32-Bit-Typen relevant."
+   },
+   {
+    "key": "scale",
+    "label": "Skalierungsfaktor",
+    "type": "number",
+    "required": true,
+    "default": 1.0,
+    "options": null,
+    "placeholder": null,
+    "help": "Multiplikator auf den Rohwert (z. B. 0.1 bei 0,1-W-Auflösung)."
+   },
+   {
+    "key": "invert",
+    "label": "Richtung invertieren",
+    "type": "boolean",
+    "required": true,
+    "default": false,
+    "options": null,
+    "placeholder": null,
+    "help": "Aktivieren, falls Einspeisung als Bezug erscheint (+ muss Bezug sein)."
+   }
+  ],
+  "capabilities": [],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "generic_modbus_inverter",
+  "name": "Modbus TCP generisch (Registerprofil)",
+  "category": "inverter",
+  "description": "Wechselrichter mit frei konfigurierbaren Registern für PV, Netz und Batterie.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.31",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 1,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "register_type",
+    "label": "Register-Typ",
+    "type": "select",
+    "required": true,
+    "default": "holding",
+    "options": [
+     {
+      "value": "holding",
+      "label": "Holding (FC03)"
+     },
+     {
+      "value": "input",
+      "label": "Input (FC04)"
+     }
+    ],
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "word_order",
+    "label": "Word-Reihenfolge",
+    "type": "select",
+    "required": true,
+    "default": "big",
+    "options": [
+     {
+      "value": "big",
+      "label": "Big-Endian"
+     },
+     {
+      "value": "little",
+      "label": "Little-Endian"
+     }
+    ],
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "pv_register",
+    "label": "PV-Leistung: Register",
+    "type": "number",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "0-basierte Adresse"
+   },
+   {
+    "key": "pv_type",
+    "label": "PV-Leistung: Datentyp",
+    "type": "select",
+    "required": false,
+    "default": "u32",
+    "options": [
+     {
+      "value": "float32",
+      "label": "float32"
+     },
+     {
+      "value": "s32",
+      "label": "int32"
+     },
+     {
+      "value": "u32",
+      "label": "uint32"
+     },
+     {
+      "value": "s16",
+      "label": "int16"
+     },
+     {
+      "value": "u16",
+      "label": "uint16"
+     }
+    ],
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "pv_scale",
+    "label": "PV-Leistung: Faktor",
+    "type": "number",
+    "required": false,
+    "default": 1.0,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "grid_register",
+    "label": "Netzleistung: Register",
+    "type": "number",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "0-basierte Adresse"
+   },
+   {
+    "key": "grid_type",
+    "label": "Netzleistung: Datentyp",
+    "type": "select",
+    "required": false,
+    "default": "s32",
+    "options": [
+     {
+      "value": "float32",
+      "label": "float32"
+     },
+     {
+      "value": "s32",
+      "label": "int32"
+     },
+     {
+      "value": "u32",
+      "label": "uint32"
+     },
+     {
+      "value": "s16",
+      "label": "int16"
+     },
+     {
+      "value": "u16",
+      "label": "uint16"
+     }
+    ],
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "grid_scale",
+    "label": "Netzleistung: Faktor",
+    "type": "number",
+    "required": false,
+    "default": 1.0,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "soc_register",
+    "label": "Batterie-Ladestand: Register",
+    "type": "number",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "0-basierte Adresse"
+   },
+   {
+    "key": "soc_type",
+    "label": "Batterie-Ladestand: Datentyp",
+    "type": "select",
+    "required": false,
+    "default": "u16",
+    "options": [
+     {
+      "value": "float32",
+      "label": "float32"
+     },
+     {
+      "value": "s32",
+      "label": "int32"
+     },
+     {
+      "value": "u32",
+      "label": "uint32"
+     },
+     {
+      "value": "s16",
+      "label": "int16"
+     },
+     {
+      "value": "u16",
+      "label": "uint16"
+     }
+    ],
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "soc_scale",
+    "label": "Batterie-Ladestand: Faktor",
+    "type": "number",
+    "required": false,
+    "default": 1.0,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "battery_register",
+    "label": "Batterieleistung: Register",
+    "type": "number",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "0-basierte Adresse"
+   },
+   {
+    "key": "battery_type",
+    "label": "Batterieleistung: Datentyp",
+    "type": "select",
+    "required": false,
+    "default": "s32",
+    "options": [
+     {
+      "value": "float32",
+      "label": "float32"
+     },
+     {
+      "value": "s32",
+      "label": "int32"
+     },
+     {
+      "value": "u32",
+      "label": "uint32"
+     },
+     {
+      "value": "s16",
+      "label": "int16"
+     },
+     {
+      "value": "u16",
+      "label": "uint16"
+     }
+    ],
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "battery_scale",
+    "label": "Batterieleistung: Faktor",
+    "type": "number",
+    "required": false,
+    "default": 1.0,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "battery_invert",
+    "label": "Batterie: Vorzeichen umkehren",
+    "type": "boolean",
+    "required": false,
+    "default": false,
+    "options": null,
+    "placeholder": null,
+    "help": "+ muss Laden sein"
+   }
+  ],
+  "capabilities": [
+   "battery_monitor"
+  ],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "generic_modbus_battery",
+  "name": "Modbus TCP generisch (Registerprofil, lesend)",
+  "category": "battery",
+  "description": "Speicher mit frei konfigurierbaren Registern für Ladestand und Leistung. Nur lesend.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.31",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 1,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "register_type",
+    "label": "Register-Typ",
+    "type": "select",
+    "required": true,
+    "default": "holding",
+    "options": [
+     {
+      "value": "holding",
+      "label": "Holding (FC03)"
+     },
+     {
+      "value": "input",
+      "label": "Input (FC04)"
+     }
+    ],
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "word_order",
+    "label": "Word-Reihenfolge",
+    "type": "select",
+    "required": true,
+    "default": "big",
+    "options": [
+     {
+      "value": "big",
+      "label": "Big-Endian"
+     },
+     {
+      "value": "little",
+      "label": "Little-Endian"
+     }
+    ],
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "soc_register",
+    "label": "Ladestand: Register",
+    "type": "number",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "0-basierte Adresse"
+   },
+   {
+    "key": "soc_type",
+    "label": "Ladestand: Datentyp",
+    "type": "select",
+    "required": false,
+    "default": "u16",
+    "options": [
+     {
+      "value": "float32",
+      "label": "float32"
+     },
+     {
+      "value": "s32",
+      "label": "int32"
+     },
+     {
+      "value": "u32",
+      "label": "uint32"
+     },
+     {
+      "value": "s16",
+      "label": "int16"
+     },
+     {
+      "value": "u16",
+      "label": "uint16"
+     }
+    ],
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "soc_scale",
+    "label": "Ladestand: Faktor",
+    "type": "number",
+    "required": false,
+    "default": 1.0,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "battery_register",
+    "label": "Leistung: Register",
+    "type": "number",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "0-basierte Adresse"
+   },
+   {
+    "key": "battery_type",
+    "label": "Leistung: Datentyp",
+    "type": "select",
+    "required": false,
+    "default": "s32",
+    "options": [
+     {
+      "value": "float32",
+      "label": "float32"
+     },
+     {
+      "value": "s32",
+      "label": "int32"
+     },
+     {
+      "value": "u32",
+      "label": "uint32"
+     },
+     {
+      "value": "s16",
+      "label": "int16"
+     },
+     {
+      "value": "u16",
+      "label": "uint16"
+     }
+    ],
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "battery_scale",
+    "label": "Leistung: Faktor",
+    "type": "number",
+    "required": false,
+    "default": 1.0,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "battery_invert",
+    "label": "Vorzeichen umkehren",
+    "type": "boolean",
+    "required": false,
+    "default": false,
+    "options": null,
+    "placeholder": null,
+    "help": "+ muss Laden sein"
+   }
+  ],
+  "capabilities": [
+   "battery_monitor"
+  ],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "mqtt_meter",
+  "name": "MQTT (generisch)",
+  "category": "meter",
+  "description": "Netzleistung aus einem MQTT-Topic.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "Broker",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.6",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 1883,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "username",
+    "label": "Benutzer",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "password",
+    "label": "Passwort",
+    "type": "password",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_age_s",
+    "label": "Max. Alter (s)",
+    "type": "number",
+    "required": true,
+    "default": 60,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "grid_topic",
+    "label": "Topic Netzleistung",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "haus/zaehler/leistung",
+    "help": null
+   },
+   {
+    "key": "grid_path",
+    "label": "Pfad Netzleistung",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "JSON-Pfad; leer = Zahl"
+   },
+   {
+    "key": "scale",
+    "label": "Faktor",
+    "type": "number",
+    "required": false,
+    "default": 1.0,
+    "options": null,
+    "placeholder": null,
+    "help": "Rohwert × Faktor = Watt (z. B. 1000 bei kW)"
+   },
+   {
+    "key": "invert",
+    "label": "Vorzeichen umkehren",
+    "type": "boolean",
+    "required": false,
+    "default": false,
+    "options": null,
+    "placeholder": null,
+    "help": "+ muss Netzbezug sein"
+   }
+  ],
+  "capabilities": [],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "mqtt_inverter",
+  "name": "MQTT (generisch)",
+  "category": "inverter",
+  "description": "PV-Leistung, optional Netz- und Batteriewerte, aus MQTT-Topics.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "Broker",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.6",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 1883,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "username",
+    "label": "Benutzer",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "password",
+    "label": "Passwort",
+    "type": "password",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_age_s",
+    "label": "Max. Alter (s)",
+    "type": "number",
+    "required": true,
+    "default": 60,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "pv_topic",
+    "label": "Topic PV-Leistung",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "solar/ac/power",
+    "help": null
+   },
+   {
+    "key": "pv_path",
+    "label": "Pfad PV-Leistung",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "JSON-Pfad; leer = Zahl"
+   },
+   {
+    "key": "scale",
+    "label": "Faktor",
+    "type": "number",
+    "required": false,
+    "default": 1.0,
+    "options": null,
+    "placeholder": null,
+    "help": "Rohwert × Faktor = Watt (z. B. 1000 bei kW)"
+   },
+   {
+    "key": "grid_topic",
+    "label": "Topic Netzleistung",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "grid_path",
+    "label": "Pfad Netzleistung",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "JSON-Pfad; leer = Zahl"
+   },
+   {
+    "key": "soc_topic",
+    "label": "Topic Batterie-Ladestand",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "soc_path",
+    "label": "Pfad Ladestand",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "JSON-Pfad; leer = Zahl"
+   },
+   {
+    "key": "battery_topic",
+    "label": "Topic Batterieleistung",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "battery_path",
+    "label": "Pfad Batterieleistung",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "JSON-Pfad; leer = Zahl"
+   },
+   {
+    "key": "battery_invert",
+    "label": "Batterie: Vorzeichen umkehren",
+    "type": "boolean",
+    "required": false,
+    "default": false,
+    "options": null,
+    "placeholder": null,
+    "help": "+ muss Laden sein"
+   }
+  ],
+  "capabilities": [
+   "battery_monitor"
+  ],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "mqtt_battery",
+  "name": "MQTT (generisch, lesend)",
+  "category": "battery",
+  "description": "Ladestand und Leistung aus MQTT-Topics. Nur lesend.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "Broker",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.6",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 1883,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "username",
+    "label": "Benutzer",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "password",
+    "label": "Passwort",
+    "type": "password",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_age_s",
+    "label": "Max. Alter (s)",
+    "type": "number",
+    "required": true,
+    "default": 60,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "soc_topic",
+    "label": "Topic Ladestand",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "soc_path",
+    "label": "Pfad Ladestand",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "JSON-Pfad; leer = Zahl"
+   },
+   {
+    "key": "battery_topic",
+    "label": "Topic Leistung",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "battery_path",
+    "label": "Pfad Leistung",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "JSON-Pfad; leer = Zahl"
+   },
+   {
+    "key": "scale",
+    "label": "Faktor",
+    "type": "number",
+    "required": false,
+    "default": 1.0,
+    "options": null,
+    "placeholder": null,
+    "help": "Rohwert × Faktor = Watt (z. B. 1000 bei kW)"
+   },
+   {
+    "key": "battery_invert",
+    "label": "Vorzeichen umkehren",
+    "type": "boolean",
+    "required": false,
+    "default": false,
+    "options": null,
+    "placeholder": null,
+    "help": "+ muss Laden sein"
+   }
+  ],
+  "capabilities": [
+   "battery_monitor"
+  ],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "mqtt_relay_heater",
+  "name": "Schaltaktor über MQTT (generisch)",
+  "category": "water_heater",
+  "description": "Ein/Aus über ein Befehls-Topic, Zustand aus einem Status-Topic.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "Broker",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.6",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 1883,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "username",
+    "label": "Benutzer",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "password",
+    "label": "Passwort",
+    "type": "password",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_age_s",
+    "label": "Max. Alter (s)",
+    "type": "number",
+    "required": true,
+    "default": 60,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "command_topic",
+    "label": "Topic Befehl",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "heizstab/set",
+    "help": null
+   },
+   {
+    "key": "payload_on",
+    "label": "Nutzlast Ein",
+    "type": "text",
+    "required": true,
+    "default": "ON",
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "payload_off",
+    "label": "Nutzlast Aus",
+    "type": "text",
+    "required": true,
+    "default": "OFF",
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "state_topic",
+    "label": "Topic Zustand",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "heizstab/state",
+    "help": null
+   },
+   {
+    "key": "state_path",
+    "label": "Pfad Zustand",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "JSON-Pfad; leer = Zahl"
+   },
+   {
+    "key": "power_topic",
+    "label": "Topic Leistung",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "power_path",
+    "label": "Pfad Leistung",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "JSON-Pfad; leer = Zahl"
+   },
+   {
+    "key": "rated_power",
+    "label": "Nennleistung (W)",
+    "type": "number",
+    "required": true,
+    "default": 3000,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   }
+  ],
+  "capabilities": [
+   "relay",
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "goe_charger",
+  "name": "go-e Charger (HTTP-API v2)",
+  "category": "wallbox",
+  "description": "go-e Charger über die lokale HTTP-API v2 (in der go-e-App aktivieren). Unterstützt stufenlosen Ladestrom, Start/Stopp und Phasenumschaltung.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.60",
+    "help": "IP des go-e Chargers im lokalen Netz. In der go-e-App muss unter Internet → API die lokale HTTP-API (v2) aktiviert sein."
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "Hardware-Limit (11 kW = 16 A, 22 kW = 32 A). Nie höher setzen als die Absicherung des Anschlusses."
+   }
+  ],
+  "capabilities": [
+   "rfid",
+   "write_test",
+   "phase_switch"
+  ],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "ha_meter",
+  "name": "Home Assistant",
+  "category": "meter",
+  "description": "Netzleistung aus einer Home-Assistant-Entität (W oder kW).",
+  "fields": [
+   {
+    "key": "url",
+    "label": "Home-Assistant-URL",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "http://192.0.2.5:8123",
+    "help": null
+   },
+   {
+    "key": "token",
+    "label": "Access-Token",
+    "type": "password",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "Long-Lived Access Token"
+   },
+   {
+    "key": "grid_entity",
+    "label": "Entität Netzleistung",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "sensor.",
+    "help": null
+   },
+   {
+    "key": "invert",
+    "label": "Vorzeichen umkehren",
+    "type": "boolean",
+    "required": false,
+    "default": false,
+    "options": null,
+    "placeholder": null,
+    "help": "+ muss Netzbezug sein"
+   }
+  ],
+  "capabilities": [],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "ha_inverter",
+  "name": "Home Assistant",
+  "category": "inverter",
+  "description": "PV-Leistung, optional Netz- und Batteriewerte, aus Home-Assistant-Entitäten.",
+  "fields": [
+   {
+    "key": "url",
+    "label": "Home-Assistant-URL",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "http://192.0.2.5:8123",
+    "help": null
+   },
+   {
+    "key": "token",
+    "label": "Access-Token",
+    "type": "password",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "Long-Lived Access Token"
+   },
+   {
+    "key": "pv_entity",
+    "label": "Entität PV-Leistung",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "sensor.",
+    "help": null
+   },
+   {
+    "key": "grid_entity",
+    "label": "Entität Netzleistung",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": "sensor.",
+    "help": null
+   },
+   {
+    "key": "soc_entity",
+    "label": "Entität Batterie-Ladestand",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": "sensor.",
+    "help": null
+   },
+   {
+    "key": "battery_entity",
+    "label": "Entität Batterieleistung",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": "sensor.",
+    "help": null
+   },
+   {
+    "key": "battery_invert",
+    "label": "Batterie: Vorzeichen umkehren",
+    "type": "boolean",
+    "required": false,
+    "default": false,
+    "options": null,
+    "placeholder": null,
+    "help": "+ muss Laden sein"
+   }
+  ],
+  "capabilities": [
+   "battery_monitor"
+  ],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "ha_battery",
+  "name": "Home Assistant (lesend)",
+  "category": "battery",
+  "description": "Ladestand und Leistung aus Home-Assistant-Entitäten. Nur lesend.",
+  "fields": [
+   {
+    "key": "url",
+    "label": "Home-Assistant-URL",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "http://192.0.2.5:8123",
+    "help": null
+   },
+   {
+    "key": "token",
+    "label": "Access-Token",
+    "type": "password",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "Long-Lived Access Token"
+   },
+   {
+    "key": "soc_entity",
+    "label": "Entität Ladestand",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "sensor.",
+    "help": null
+   },
+   {
+    "key": "battery_entity",
+    "label": "Entität Leistung",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "sensor.",
+    "help": null
+   },
+   {
+    "key": "battery_invert",
+    "label": "Vorzeichen umkehren",
+    "type": "boolean",
+    "required": false,
+    "default": false,
+    "options": null,
+    "placeholder": null,
+    "help": "+ muss Laden sein"
+   }
+  ],
+  "capabilities": [
+   "battery_monitor"
+  ],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "ha_switch_heater",
+  "name": "Schaltaktor über Home Assistant",
+  "category": "water_heater",
+  "description": "Heizstab oder andere Last über eine Schalt-Entität (switch, input_boolean).",
+  "fields": [
+   {
+    "key": "url",
+    "label": "Home-Assistant-URL",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "http://192.0.2.5:8123",
+    "help": null
+   },
+   {
+    "key": "token",
+    "label": "Access-Token",
+    "type": "password",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "Long-Lived Access Token"
+   },
+   {
+    "key": "switch_entity",
+    "label": "Entität Schalter",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "switch.",
+    "help": null
+   },
+   {
+    "key": "power_entity",
+    "label": "Entität Leistung",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": "sensor.",
+    "help": null
+   },
+   {
+    "key": "temperature_entity",
+    "label": "Entität Temperatur",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": "sensor.",
+    "help": null
+   },
+   {
+    "key": "rated_power",
+    "label": "Nennleistung (W)",
+    "type": "number",
+    "required": true,
+    "default": 3000,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   }
+  ],
+  "capabilities": [
+   "relay",
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "ha_wallbox",
+  "name": "Wallbox über Home Assistant",
+  "category": "wallbox",
+  "description": "Wallbox-Integration in Home Assistant mit Schalter und Ladestrom-Entität (z. B. openWB, Easee, Zaptec, Wallbox, Keba).",
+  "fields": [
+   {
+    "key": "url",
+    "label": "Home-Assistant-URL",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "http://192.0.2.5:8123",
+    "help": null
+   },
+   {
+    "key": "token",
+    "label": "Access-Token",
+    "type": "password",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "Long-Lived Access Token"
+   },
+   {
+    "key": "switch_entity",
+    "label": "Entität Laden ein/aus",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "switch.",
+    "help": null
+   },
+   {
+    "key": "current_entity",
+    "label": "Entität Ladestrom (A)",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "number.",
+    "help": null
+   },
+   {
+    "key": "power_entity",
+    "label": "Entität Ladeleistung",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "sensor.",
+    "help": null
+   },
+   {
+    "key": "plugged_entity",
+    "label": "Entität Fahrzeug verbunden",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": "binary_sensor.",
+    "help": null
+   },
+   {
+    "key": "soc_entity",
+    "label": "Entität Fahrzeug-Ladestand",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": "sensor.",
+    "help": null
+   },
+   {
+    "key": "phases",
+    "label": "Phasen",
+    "type": "select",
+    "required": true,
+    "default": "3",
+    "options": [
+     {
+      "value": "1",
+      "label": "1"
+     },
+     {
+      "value": "3",
+      "label": "3"
+     }
+    ],
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "huawei_sun2000",
+  "name": "Huawei SUN2000 / LUNA2000 (experimentell)",
+  "category": "inverter",
+  "description": "Huawei SUN2000 über Modbus TCP: PV-Leistung, Erträge und – falls ein LUNA2000-Speicher vorhanden ist – dessen Ladestand und Leistung (nur lesend; der Wechselrichter regelt die Batterie selbst).",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.35",
+    "help": "IP des SUN2000 bzw. des SDongle. Modbus TCP muss im Dongle freigeschaltet sein. Achtung: Huawei erlaubt nur eine Modbus-Verbindung gleichzeitig."
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": "Modbus-TCP-Port, Standard 502."
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 1,
+    "options": null,
+    "placeholder": null,
+    "help": "Standard 1. Bei Anlagen mit mehreren Wechselrichtern am selben Dongle aufsteigend (1, 2, 3 …)."
+   }
+  ],
+  "capabilities": [
+   "battery_monitor",
+   "hybrid"
+  ],
+  "maturity": "experimental",
+  "notes": "Registerkarte aus der Huawei-Dokumentation, nicht an Hardware verifiziert. Vor dem Produktivbetrieb die Live-Werte im Verbindungstest gegen die FusionSolar-App prüfen. Alternative: der SunSpec-Treiber, sofern das Gerät SunSpec unterstützt.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "huawei_meter",
+  "name": "Huawei Smart Power Sensor (experimentell)",
+  "category": "meter",
+  "description": "Netzmessung des Huawei Smart Power Sensors (DTSU666-H), gelesen über den SUN2000 – gleiche IP wie der Wechselrichter eintragen.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.35",
+    "help": "IP des SUN2000 bzw. des SDongle. Modbus TCP muss im Dongle freigeschaltet sein. Achtung: Huawei erlaubt nur eine Modbus-Verbindung gleichzeitig."
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": "Modbus-TCP-Port, Standard 502."
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 1,
+    "options": null,
+    "placeholder": null,
+    "help": "Standard 1. Bei Anlagen mit mehreren Wechselrichtern am selben Dongle aufsteigend (1, 2, 3 …)."
+   },
+   {
+    "key": "invert",
+    "label": "Richtung invertieren",
+    "type": "boolean",
+    "required": false,
+    "default": false,
+    "options": null,
+    "placeholder": null,
+    "help": "Huawei zählt Einspeisung positiv; MinePower rechnet mit '+ = Bezug' und dreht das Vorzeichen deshalb bereits um. Diese Option nur setzen, wenn der Verbindungstest trotzdem die falsche Richtung meldet."
+   }
+  ],
+  "capabilities": [],
+  "maturity": "experimental",
+  "notes": "Vorzeichen unbedingt im Verbindungstest prüfen: Bei Bezug muss dort 'Bezug' stehen. Stimmt das nicht, regelt die Anlage in die falsche Richtung.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "keba_p30",
+  "name": "KEBA KeContact P30 (UDP)",
+  "category": "wallbox",
+  "description": "KEBA P30 c-/x-Serie über die UDP-Schnittstelle.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.15",
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "phases",
+    "label": "Phasen",
+    "type": "select",
+    "required": true,
+    "default": "3",
+    "options": [
+     {
+      "value": "1",
+      "label": "1"
+     },
+     {
+      "value": "3",
+      "label": "3"
+     }
+    ],
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "local_port",
+    "label": "Lokaler UDP-Port",
+    "type": "number",
+    "required": false,
+    "default": 7090,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "UDP-Schnittstelle in der Wallbox aktivieren; Port 7090/udp zum Container freigeben.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "mypv_acthor",
+  "name": "my-PV AC•THOR / AC ELWA-E / ELWA 2",
+  "category": "water_heater",
+  "description": "Stufenlos modulierender Warmwasser-Heizstab – die feinste Stellgröße im System und damit der ideale Abnehmer für kleine Restüberschüsse. Steuerweg wählbar (HTTP oder Modbus TCP). Das Gerät muss in seinem Setup auf den passenden externen Steuerungstyp gestellt sein.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.70",
+    "help": "IP des my-PV-Geräts im lokalen Netz."
+   },
+   {
+    "key": "control_method",
+    "label": "Steuerweg",
+    "type": "select",
+    "required": true,
+    "default": "http",
+    "options": [
+     {
+      "value": "http",
+      "label": "my-PV HTTP-API"
+     },
+     {
+      "value": "modbus_tcp",
+      "label": "Modbus TCP"
+     }
+    ],
+    "placeholder": null,
+    "help": "HTTP: /control.html – Gerät im Setup auf Steuerungstyp 'HTTP' stellen. Modbus TCP: Port 502 – Gerät auf 'Modbus TCP' stellen. Modbus ist etwas schneller und liefert den Steuerstatus direkt mit."
+   },
+   {
+    "key": "rated_power",
+    "label": "Nennleistung (W)",
+    "type": "number",
+    "required": true,
+    "default": 3000,
+    "options": null,
+    "placeholder": null,
+    "help": "AC•THOR: 3000 W, AC•THOR 9s: 9000 W, AC ELWA-E/ELWA 2: ~3500 W."
+   },
+   {
+    "key": "min_power_w",
+    "label": "Kleinste Stufe (W)",
+    "type": "number",
+    "required": false,
+    "default": 100,
+    "options": null,
+    "placeholder": null,
+    "help": "Ab dieser Leistung heizt das Gerät sinnvoll. Je kleiner, desto feiner lassen sich Restüberschüsse verwerten (my-PV: ~100 W)."
+   },
+   {
+    "key": "modbus_port",
+    "label": "Modbus-Port",
+    "type": "number",
+    "required": false,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": "Nur für Modbus TCP. Standard 502."
+   },
+   {
+    "key": "unit_id",
+    "label": "Modbus Unit-ID",
+    "type": "number",
+    "required": false,
+    "default": 1,
+    "options": null,
+    "placeholder": null,
+    "help": "Nur für Modbus TCP. Standard 1 (my-PV-Gerätenummer)."
+   },
+   {
+    "key": "verify_ssl",
+    "label": "SSL-Zertifikat prüfen",
+    "type": "boolean",
+    "required": false,
+    "default": false,
+    "options": null,
+    "placeholder": null,
+    "help": "Nur für HTTP. Aus lassen – my-PV nutzt selbstsignierte Zertifikate."
+   }
+  ],
+  "capabilities": [
+   "modulation",
+   "fine_modulation",
+   "temperature",
+   "write_test",
+   "own_program"
+  ],
+  "maturity": "stable",
+  "notes": "An einem AC•THOR/ELWA über Modbus TCP im Dauerbetrieb erprobt.\n\nGeräteprogramm: Meldet das Gerät 'Boost', heizt es nach seiner eigenen Einstellung – meist Warmwasser-Sicherstellung (heizt mit Netzstrom, wenn das Wasser im Zeitfenster unter der Mindesttemperatur liegt) oder Legionellenschutz. MinePower kann das nicht abschalten, zählt die Leistung aber nicht als Überschuss und zeigt nur 'heizt per Geräte-App/-Programm'.\n\nAbhilfe: im ELWA-Webinterface die Zeitfenster bzw. die Mindesttemperatur der Warmwasser-Sicherstellung anpassen oder sie abschalten. Den Legionellenschutz bewusst lassen oder in die Mittagszeit legen.\n\nWärmepuffer: Soll das Wasser mit Überschuss über die Zieltemperatur heizen ('Mit Überschuss heizen bis'), muss die Maximaltemperatur im Gerät das erlauben.",
+  "offline_hint": null,
+  "own_program_hint": "Warmwasser-Sicherstellung im Webinterface des Geräts anpassen."
+ },
+ {
+  "id": "ocpp_wallbox",
+  "name": "Generische Wallbox (OCPP 1.6J)",
+  "category": "wallbox",
+  "description": "Breite Kompatibilität: Die Wallbox verbindet sich per OCPP 1.6J zu dieser App (Backend-URL in der Wallbox: ws://<server-ip>:<port>/<charge-point-id>). Experimentell – Ladestromvorgabe via SmartCharging-Profil.",
+  "fields": [
+   {
+    "key": "charge_point_id",
+    "label": "Charge-Point-ID",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "wallbox1",
+    "help": "Kennung, mit der sich die Wallbox verbindet (letzter Teil der Backend-URL). Muss exakt mit der Einstellung in der Wallbox übereinstimmen."
+   },
+   {
+    "key": "port",
+    "label": "Server-Port",
+    "type": "number",
+    "required": true,
+    "default": 8887,
+    "options": null,
+    "placeholder": null,
+    "help": "Port, auf dem MinePower auf die Wallbox wartet. Im Docker-Setup freigeben (ports: [\"8887:8887\"]) – sonst erreicht die Wallbox den Server nie."
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "Hardware-Limit der Wallbox."
+   },
+   {
+    "key": "phases",
+    "label": "Phasenanzahl",
+    "type": "number",
+    "required": true,
+    "default": 3,
+    "options": null,
+    "placeholder": null,
+    "help": "Fest verdrahtete Phasenzahl (für die Leistungsrechnung)."
+   },
+   {
+    "key": "connector_id",
+    "label": "Connector-ID",
+    "type": "number",
+    "required": false,
+    "default": 1,
+    "options": null,
+    "placeholder": null,
+    "help": "Ladepunkt-Nummer innerhalb der Wallbox. Bei Einzelladepunkten 1; bei Doppelladern 1 oder 2."
+   },
+   {
+    "key": "id_tag",
+    "label": "ID-Tag für Fernstart",
+    "type": "text",
+    "required": false,
+    "default": "minepower",
+    "options": null,
+    "placeholder": null,
+    "help": "Kennung, mit der MinePower Ladevorgänge startet. Manche Boxen akzeptieren nur in ihrer Whitelist hinterlegte Tags."
+   },
+   {
+    "key": "max_silence_s",
+    "label": "Heartbeat-Timeout (s)",
+    "type": "number",
+    "required": false,
+    "default": 900,
+    "options": null,
+    "placeholder": null,
+    "help": "Nach dieser Stille ohne Heartbeat gilt die Wallbox als getrennt. Verhindert, dass gegen eine tote Verbindung geregelt wird."
+   }
+  ],
+  "capabilities": [
+   "rfid",
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "Deckt die für Überschussladen nötige Teilmenge von OCPP 1.6J ab. Der Ladestrom wird über ein SmartCharging-Profil vorgegeben – Boxen ohne SmartCharging lassen sich nur ein-/ausschalten. Der Schreibtest im Verbindungstest zeigt das sofort.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "sgready_shelly",
+  "name": "Wärmepumpe SG-Ready über Shelly (2 Kanäle)",
+  "category": "water_heater",
+  "description": "SG-Ready über einen zweikanaligen Shelly (Gen2+, z. B. Pro 2, Plus 2PM).",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.13",
+    "help": null
+   },
+   {
+    "key": "channel_1",
+    "label": "Kanal Kontakt 1",
+    "type": "number",
+    "required": true,
+    "default": 0,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "channel_2",
+    "label": "Kanal Kontakt 2",
+    "type": "number",
+    "required": true,
+    "default": 1,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "rated_power",
+    "label": "Leistung bei Einschaltempfehlung (W)",
+    "type": "number",
+    "required": true,
+    "default": 2000,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   }
+  ],
+  "capabilities": [
+   "sg_ready",
+   "relay",
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "Kontakt 1 = Sperre, Kontakt 2 = Einschaltempfehlung. MinePower setzt nie die Sperre.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "sgready_homeassistant",
+  "name": "Wärmepumpe SG-Ready über Home Assistant",
+  "category": "water_heater",
+  "description": "SG-Ready über zwei Schalt-Entitäten in Home Assistant.",
+  "fields": [
+   {
+    "key": "url",
+    "label": "Home-Assistant-URL",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "http://192.0.2.5:8123",
+    "help": null
+   },
+   {
+    "key": "token",
+    "label": "Access-Token",
+    "type": "password",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "Long-Lived Access Token"
+   },
+   {
+    "key": "switch_1",
+    "label": "Entität Kontakt 1",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "switch.",
+    "help": null
+   },
+   {
+    "key": "switch_2",
+    "label": "Entität Kontakt 2",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "switch.",
+    "help": null
+   },
+   {
+    "key": "power_entity",
+    "label": "Entität Leistung",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": "sensor.",
+    "help": null
+   },
+   {
+    "key": "rated_power",
+    "label": "Leistung bei Einschaltempfehlung (W)",
+    "type": "number",
+    "required": true,
+    "default": 2000,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   }
+  ],
+  "capabilities": [
+   "sg_ready",
+   "relay",
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "Kontakt 1 = Sperre, Kontakt 2 = Einschaltempfehlung. MinePower setzt nie die Sperre.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "shelly_3em",
+  "name": "Shelly 3EM / Pro 3EM (Netzzähler)",
+  "category": "meter",
+  "description": "Shelly 3-Phasen-Energiemesser am Hausanschluss. Gen1 (3EM) über /status, Gen2+ (Pro 3EM) über RPC. Positive Leistung = Netzbezug (Wandler-Richtung beachten).",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.40",
+    "help": "IP des Shelly im lokalen Netz. Feste IP im Router vergeben – sonst geht die Netzmessung nach einem DHCP-Wechsel verloren."
+   },
+   {
+    "key": "generation",
+    "label": "Geräte-Generation",
+    "type": "select",
+    "required": true,
+    "default": "gen2",
+    "options": [
+     {
+      "value": "gen2",
+      "label": "Gen2+ (Pro-Serie, RPC-API)"
+     },
+     {
+      "value": "gen1",
+      "label": "Gen1 (ältere Modelle, /status)"
+     }
+    ],
+    "placeholder": null,
+    "help": "Bestimmt die verwendete API. Falsch gewählt meldet der Verbindungstest HTTP 404 – er schlägt dann die richtige Generation vor."
+   },
+   {
+    "key": "invert",
+    "label": "Richtung invertieren",
+    "type": "boolean",
+    "required": false,
+    "default": false,
+    "options": null,
+    "placeholder": null,
+    "help": "Aktivieren, falls Einspeisung fälschlich als Bezug angezeigt wird (Stromwandler seitenverkehrt montiert). Der Verbindungstest zeigt die aktuelle Richtung im Klartext."
+   }
+  ],
+  "capabilities": [],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "shelly_relay_heater",
+  "name": "Heizstab über Shelly-Relais",
+  "category": "water_heater",
+  "description": "Ein-/Aus-Steuerung eines Heizstabs über ein Shelly-Relais (Plug S, 1PM, Pro 1PM). Keine Modulation – der Regler schaltet bei ausreichend Überschuss ein. Für stufenloses Nachführen kleiner Überschüsse ist ein modulierendes Gerät (z. B. my-PV) deutlich effizienter.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.45",
+    "help": "IP des Shelly-Relais."
+   },
+   {
+    "key": "generation",
+    "label": "Geräte-Generation",
+    "type": "select",
+    "required": true,
+    "default": "gen2",
+    "options": [
+     {
+      "value": "gen2",
+      "label": "Gen2+ (Pro-Serie, RPC-API)"
+     },
+     {
+      "value": "gen1",
+      "label": "Gen1 (ältere Modelle, /status)"
+     }
+    ],
+    "placeholder": null,
+    "help": "Bestimmt die verwendete API. Falsch gewählt meldet der Verbindungstest HTTP 404 – er schlägt dann die richtige Generation vor."
+   },
+   {
+    "key": "rated_power",
+    "label": "Heizstab-Leistung (W)",
+    "type": "number",
+    "required": true,
+    "default": 3000,
+    "options": null,
+    "placeholder": null,
+    "help": "Nennleistung der geschalteten Last – wird für die Überschussrechnung verwendet, solange das Relais keine eigene Messung liefert."
+   }
+  ],
+  "capabilities": [
+   "relay",
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "sim_inverter",
+  "name": "Simulation: PV-Wechselrichter",
+  "category": "inverter",
+  "description": "Simulierter Wechselrichter mit realistischer Tageskurve und Wetter-Rauschen.",
+  "fields": [
+   {
+    "key": "kwp",
+    "label": "Anlagengröße (kWp)",
+    "type": "number",
+    "required": true,
+    "default": 9.8,
+    "options": null,
+    "placeholder": null,
+    "help": "Peak-Leistung der simulierten PV-Anlage."
+   }
+  ],
+  "capabilities": [],
+  "maturity": "stable",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "sim_meter",
+  "name": "Simulation: Netzzähler",
+  "category": "meter",
+  "description": "Simulierter Zähler am Hausanschluss – ergibt sich aus der Energiebilanz der Simulation.",
+  "fields": [],
+  "capabilities": [],
+  "maturity": "stable",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "sim_wallbox",
+  "name": "Simulation: Wallbox + E-Auto",
+  "category": "wallbox",
+  "description": "Simulierte 11-kW-Wallbox mit verbundenem Fahrzeug (SoC-Modell, Phasenumschaltung).",
+  "fields": [
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "Hardware-Limit der simulierten Wallbox."
+   },
+   {
+    "key": "car_capacity_kwh",
+    "label": "Fahrzeug-Akku (kWh)",
+    "type": "number",
+    "required": true,
+    "default": 62,
+    "options": null,
+    "placeholder": null,
+    "help": "Kapazität des simulierten Fahrzeugs."
+   }
+  ],
+  "capabilities": [
+   "soc",
+   "charge_limit",
+   "phase_switch"
+  ],
+  "maturity": "stable",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "sim_water_heater",
+  "name": "Simulation: Heizstab / Warmwasser",
+  "category": "water_heater",
+  "description": "Simulierter modulierender Heizstab (0–3 kW) mit 180-l-Speicher-Temperaturmodell.",
+  "fields": [
+   {
+    "key": "rated_power",
+    "label": "Nennleistung (W)",
+    "type": "number",
+    "required": true,
+    "default": 3000,
+    "options": null,
+    "placeholder": null,
+    "help": "Maximale Heizleistung des simulierten Heizstabs."
+   }
+  ],
+  "capabilities": [
+   "modulation",
+   "temperature"
+  ],
+  "maturity": "stable",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "sim_battery",
+  "name": "Simulation: Hausbatterie",
+  "category": "battery",
+  "description": "Simulierter Speicher mit Eigenverbrauchs-Logik, steuerbar (Zwangsladen/-entladen, Reserve).",
+  "fields": [
+   {
+    "key": "capacity_kwh",
+    "label": "Kapazität (kWh)",
+    "type": "number",
+    "required": true,
+    "default": 9.6,
+    "options": null,
+    "placeholder": null,
+    "help": "Nutzbare Kapazität des simulierten Speichers."
+   },
+   {
+    "key": "max_power",
+    "label": "Max. Lade-/Entladeleistung (W)",
+    "type": "number",
+    "required": true,
+    "default": 5000,
+    "options": null,
+    "placeholder": null,
+    "help": "Leistungsgrenze in beide Richtungen."
+   }
+  ],
+  "capabilities": [
+   "battery_control"
+  ],
+  "maturity": "stable",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "sma_inverter",
+  "name": "SMA Wechselrichter / Sunny Boy Storage (Modbus TCP)",
+  "category": "inverter",
+  "description": "SMA Sunny Boy, Sunny Tripower (auch Tripower X) und Sunny Boy Storage über Modbus TCP. Liefert PV-Leistung und Erträge; bei Speichergeräten zusätzlich Batterie-Ladestand und -leistung (nur lesend – SMA regelt die Batterie selbst). Für die Netzmessung das SMA Energy Meter / den Home Manager als Zähler anlegen.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.21",
+    "help": "IP des SMA-Geräts. Modbus TCP muss im Gerät aktiviert sein (Installateur-Zugang → Externe Kommunikation → Modbus → TCP-Server)."
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": "Modbus-TCP-Port, Standard 502."
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 3,
+    "options": null,
+    "placeholder": null,
+    "help": "SMA-Standard: 3. Beim Sunny Home Manager abweichend – bei 'Zielgerät nicht erreichbar' auch 1 und 2 probieren."
+   }
+  ],
+  "capabilities": [
+   "battery_monitor"
+  ],
+  "maturity": "experimental",
+  "notes": "Registerkarte gemäß SMA-Modbus-Liste. Batterie- und Zählerregister existieren nur auf Geräten mit Speicher bzw. Energy Meter – fehlende Register werden übersprungen.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "sma_meter",
+  "name": "SMA Energy Meter / Sunny Home Manager (via Wechselrichter)",
+  "category": "meter",
+  "description": "Netzmessung des SMA Energy Meters bzw. Sunny Home Managers, gelesen über die Modbus-Register des Wechselrichters (gleiche IP wie der Wechselrichter). Bezug und Einspeisung liegen bei SMA in getrennten Registern und werden hier zu einer vorzeichenbehafteten Netzleistung zusammengefasst.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.21",
+    "help": "IP des SMA-Geräts. Modbus TCP muss im Gerät aktiviert sein (Installateur-Zugang → Externe Kommunikation → Modbus → TCP-Server)."
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": "Modbus-TCP-Port, Standard 502."
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 3,
+    "options": null,
+    "placeholder": null,
+    "help": "SMA-Standard: 3. Beim Sunny Home Manager abweichend – bei 'Zielgerät nicht erreichbar' auch 1 und 2 probieren."
+   }
+  ],
+  "capabilities": [],
+  "maturity": "experimental",
+  "notes": "Nur verfügbar, wenn am Wechselrichter ein SMA Energy Meter / Home Manager eingebunden ist. Der Verbindungstest zeigt sofort, ob die Register antworten.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "sungrow_battery",
+  "name": "Sungrow Batterie SBR/SBH (steuerbar)",
+  "category": "battery",
+  "description": "SBR-/SBH-Speicher am SH-Hybrid (gleiche IP wie der Wechselrichter). Nötig für aktive Steuerung: Netzladen bei günstigem Preis, manuelles Laden/Entladen, Sperre während eines Netzladefensters. Für reines Monitoring reicht der SH-Treiber.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.50",
+    "help": "IP des WiNet-S-Dongles bzw. des LAN-Anschlusses des Wechselrichters. Am besten im Router eine feste IP vergeben – sonst geht die Anlage nach einem DHCP-Wechsel offline."
+   },
+   {
+    "key": "port",
+    "label": "Modbus-Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": "Standard: 502. Beim WiNet-S muss 'Modbus TCP' in dessen Weboberfläche aktiviert sein, sonst bleibt der Port zu."
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID (Slave-Adresse)",
+    "type": "number",
+    "required": true,
+    "default": 1,
+    "options": null,
+    "placeholder": null,
+    "help": "Modbus-Geräteadresse, Standard bei Sungrow: 1. Bei WiNet-S manchmal 247 – wenn der Verbindungstest 'Zielgerät nicht erreichbar' meldet, beides probieren."
+   },
+   {
+    "key": "allow_active_control",
+    "label": "Aktive Batteriesteuerung erlauben",
+    "type": "boolean",
+    "required": false,
+    "default": false,
+    "options": null,
+    "placeholder": null,
+    "help": "Erlaubt MinePower, den Betriebsmodus des Speichers zu schreiben: Netzladen bei günstigem Preis, manuelles Laden/Entladen per Knopfdruck, Sperre während eines Netzladefensters. Beim Beenden, nach Ablauf eines manuellen Befehls und beim Neustart setzt MinePower den Wechselrichter auf Eigenverbrauch zurück. Im Wechselrichter muss dafür nichts umgestellt werden."
+   },
+   {
+    "key": "max_power_w",
+    "label": "Max. Lade-/Entladeleistung (W)",
+    "type": "number",
+    "required": false,
+    "default": 5000,
+    "options": null,
+    "placeholder": null,
+    "help": "Obergrenze für Zwangsladen/-entladen. Liegt sie über dem, was dein Modell kann, lehnt der Wechselrichter den Befehl ab (Meldung 'Wert außerhalb des erlaubten Bereichs') – dann hier den Wert aus dem Datenblatt eintragen."
+   }
+  ],
+  "capabilities": [
+   "battery_control",
+   "battery_monitor"
+  ],
+  "maturity": "beta",
+  "notes": "Registerkarte nach Sungrow-Doku (SH-RT). Vor jedem SoC-Schreiben wird geprüft, ob die gelesenen Grenzen plausibel sind.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "sungrow_sg",
+  "name": "Sungrow SG-Serie (String-Wechselrichter)",
+  "category": "inverter",
+  "description": "Sungrow String-Wechselrichter über Modbus TCP (WiNet-S) oder LAN. Liefert PV-Leistung und Erträge.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.50",
+    "help": "IP des WiNet-S-Dongles bzw. des LAN-Anschlusses des Wechselrichters. Am besten im Router eine feste IP vergeben – sonst geht die Anlage nach einem DHCP-Wechsel offline."
+   },
+   {
+    "key": "port",
+    "label": "Modbus-Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": "Standard: 502. Beim WiNet-S muss 'Modbus TCP' in dessen Weboberfläche aktiviert sein, sonst bleibt der Port zu."
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID (Slave-Adresse)",
+    "type": "number",
+    "required": true,
+    "default": 1,
+    "options": null,
+    "placeholder": null,
+    "help": "Modbus-Geräteadresse, Standard bei Sungrow: 1. Bei WiNet-S manchmal 247 – wenn der Verbindungstest 'Zielgerät nicht erreichbar' meldet, beides probieren."
+   }
+  ],
+  "capabilities": [],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "sungrow_sh",
+  "name": "Sungrow SH-Serie (Hybrid mit Batterie)",
+  "category": "inverter",
+  "description": "Sungrow Hybrid (SH5.0RT, SH10RT …) über Modbus TCP. Liefert PV-Leistung, Netzleistung (integrierter DTSU666-Zähler) sowie Batterie-Ladestand und -leistung. Ein separates Batteriegerät ist dafür nicht nötig – der Wechselrichter regelt seine Batterie selbst.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.50",
+    "help": "IP des WiNet-S-Dongles bzw. des LAN-Anschlusses des Wechselrichters. Am besten im Router eine feste IP vergeben – sonst geht die Anlage nach einem DHCP-Wechsel offline."
+   },
+   {
+    "key": "port",
+    "label": "Modbus-Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": "Standard: 502. Beim WiNet-S muss 'Modbus TCP' in dessen Weboberfläche aktiviert sein, sonst bleibt der Port zu."
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID (Slave-Adresse)",
+    "type": "number",
+    "required": true,
+    "default": 1,
+    "options": null,
+    "placeholder": null,
+    "help": "Modbus-Geräteadresse, Standard bei Sungrow: 1. Bei WiNet-S manchmal 247 – wenn der Verbindungstest 'Zielgerät nicht erreichbar' meldet, beides probieren."
+   }
+  ],
+  "capabilities": [
+   "hybrid",
+   "battery_monitor",
+   "grid_meter"
+  ],
+  "maturity": "stable",
+  "notes": "Registerkarte an einem SH-RT-Modell im Dauerbetrieb erprobt. Weicht ein Firmware-Stand ab, melden die Live-Werte im Verbindungstest das sofort als unplausibel.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "sungrow_meter",
+  "name": "Sungrow Energiezähler (DTSU666 am WR)",
+  "category": "meter",
+  "description": "Netzmessung des am Sungrow-Wechselrichter angeschlossenen Zählers (DTSU666). Gleiche IP wie der Wechselrichter eintragen.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.50",
+    "help": "IP des WiNet-S-Dongles bzw. des LAN-Anschlusses des Wechselrichters. Am besten im Router eine feste IP vergeben – sonst geht die Anlage nach einem DHCP-Wechsel offline."
+   },
+   {
+    "key": "port",
+    "label": "Modbus-Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": "Standard: 502. Beim WiNet-S muss 'Modbus TCP' in dessen Weboberfläche aktiviert sein, sonst bleibt der Port zu."
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID (Slave-Adresse)",
+    "type": "number",
+    "required": true,
+    "default": 1,
+    "options": null,
+    "placeholder": null,
+    "help": "Modbus-Geräteadresse, Standard bei Sungrow: 1. Bei WiNet-S manchmal 247 – wenn der Verbindungstest 'Zielgerät nicht erreichbar' meldet, beides probieren."
+   },
+   {
+    "key": "series",
+    "label": "Wechselrichter-Serie",
+    "type": "select",
+    "required": true,
+    "default": "sh",
+    "options": [
+     {
+      "value": "sh",
+      "label": "SH-Serie (Hybrid)"
+     },
+     {
+      "value": "sg",
+      "label": "SG-Serie (String)"
+     }
+    ],
+    "placeholder": null,
+    "help": "Bestimmt die Registeradresse der Netzmessung: SH liest 13010, SG liest 5083."
+   }
+  ],
+  "capabilities": [],
+  "maturity": "stable",
+  "notes": "An einem DTSU666 hinter einem SH-Wechselrichter im Dauerbetrieb erprobt. Die SG-Variante (Register 5083) ist nicht an echter Hardware getestet.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "sungrow_wallbox",
+  "name": "Sungrow AC-Wallbox AC007 / AC011E (Beta)",
+  "category": "wallbox",
+  "description": "Sungrow iSolarCharger AC-Wallbox über Modbus TCP: Ladefreigabe, stufenloser Ladestrom, Status. Beta – die Registerbasis unterscheidet sich je nach Firmware und ist deshalb einstellbar; der Verbindungstest findet sie automatisch.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.50",
+    "help": "IP des WiNet-S-Dongles bzw. des LAN-Anschlusses des Wechselrichters. Am besten im Router eine feste IP vergeben – sonst geht die Anlage nach einem DHCP-Wechsel offline."
+   },
+   {
+    "key": "port",
+    "label": "Modbus-Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": "Standard: 502. Beim WiNet-S muss 'Modbus TCP' in dessen Weboberfläche aktiviert sein, sonst bleibt der Port zu."
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID (Slave-Adresse)",
+    "type": "number",
+    "required": true,
+    "default": 1,
+    "options": null,
+    "placeholder": null,
+    "help": "Modbus-Geräteadresse, Standard bei Sungrow: 1. Bei WiNet-S manchmal 247 – wenn der Verbindungstest 'Zielgerät nicht erreichbar' meldet, beides probieren."
+   },
+   {
+    "key": "register_base",
+    "label": "Register-Basis",
+    "type": "number",
+    "required": true,
+    "default": 21200,
+    "options": null,
+    "placeholder": null,
+    "help": "Basisadresse der Wallbox-Register. Nur ändern, wenn der Verbindungstest unplausible Werte zeigt – er schlägt die passende Basis selbst vor."
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "Hardware-Limit der Wallbox (11 kW = 16 A, 22 kW = 32 A)."
+   },
+   {
+    "key": "phase_switch",
+    "label": "Phasenumschaltung vorhanden",
+    "type": "boolean",
+    "required": false,
+    "default": false,
+    "options": null,
+    "placeholder": null,
+    "help": "Nur aktivieren, wenn die Box 1↔3-phasig umschalten kann. Ist sie es nicht, lehnt sie den Befehl ab und die Regelung bleibt unnötig im Umschaltversuch hängen."
+   }
+  ],
+  "capabilities": [
+   "write_test",
+   "phase_switch"
+  ],
+  "maturity": "experimental",
+  "notes": "Vor dem Produktivbetrieb bitte 'Verbindung testen' mit Schreibtest ausführen: Er zeigt, ob die Box den Sollstrom wirklich übernimmt. Tut sie das nicht, steht sie meist noch im internen Lademodus statt auf externer Ansteuerung.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "sunspec_inverter",
+  "name": "SunSpec-Wechselrichter (Kostal, GoodWe, SolarEdge, Delta, SMA …)",
+  "category": "inverter",
+  "description": "Herstellerübergreifend über den SunSpec-Modbus-Standard. Das Gerät wird beim Verbinden automatisch abgefragt – ohne feste Registerkarte und damit unempfindlich gegen Firmware-Updates. Passt für Kostal Plenticore, GoodWe ET/EH, SolarEdge, Delta, SMA Tripower X und viele weitere.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.25",
+    "help": "IP des Wechselrichters bzw. Zählers. Modbus TCP muss im Gerät aktiviert sein – bei Kostal unter Einstellungen → Modbus/SunSpec, bei SMA unter Externe Kommunikation."
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": "Modbus-TCP-Port, Standard 502. SolarEdge nutzt teils 1502."
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 1,
+    "options": null,
+    "placeholder": null,
+    "help": "Modbus-Slave-Adresse. Kostal/GoodWe: 1 · SMA: 3 · SolarEdge: 1. Meldet der Test 'Zielgerät nicht erreichbar', hier variieren."
+   },
+   {
+    "key": "base_address",
+    "label": "SunSpec-Basisadresse",
+    "type": "select",
+    "required": false,
+    "default": "auto",
+    "options": [
+     {
+      "value": "auto",
+      "label": "Automatisch suchen (empfohlen)"
+     },
+     {
+      "value": "40000",
+      "label": "40000 (Standard)"
+     },
+     {
+      "value": "50000",
+      "label": "50000"
+     },
+     {
+      "value": "0",
+      "label": "0"
+     }
+    ],
+    "placeholder": null,
+    "help": "Wo die SunSpec-Kennung steht. 'Automatisch' probiert alle drei Varianten – nur festlegen, wenn der Scan zu lange dauert."
+   }
+  ],
+  "capabilities": [
+   "battery_monitor"
+  ],
+  "maturity": "experimental",
+  "notes": "Der Verbindungstest zeigt Hersteller, Modell und die gefundenen SunSpec-Modelle. Erscheint dort das erwartete Gerät, stimmt die Anbindung.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "sunspec_meter",
+  "name": "SunSpec-Zähler (herstellerübergreifend)",
+  "category": "meter",
+  "description": "Netzzähler über den SunSpec-Standard – entweder ein eigenständiger Zähler oder der am Wechselrichter angeschlossene (dann dieselbe IP eintragen). Vorzeichen: positiv = Netzbezug.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.25",
+    "help": "IP des Wechselrichters bzw. Zählers. Modbus TCP muss im Gerät aktiviert sein – bei Kostal unter Einstellungen → Modbus/SunSpec, bei SMA unter Externe Kommunikation."
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": "Modbus-TCP-Port, Standard 502. SolarEdge nutzt teils 1502."
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 1,
+    "options": null,
+    "placeholder": null,
+    "help": "Modbus-Slave-Adresse. Kostal/GoodWe: 1 · SMA: 3 · SolarEdge: 1. Meldet der Test 'Zielgerät nicht erreichbar', hier variieren."
+   },
+   {
+    "key": "base_address",
+    "label": "SunSpec-Basisadresse",
+    "type": "select",
+    "required": false,
+    "default": "auto",
+    "options": [
+     {
+      "value": "auto",
+      "label": "Automatisch suchen (empfohlen)"
+     },
+     {
+      "value": "40000",
+      "label": "40000 (Standard)"
+     },
+     {
+      "value": "50000",
+      "label": "50000"
+     },
+     {
+      "value": "0",
+      "label": "0"
+     }
+    ],
+    "placeholder": null,
+    "help": "Wo die SunSpec-Kennung steht. 'Automatisch' probiert alle drei Varianten – nur festlegen, wenn der Scan zu lange dauert."
+   },
+   {
+    "key": "invert",
+    "label": "Richtung invertieren",
+    "type": "boolean",
+    "required": false,
+    "default": false,
+    "options": null,
+    "placeholder": null,
+    "help": "Aktivieren, falls Einspeisung als Bezug erscheint. Der Verbindungstest zeigt die aktuelle Richtung im Klartext – unbedingt einmal gegenprüfen."
+   }
+  ],
+  "capabilities": [],
+  "maturity": "experimental",
+  "notes": "Wichtig: Nach dem Einrichten die Richtung am Verbindungstest verifizieren. Ein vertauschtes Vorzeichen lässt die Anlage in die falsche Richtung regeln.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "tasmota_meter",
+  "name": "Tasmota (SML-Lesekopf)",
+  "category": "meter",
+  "description": "Netzleistung aus dem SML-Skript eines Tasmota-Lesekopfs.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.12",
+    "help": null
+   },
+   {
+    "key": "power_path",
+    "label": "Pfad Leistung",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "SML.Power",
+    "help": "unter StatusSNS, je nach Skript"
+   },
+   {
+    "key": "scale",
+    "label": "Faktor",
+    "type": "number",
+    "required": false,
+    "default": 1.0,
+    "options": null,
+    "placeholder": null,
+    "help": "Rohwert × Faktor = Watt (z. B. 1000 bei kW)"
+   },
+   {
+    "key": "invert",
+    "label": "Vorzeichen umkehren",
+    "type": "boolean",
+    "required": false,
+    "default": false,
+    "options": null,
+    "placeholder": null,
+    "help": "+ muss Netzbezug sein"
+   },
+   {
+    "key": "user",
+    "label": "Benutzer",
+    "type": "text",
+    "required": false,
+    "default": "admin",
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "password",
+    "label": "Passwort",
+    "type": "password",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   }
+  ],
+  "capabilities": [],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "tasmota_relay_heater",
+  "name": "Schaltaktor Tasmota",
+  "category": "water_heater",
+  "description": "Heizstab oder andere Last über ein Tasmota-Relais.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.12",
+    "help": null
+   },
+   {
+    "key": "relay",
+    "label": "Relais-Nr.",
+    "type": "number",
+    "required": true,
+    "default": 1,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "rated_power",
+    "label": "Nennleistung (W)",
+    "type": "number",
+    "required": true,
+    "default": 3000,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "user",
+    "label": "Benutzer",
+    "type": "text",
+    "required": false,
+    "default": "admin",
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "password",
+    "label": "Passwort",
+    "type": "password",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   }
+  ],
+  "capabilities": [
+   "relay",
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "tesla_vehicle",
+  "name": "Tesla Fahrzeug (BLE-Proxy oder Fleet-API)",
+  "category": "wallbox",
+  "description": "Steuert das Tesla-Fahrzeug direkt als Ladepunkt: Ladestrom modulieren, Start/Stopp, Ladelimit. Methode A: externer TeslaBleHttpProxy (cloud-frei, läuft z. B. auf einem Raspberry Pi – NICHT Teil dieser App). Methode B: Tesla Fleet-API (Cloud, liefert zuverlässig SoC).",
+  "fields": [
+   {
+    "key": "backend",
+    "label": "Anbindung",
+    "type": "select",
+    "required": true,
+    "default": "ble_proxy",
+    "options": [
+     {
+      "value": "ble_proxy",
+      "label": "BLE-Proxy (lokal, empfohlen)"
+     },
+     {
+      "value": "fleet",
+      "label": "Fleet-API (Cloud)"
+     }
+    ],
+    "placeholder": null,
+    "help": "BLE-Proxy: cloud-frei über einen bereits laufenden TeslaBleHttpProxy. Fleet-API: ohne lokale Hardware, benötigt OAuth-Token."
+   },
+   {
+    "key": "proxy_url",
+    "label": "Proxy-Adresse",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": "http://192.0.2.99",
+    "help": "Adresse des extern laufenden TeslaBleHttpProxy (nur Methode A), ohne Port. Die Schlüssel-Kopplung erfolgt im Proxy selbst."
+   },
+   {
+    "key": "proxy_port",
+    "label": "Proxy-Port",
+    "type": "number",
+    "required": false,
+    "default": 8080,
+    "options": null,
+    "placeholder": null,
+    "help": "Port des TeslaBleHttpProxy. Standard 8080 – je nach Installation abweichend (z. B. 80). Wird ignoriert, wenn die Proxy-Adresse bereits einen Port enthält."
+   },
+   {
+    "key": "vin",
+    "label": "Fahrzeug-VIN",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": "5YJ3E7EB...",
+    "help": "17-stellige Fahrzeug-Identnummer (nur Methode A)."
+   },
+   {
+    "key": "proxy_auth",
+    "label": "Proxy-Auth-Header",
+    "type": "password",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "Optionaler Authorization-Header, falls der Proxy abgesichert ist."
+   },
+   {
+    "key": "access_token",
+    "label": "Fleet-API Access-Token",
+    "type": "password",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "OAuth-Token für die Tesla Fleet-API (nur Methode B)."
+   },
+   {
+    "key": "vehicle_id",
+    "label": "Fahrzeug-ID (Fleet)",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "Numerische Fahrzeug-ID aus der Fleet-API (nur Methode B)."
+   },
+   {
+    "key": "region",
+    "label": "Fleet-Region",
+    "type": "select",
+    "required": false,
+    "default": "eu",
+    "options": [
+     {
+      "value": "eu",
+      "label": "Europa"
+     },
+     {
+      "value": "na",
+      "label": "Nordamerika"
+     }
+    ],
+    "placeholder": null,
+    "help": "Region des Tesla-Kontos (nur Methode B)."
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "Obergrenze für den Ladestrom (abhängig von Kabel/Anschluss)."
+   },
+   {
+    "key": "capacity_kwh",
+    "label": "Akku-Kapazität (kWh)",
+    "type": "number",
+    "required": false,
+    "default": 60,
+    "options": null,
+    "placeholder": null,
+    "help": "Für die Zielladung mit Deadline (Modus 'Zielladung')."
+   }
+  ],
+  "capabilities": [
+   "soc",
+   "charge_limit",
+   "wake",
+   "write_test"
+  ],
+  "maturity": "stable",
+  "notes": "Über einen BLE-Proxy im Dauerbetrieb erprobt.\n\nErreichbarkeit: Antwortet das Auto 2 min nicht, gilt es als 'nicht erreichbar' – MinePower behält den letzten Stand (angesteckt oder nicht), sendet keine Befehle ins Leere und weckt ein angestecktes Auto bei Überschuss oder günstigem Strom (höchstens alle 30 min). Ins Protokoll kommt es erst nach 30 min.\n\n'Schläft angesteckt' = letzter Stand angesteckt; 'unterwegs' = letzter Stand nicht angesteckt oder außer Bluetooth-Reichweite; 'BLE-Proxy offline' = der Proxy selbst antwortet nicht (Raspberry Pi, IP/Port prüfen).\n\nPhasen: MinePower erkennt aus Leistung und Strom, ob das Auto 1- oder 3-phasig lädt. Mehr Phasen werden sofort übernommen, weniger erst nach einer Minute Bestätigung.\n\nSelbststart beim Anstecken oder durch 'Geplantes Laden' in der Fahrzeug-App wird sofort gestoppt, wenn kein Überschuss da ist.",
+  "offline_hint": "Gateway (TeslaBleHttpProxy) prüfen: Dienst, IP-Adresse, Port, Abstand zum Fahrzeug.",
+  "own_program_hint": null
+ },
+ {
+  "id": "victron_gx",
+  "name": "Victron GX (Modbus TCP)",
+  "category": "inverter",
+  "description": "Victron-System über Cerbo/Venus GX: PV (AC und DC), Netz, Batterie.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.14",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 100,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   }
+  ],
+  "capabilities": [
+   "hybrid",
+   "battery_monitor",
+   "grid_meter"
+  ],
+  "maturity": "experimental",
+  "notes": "Modbus TCP im GX aktivieren. Batterie nur lesend.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "easee",
+  "name": "Easee Home/Charge (Cloud-API)",
+  "category": "wallbox",
+  "description": "Easee über die offizielle Easee-Cloud-API (api.easee.com).",
+  "fields": [
+   {
+    "key": "username",
+    "label": "Benutzer (E-Mail oder Telefon)",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "password",
+    "label": "Passwort",
+    "type": "password",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "charger_id",
+    "label": "Seriennummer",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "EH000000",
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   },
+   {
+    "key": "poll_s",
+    "label": "Abfrageabstand (s)",
+    "type": "number",
+    "required": true,
+    "default": 30,
+    "options": null,
+    "placeholder": null,
+    "help": "15–300 s, Cloud-Limit beachten"
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "Zugangsdaten wie in der Easee-App. Seriennummer der Box z. B. EH123456. Benötigt Internet.",
+  "offline_hint": "Internetverbindung und Easee-Cloud-Status prüfen.",
+  "own_program_hint": null
+ },
+ {
+  "id": "zaptec",
+  "name": "Zaptec Go/Pro (Cloud-API)",
+  "category": "wallbox",
+  "description": "Zaptec Go, Go 2 und Pro über die offizielle Zaptec-Cloud-API (api.zaptec.com).",
+  "fields": [
+   {
+    "key": "username",
+    "label": "Benutzer (E-Mail)",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "password",
+    "label": "Passwort",
+    "type": "password",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "charger_id",
+    "label": "Lader-ID",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "Leer = erster Lader im Konto"
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   },
+   {
+    "key": "poll_s",
+    "label": "Abfrageabstand (s)",
+    "type": "number",
+    "required": true,
+    "default": 30,
+    "options": null,
+    "placeholder": null,
+    "help": "15–300 s, Cloud-Limit beachten"
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "Zugangsdaten des Zaptec-Portals. Stand-alone-Modus in der Zaptec-App ausschalten. Benötigt Internet.",
+  "offline_hint": "Internetverbindung und Zaptec-Portal prüfen.",
+  "own_program_hint": null
+ },
+ {
+  "id": "hardybarth_ecb1",
+  "name": "Hardy Barth cPH1/cPH2 mit eCB1 (HTTP)",
+  "category": "wallbox",
+  "description": "Hardy Barth Wallboxen mit eCB1-Controller über die lokale REST-API.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.21",
+    "help": null
+   },
+   {
+    "key": "chargecontrol",
+    "label": "Ladepunkt",
+    "type": "number",
+    "required": true,
+    "default": 1,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "meter",
+    "label": "Zähler",
+    "type": "number",
+    "required": true,
+    "default": 1,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "Die Box wird beim ersten Stellbefehl in den Modus 'manual' gesetzt.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "hardybarth_salia",
+  "name": "Hardy Barth mit Salia-Controller (HTTP)",
+  "category": "wallbox",
+  "description": "Hardy Barth cPH2 und Salia PLCC über die lokale API.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.22",
+    "help": null
+   },
+   {
+    "key": "username",
+    "label": "Benutzer",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "password",
+    "label": "Passwort",
+    "type": "password",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "Die Box wird beim ersten Stellbefehl in den Modus 'manual' gesetzt.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "sma_evcharger",
+  "name": "SMA EV Charger 7.4/22 (HTTP)",
+  "category": "wallbox",
+  "description": "SMA EV Charger über die lokale Web-API (Firmware ab 1.2.23).",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.23",
+    "help": null
+   },
+   {
+    "key": "scheme",
+    "label": "Protokoll",
+    "type": "select",
+    "required": true,
+    "default": "http",
+    "options": [
+     {
+      "value": "http",
+      "label": "HTTP"
+     },
+     {
+      "value": "https",
+      "label": "HTTPS"
+     }
+    ],
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "username",
+    "label": "Benutzer",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "password",
+    "label": "Passwort",
+    "type": "password",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "Drehschalter an der Box auf 'Schnellladen'. App-Sperre im Gerät deaktivieren.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "evse_wifi",
+  "name": "EVSE-WiFi / SimpleEVSE (HTTP)",
+  "category": "wallbox",
+  "description": "SimpleEVSE mit EVSE-WiFi-Modul über die lokale HTTP-API.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.24",
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "In EVSE-WiFi 'Always Active' ausschalten, sonst ist Sperren nicht möglich.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "openwb_pro",
+  "name": "openWB Pro (HTTP)",
+  "category": "wallbox",
+  "description": "openWB Pro bzw. Pro+ im Modus 'externe Steuerung' über die lokale HTTP-API.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.25",
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   }
+  ],
+  "capabilities": [
+   "write_test",
+   "phase_switch"
+  ],
+  "maturity": "experimental",
+  "notes": "In der openWB Pro unter Einstellungen die Steuerung durch ein externes System zulassen.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "http_wallbox",
+  "name": "Wallbox über HTTP (generisch)",
+  "category": "wallbox",
+  "description": "Status als JSON von einer URL, Steuerung über URLs mit Platzhalter {current}.",
+  "fields": [
+   {
+    "key": "status_url",
+    "label": "URL Status",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "http://192.0.2.26/status",
+    "help": null
+   },
+   {
+    "key": "power_path",
+    "label": "Pfad Ladeleistung (W)",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "power",
+    "help": "JSON-Pfad, z. B. data.power; leer = ganze Antwort"
+   },
+   {
+    "key": "plugged_path",
+    "label": "Pfad Fahrzeug verbunden",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": "plugged",
+    "help": "JSON-Pfad, z. B. data.power; leer = ganze Antwort"
+   },
+   {
+    "key": "current_path",
+    "label": "Pfad Ladestrom (A)",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "JSON-Pfad, z. B. data.power; leer = ganze Antwort"
+   },
+   {
+    "key": "soc_path",
+    "label": "Pfad Fahrzeug-Ladestand",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "JSON-Pfad, z. B. data.power; leer = ganze Antwort"
+   },
+   {
+    "key": "current_url",
+    "label": "URL Ladestrom",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "http://192.0.2.26/set?current={current}",
+    "help": null
+   },
+   {
+    "key": "enable_url",
+    "label": "URL Laden ein",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "http://192.0.2.26/set?enable=1",
+    "help": null
+   },
+   {
+    "key": "disable_url",
+    "label": "URL Laden aus",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "http://192.0.2.26/set?enable=0",
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   },
+   {
+    "key": "phases",
+    "label": "Phasen",
+    "type": "select",
+    "required": true,
+    "default": "3",
+    "options": [
+     {
+      "value": "1",
+      "label": "1"
+     },
+     {
+      "value": "3",
+      "label": "3"
+     }
+    ],
+    "placeholder": null,
+    "help": null
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "cfos_powerbrain",
+  "name": "cFos Power Brain (Modbus TCP)",
+  "category": "wallbox",
+  "description": "cFos Power Brain Wallbox bzw. Controller über Modbus TCP.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.20",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 4701,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 1,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "Lastmanagement im Power Brain auf 'Beobachten' stellen, sonst überschreibt es die Vorgaben.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "alfen_eve",
+  "name": "Alfen Eve (Modbus TCP)",
+  "category": "wallbox",
+  "description": "Alfen Eve Single/Double Pro-line über Modbus TCP.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.20",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 1,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "Im ACE Service Installer: Active Load Balancing aktiv, Datenquelle 'Energy Management System'. Unit-ID 1 = Ladepunkt 1, 2 = Ladepunkt 2.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "webasto_next",
+  "name": "Webasto Next / Ampure Unite (Modbus TCP)",
+  "category": "wallbox",
+  "description": "Webasto Next und Ampure Unite über Modbus TCP.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.20",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 255,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "Modbus in der Web-Oberfläche der Box aktivieren (HEMS).",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "vestel_evc04",
+  "name": "Vestel EVC04 (Modbus TCP)",
+  "category": "wallbox",
+  "description": "Vestel EVC04 und baugleiche Boxen (z. B. Hager witty start) über Modbus TCP.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.20",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 255,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "Modbus TCP in der Web-Oberfläche aktivieren.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "bender_cc",
+  "name": "Bender CC612/CC613, Mennekes Amtron (Modbus TCP)",
+  "category": "wallbox",
+  "description": "Ladecontroller Bender CC612/CC613, u. a. in Mennekes Amtron Xtra/Premium/4You/4Business, Walther, Ubitricity.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.20",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 255,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   },
+   {
+    "key": "phases",
+    "label": "Phasen",
+    "type": "select",
+    "required": true,
+    "default": "3",
+    "options": [
+     {
+      "value": "1",
+      "label": "1"
+     },
+     {
+      "value": "3",
+      "label": "3"
+     }
+    ],
+    "placeholder": null,
+    "help": null
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "In der Web-Oberfläche: Modbus TCP Server aktiv, Register-Adresssatz 'Ebee', HEMS-Strombegrenzung zulassen.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "phoenix_charx",
+  "name": "Phoenix Contact CHARX SEC (Modbus TCP)",
+  "category": "wallbox",
+  "description": "Ladecontroller Phoenix Contact CHARX SEC-3xxx über Modbus TCP.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.20",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 1,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "connector",
+    "label": "Ladepunkt",
+    "type": "number",
+    "required": true,
+    "default": 1,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "Modbus-Server im CHARX aktivieren. Ladepunkt = Nummer des Ladecontrollers (1, 2 …).",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "phoenix_ev_eth",
+  "name": "Phoenix Contact EV-CC/EV-ETH, Wallbe (Modbus TCP)",
+  "category": "wallbox",
+  "description": "Ladecontroller Phoenix Contact EV-CC-AC1-M3-…-ETH, u. a. in Wallbe Eco/Pro, ESL Walli.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.20",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 255,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   },
+   {
+    "key": "phases",
+    "label": "Phasen",
+    "type": "select",
+    "required": true,
+    "default": "3",
+    "options": [
+     {
+      "value": "1",
+      "label": "1"
+     },
+     {
+      "value": "3",
+      "label": "3"
+     }
+    ],
+    "placeholder": null,
+    "help": null
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "Ladefreigabe per DIP-Schalter auf 'extern' stellen.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "keba_modbus",
+  "name": "KEBA KeContact P30 x / P40 (Modbus TCP)",
+  "category": "wallbox",
+  "description": "KEBA KeContact P30 x-Serie und P40 über Modbus TCP.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.20",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 255,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "Modbus TCP in der Web-Oberfläche bzw. per DIP-Schalter aktivieren.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "heidelberg_ec",
+  "name": "Heidelberg Energy Control (Modbus RTU)",
+  "category": "wallbox",
+  "description": "Heidelberg Energy Control über RS485 und ein Modbus-TCP-Gateway.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse (Gateway)",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.20",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 1,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "framer",
+    "label": "Gateway-Protokoll",
+    "type": "select",
+    "required": true,
+    "default": "rtu",
+    "options": [
+     {
+      "value": "rtu",
+      "label": "Modbus RTU über TCP"
+     },
+     {
+      "value": "socket",
+      "label": "Modbus TCP (Gateway setzt um)"
+     }
+    ],
+    "placeholder": null,
+    "help": "RS485-Gateway, z. B. Waveshare, USR-TCP232"
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "RS485: 19200 Baud, 8E1. Bus-Adresse per DIP-Schalter. Gateway in den transparenten Modus bzw. auf Modbus RTU über TCP stellen.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "amperfied",
+  "name": "Amperfied connect.home/business (Modbus TCP)",
+  "category": "wallbox",
+  "description": "Amperfied Wallbox connect.home, connect.business, connect.solar über Modbus TCP.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.20",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 255,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "Modbus TCP in der Web-Oberfläche aktivieren. Steuerung durch externes Energiemanagement zulassen.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "mennekes_compact",
+  "name": "Mennekes Amtron Compact 2.0s (Modbus RTU)",
+  "category": "wallbox",
+  "description": "Mennekes Amtron Compact 2.0s über RS485 und ein Modbus-TCP-Gateway.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse (Gateway)",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.20",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 50,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "framer",
+    "label": "Gateway-Protokoll",
+    "type": "select",
+    "required": true,
+    "default": "rtu",
+    "options": [
+     {
+      "value": "rtu",
+      "label": "Modbus RTU über TCP"
+     },
+     {
+      "value": "socket",
+      "label": "Modbus TCP (Gateway setzt um)"
+     }
+    ],
+    "placeholder": null,
+    "help": "RS485-Gateway, z. B. Waveshare, USR-TCP232"
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "RS485: 57600 Baud, 8N2, Bus-Adresse 50. Gateway auf Modbus RTU über TCP stellen.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "abl_emh1",
+  "name": "ABL eMH1 (Modbus ASCII)",
+  "category": "wallbox",
+  "description": "ABL eMH1 über RS485 (Modbus ASCII) und ein TCP-Gateway.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.20",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 1,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "framer",
+    "label": "Gateway-Protokoll",
+    "type": "select",
+    "required": true,
+    "default": "ascii",
+    "options": [
+     {
+      "value": "ascii",
+      "label": "Modbus ASCII über TCP"
+     },
+     {
+      "value": "socket",
+      "label": "Modbus TCP (Gateway setzt um)"
+     }
+    ],
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   },
+   {
+    "key": "phases",
+    "label": "Phasen",
+    "type": "select",
+    "required": true,
+    "default": "3",
+    "options": [
+     {
+      "value": "1",
+      "label": "1"
+     },
+     {
+      "value": "3",
+      "label": "3"
+     }
+    ],
+    "placeholder": null,
+    "help": null
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "RS485: 38400 Baud, 8E1, Modbus ASCII. Gateway muss ASCII über TCP durchreichen.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "em2go",
+  "name": "EM2GO Home (Modbus TCP)",
+  "category": "wallbox",
+  "description": "EM2GO Home Series über Modbus TCP.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.20",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 255,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "innogy_ebox",
+  "name": "innogy / E.ON eBox (Modbus TCP)",
+  "category": "wallbox",
+  "description": "innogy eBox smart/professional (heute E.ON Drive) über Modbus TCP.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.20",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 1,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "Modbus TCP in der eBox aktivieren (Konfiguration → Lastmanagement → Modbus).",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "versicharge",
+  "name": "Siemens VersiCharge (Modbus TCP)",
+  "category": "wallbox",
+  "description": "Siemens VersiCharge AC ab Firmware 2.128 über Modbus TCP.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.20",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 2,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "solax_evc",
+  "name": "SolaX X1/X3-EVC (Modbus TCP)",
+  "category": "wallbox",
+  "description": "SolaX X1-EVC und X3-EVC über Modbus TCP.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.20",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 1,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "Lademodus in der SolaX-App auf 'Fast' stellen, sonst regelt die Box selbst.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "peblar",
+  "name": "Peblar Home/Business (Modbus TCP)",
+  "category": "wallbox",
+  "description": "Peblar Home, Home Plus und Business über Modbus TCP.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.20",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 255,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "Modbus in der Peblar-Oberfläche aktivieren, Strombegrenzung über Modbus zulassen.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "pulsares",
+  "name": "Pulsares (Modbus TCP)",
+  "category": "wallbox",
+  "description": "Pulsares-Wallboxen über Modbus TCP. Ohne Zähler: Leistung aus Strom und Phasen geschätzt.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.20",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 1,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   },
+   {
+    "key": "phases",
+    "label": "Phasen",
+    "type": "select",
+    "required": true,
+    "default": "3",
+    "options": [
+     {
+      "value": "1",
+      "label": "1"
+     },
+     {
+      "value": "3",
+      "label": "3"
+     }
+    ],
+    "placeholder": null,
+    "help": null
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "kse_wallbox",
+  "name": "KSE wallbox (Modbus RTU)",
+  "category": "wallbox",
+  "description": "KSE wallbox über RS485 und ein Modbus-TCP-Gateway.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse (Gateway)",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.20",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 100,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "framer",
+    "label": "Gateway-Protokoll",
+    "type": "select",
+    "required": true,
+    "default": "rtu",
+    "options": [
+     {
+      "value": "rtu",
+      "label": "Modbus RTU über TCP"
+     },
+     {
+      "value": "socket",
+      "label": "Modbus TCP (Gateway setzt um)"
+     }
+    ],
+    "placeholder": null,
+    "help": "RS485-Gateway, z. B. Waveshare, USR-TCP232"
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "RS485: 9600 Baud, 8E1, Bus-Adresse 100.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "obo_wallbox",
+  "name": "OBO Bettermann Wallbox (Modbus RTU)",
+  "category": "wallbox",
+  "description": "OBO Bettermann Wallbox über RS485 und ein Modbus-TCP-Gateway. Ohne Zähler: Leistung geschätzt.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse (Gateway)",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.20",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 502,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "unit_id",
+    "label": "Unit-ID",
+    "type": "number",
+    "required": true,
+    "default": 101,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "framer",
+    "label": "Gateway-Protokoll",
+    "type": "select",
+    "required": true,
+    "default": "rtu",
+    "options": [
+     {
+      "value": "rtu",
+      "label": "Modbus RTU über TCP"
+     },
+     {
+      "value": "socket",
+      "label": "Modbus TCP (Gateway setzt um)"
+     }
+    ],
+    "placeholder": null,
+    "help": "RS485-Gateway, z. B. Waveshare, USR-TCP232"
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   },
+   {
+    "key": "phases",
+    "label": "Phasen",
+    "type": "select",
+    "required": true,
+    "default": "3",
+    "options": [
+     {
+      "value": "1",
+      "label": "1"
+     },
+     {
+      "value": "3",
+      "label": "3"
+     }
+    ],
+    "placeholder": null,
+    "help": null
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "RS485: 19200 Baud, 8E1, Bus-Adresse 101.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "openwb_mqtt",
+  "name": "openWB 1.9 'Nur Ladepunkt' (MQTT)",
+  "category": "wallbox",
+  "description": "openWB series1/2 mit Software 1.9 im Modus 'Nur Ladepunkt' über den MQTT-Broker der openWB.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "Broker",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.6",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 1883,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "username",
+    "label": "Benutzer",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "password",
+    "label": "Passwort",
+    "type": "password",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_age_s",
+    "label": "Max. Alter (s)",
+    "type": "number",
+    "required": true,
+    "default": 60,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "chargepoint",
+    "label": "Ladepunkt",
+    "type": "select",
+    "required": true,
+    "default": "1",
+    "options": [
+     {
+      "value": "1",
+      "label": "1"
+     },
+     {
+      "value": "2",
+      "label": "2"
+     }
+    ],
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "In der openWB: Einstellungen → Modulkonfiguration → 'Nur Ladepunkt'. Broker = IP der openWB.",
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "mqtt_wallbox",
+  "name": "Wallbox über MQTT (generisch)",
+  "category": "wallbox",
+  "description": "Werte aus MQTT-Topics, Steuerung über Befehls-Topics.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "Broker",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.6",
+    "help": null
+   },
+   {
+    "key": "port",
+    "label": "Port",
+    "type": "number",
+    "required": true,
+    "default": 1883,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "username",
+    "label": "Benutzer",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "password",
+    "label": "Passwort",
+    "type": "password",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_age_s",
+    "label": "Max. Alter (s)",
+    "type": "number",
+    "required": true,
+    "default": 60,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "power_topic",
+    "label": "Topic Ladeleistung (W)",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "wallbox/power",
+    "help": null
+   },
+   {
+    "key": "power_path",
+    "label": "Pfad Ladeleistung",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "JSON-Pfad; leer = Zahl"
+   },
+   {
+    "key": "plugged_topic",
+    "label": "Topic Fahrzeug verbunden",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "plugged_path",
+    "label": "Pfad verbunden",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "JSON-Pfad; leer = Zahl"
+   },
+   {
+    "key": "soc_topic",
+    "label": "Topic Fahrzeug-Ladestand",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "soc_path",
+    "label": "Pfad Ladestand",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "JSON-Pfad; leer = Zahl"
+   },
+   {
+    "key": "current_topic",
+    "label": "Topic Ladestrom setzen",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "wallbox/set/current",
+    "help": null
+   },
+   {
+    "key": "enable_topic",
+    "label": "Topic Laden ein/aus",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "wallbox/set/enable",
+    "help": null
+   },
+   {
+    "key": "payload_on",
+    "label": "Nutzlast Ein",
+    "type": "text",
+    "required": true,
+    "default": "1",
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "payload_off",
+    "label": "Nutzlast Aus",
+    "type": "text",
+    "required": true,
+    "default": "0",
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   },
+   {
+    "key": "phases",
+    "label": "Phasen",
+    "type": "select",
+    "required": true,
+    "default": "3",
+    "options": [
+     {
+      "value": "1",
+      "label": "1"
+     },
+     {
+      "value": "3",
+      "label": "3"
+     }
+    ],
+    "placeholder": null,
+    "help": null
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": null,
+  "offline_hint": null,
+  "own_program_hint": null
+ },
+ {
+  "id": "fronius_wattpilot",
+  "name": "Fronius Wattpilot (WebSocket)",
+  "category": "wallbox",
+  "description": "Fronius Wattpilot Home/Go 11 J und 22 J über die lokale WebSocket-Schnittstelle.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.27",
+    "help": null
+   },
+   {
+    "key": "password",
+    "label": "Passwort",
+    "type": "password",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "max_current",
+    "label": "Max. Ladestrom (A)",
+    "type": "number",
+    "required": true,
+    "default": 16,
+    "options": null,
+    "placeholder": null,
+    "help": "6–32 A, nicht über der Absicherung"
+   }
+  ],
+  "capabilities": [
+   "write_test"
+  ],
+  "maturity": "experimental",
+  "notes": "Passwort wie in der Solar.wattpilot-App. Lademodus 'Default' wählen, sonst regelt die Box selbst. Wattpilot Flex wird nicht unterstützt.",
+  "offline_hint": null,
+  "own_program_hint": null
+ }
+]

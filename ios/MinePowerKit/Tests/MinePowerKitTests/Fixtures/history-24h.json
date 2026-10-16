@@ -1,0 +1,10 @@
+{
+ "pv_power": [],
+ "grid_power": [],
+ "house_power": [],
+ "battery_power": [],
+ "battery_soc": [],
+ "wallbox_power": [],
+ "water_power": [],
+ "price_ct": []
+}

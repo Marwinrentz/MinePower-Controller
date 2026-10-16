@@ -1,0 +1,12 @@
+.build/
+MinePower.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+.swiftpm/
+xtool/
+.bsp/
+preview/
+screenshots/
+results/
+build/

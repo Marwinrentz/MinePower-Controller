@@ -1,0 +1,138 @@
+{
+  "type": "snapshot",
+  "data": {
+    "time": "2026-09-17T13:34:11.246388+00:00",
+    "pv_power": 4637.2,
+    "grid_power": -4288.4,
+    "house_power": 348.8,
+    "wallbox_power": 0.0,
+    "water_power": 0,
+    "battery": {
+      "soc": 55.0,
+      "power": 0.0
+    },
+    "surplus": 4288.4,
+    "price_ct": 8.0,
+    "price_cheap": true,
+    "grid_price_window": true,
+    "battery_locked": true,
+    "safety": null,
+    "paused": false,
+    "waste_w": 4288.4,
+    "waste_reason": "Alle steuerbaren Lasten laufen bereits am Maximum.",
+    "gap_filled_w": 0.0,
+    "deadband_w": 50.0,
+    "weather": "stabil",
+    "devices": [
+      {
+        "id": 1,
+        "name": "PV",
+        "category": "inverter",
+        "driver_id": "sim_inverter",
+        "enabled": true,
+        "online": true,
+        "last_error": null,
+        "command_error": null,
+        "uncontrolled": false,
+        "decision": {},
+        "capabilities": [],
+        "data": {
+          "pv_power": 4637.2,
+          "daily_yield_kwh": null,
+          "total_yield_kwh": null,
+          "grid_power": null,
+          "status": "ok",
+          "battery_soc": null,
+          "battery_power": null,
+          "battery_capacity_kwh": null,
+          "extra": {}
+        }
+      },
+      {
+        "id": 2,
+        "name": "Zähler",
+        "category": "meter",
+        "driver_id": "sim_meter",
+        "enabled": true,
+        "online": true,
+        "last_error": null,
+        "command_error": null,
+        "uncontrolled": false,
+        "decision": {},
+        "capabilities": [],
+        "data": {
+          "grid_power": -4288.4,
+          "power_l1": -1429.4666666666665,
+          "power_l2": -1429.4666666666665,
+          "power_l3": -1429.4666666666665,
+          "energy_import_kwh": null,
+          "energy_export_kwh": null,
+          "extra": {}
+        }
+      },
+      {
+        "id": 3,
+        "name": "Wallbox",
+        "category": "wallbox",
+        "driver_id": "sim_wallbox",
+        "enabled": true,
+        "online": true,
+        "last_error": null,
+        "command_error": null,
+        "uncontrolled": false,
+        "decision": {
+          "enable": true,
+          "current_a": 16.0,
+          "phases": null,
+          "reason": "günstiger Tarif"
+        },
+        "capabilities": [
+          "charge_limit",
+          "phase_switch",
+          "soc"
+        ],
+        "data": {
+          "state": "connected",
+          "power": 0.0,
+          "current_set": 6.0,
+          "phases_active": 1,
+          "voltage": null,
+          "energy_session_kwh": 0.0,
+          "soc": 42.0,
+          "charge_limit_soc": 80.0,
+          "vehicle_reachable": null,
+          "rfid_tag": null,
+          "extra": {}
+        },
+        "mode": "price",
+        "override": null,
+        "phases": 3,
+        "charge_limit_soc": 80.0
+      },
+      {
+        "id": 4,
+        "name": "Speicher",
+        "category": "battery",
+        "driver_id": "sim_battery",
+        "enabled": true,
+        "online": true,
+        "last_error": null,
+        "command_error": null,
+        "uncontrolled": false,
+        "decision": {},
+        "capabilities": [
+          "battery_control"
+        ],
+        "data": {
+          "soc": 55.0,
+          "power": 0.0,
+          "mode": "auto",
+          "temperature_c": null,
+          "capacity_kwh": 9.6,
+          "status": "ok",
+          "extra": {}
+        }
+      }
+    ]
+  }
+}

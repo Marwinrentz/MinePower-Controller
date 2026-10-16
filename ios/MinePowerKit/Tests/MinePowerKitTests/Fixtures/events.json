@@ -1,0 +1,10 @@
+[
+ {
+  "id": 1,
+  "time": "2026-10-16T20:50:13.949360Z",
+  "level": "info",
+  "category": "auth",
+  "message": "Login: demo@minepower.de",
+  "data": {}
+ }
+]

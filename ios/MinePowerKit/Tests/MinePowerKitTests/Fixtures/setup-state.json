@@ -1,0 +1,5 @@
+{
+ "needs_admin": false,
+ "needs_devices": false,
+ "has_grid_measurement": true
+}

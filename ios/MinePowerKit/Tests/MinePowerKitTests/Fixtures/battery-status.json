@@ -1,0 +1,28 @@
+{
+ "manual": null,
+ "manual_last": null,
+ "grid_charging": false,
+ "defaults": {
+  "power_w": 3000.0,
+  "max_minutes": 240.0,
+  "reserve_soc": 20.0
+ },
+ "devices": [
+  {
+   "id": 5,
+   "name": "Hausbatterie (Simulation)",
+   "online": true,
+   "controllable": true,
+   "control_enabled": true,
+   "soc": 55.0,
+   "power": 0.0,
+   "mode": "auto",
+   "max_soc": null,
+   "min_soc": null,
+   "target_mode": "auto",
+   "target_power_w": null,
+   "command_error": null,
+   "writes": []
+  }
+ ]
+}

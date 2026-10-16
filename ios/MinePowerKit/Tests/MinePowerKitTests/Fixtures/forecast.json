@@ -1,0 +1,9 @@
+{
+ "provider": "none",
+ "today_kwh": null,
+ "tomorrow_kwh": null,
+ "daily_kwh": {},
+ "updated_at": null,
+ "active": false,
+ "now_w": null
+}

@@ -1,0 +1,18 @@
+{
+ "range": "24h",
+ "pv_kwh": 0.0,
+ "grid_import_kwh": 0.0,
+ "grid_export_kwh": 0.0,
+ "consumption_kwh": 0.0,
+ "autarky_pct": 0.0,
+ "self_consumption_pct": 0.0,
+ "charged_kwh": 0,
+ "charged_solar_kwh": 0,
+ "charged_solar_pct": 0.0,
+ "savings_eur": 0.0,
+ "co2_saved_kg": 0.0,
+ "session_count": 0,
+ "wasted_kwh": 0.0,
+ "wasted_pct": 0.0,
+ "wasted_value_eur": 0.0
+}
