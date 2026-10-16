@@ -128,7 +128,7 @@ struct ConnectView: View {
                 }
                 .accessibilityLabel(Text("Wo finde ich die Adresse?"))
             }
-            AppTextField(title: "z. B. 192.168.178.20:8080", text: $address, symbol: "network")
+            AppTextField(title: "z. B. 192.168.178.20:8080", text: $address, symbol: "network", identifier: "address")
                 .textContentType(.URL)
                 .keyboardType(.URL)
                 .textInputAutocapitalization(.never)
@@ -136,7 +136,6 @@ struct ConnectView: View {
                 .submitLabel(.go)
                 .focused($addressFocused)
                 .onSubmit { Task { await connect(address) } }
-                .accessibilityIdentifier("address")
             if let error {
                 InlineError(error: error)
             }
@@ -197,7 +196,7 @@ struct ConnectView: View {
         do {
             let result = try await session.probe(text)
             discovery.stop()
-            session.adopt(result)
+            await session.adopt(result)
         } catch let APIError.untrustedCertificate(host, fingerprint) {
             if let fingerprint {
                 trustRequest = TrustRequest(address: text, host: host, fingerprint: fingerprint)
@@ -274,6 +273,8 @@ struct AppTextField: View {
     @Binding var text: String
     var symbol: String?
     var secure = false
+    /// Kennung für UI-Tests, direkt am Eingabefeld (nicht am Rahmen).
+    var identifier: String?
 
     var body: some View {
         HStack(spacing: Space.s) {
@@ -291,6 +292,7 @@ struct AppTextField: View {
                 }
             }
             .font(Typo.body)
+            .accessibilityIdentifier(identifier ?? "")
         }
         .padding(.horizontal, Space.m)
         .frame(minHeight: 50)

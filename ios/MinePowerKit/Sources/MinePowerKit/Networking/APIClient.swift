@@ -22,6 +22,8 @@ public enum APIError: LocalizedError, Sendable, Equatable {
     case timedOut
     case offline
     case untrustedCertificate(host: String, fingerprint: String?)
+    /// http zu einer Adresse außerhalb des Heimnetzes (ATS blockiert das).
+    case insecureRemote
     case notMinePower
     case decoding(String)
     case cancelled
@@ -49,6 +51,9 @@ public enum APIError: LocalizedError, Sendable, Equatable {
         case .offline: return Loc.t("Keine Netzverbindung.", "No network connection.")
         case .untrustedCertificate(let host, _):
             return Loc.t("Zertifikat von \(host) nicht vertrauenswürdig.", "Certificate of \(host) is not trusted.")
+        case .insecureRemote:
+            return Loc.t("Ohne https verbindet sich die App nur im Heimnetz. Nutze https (z. B. Reverse-Proxy) oder ein VPN.",
+                         "Without https the app only connects inside your home network. Use https (e.g. a reverse proxy) or a VPN.")
         case .notMinePower: return Loc.t("Unter dieser Adresse läuft kein MinePower.", "No MinePower server at this address.")
         case .decoding(let what): return Loc.t("Unerwartete Antwort vom Server (\(what)).", "Unexpected server response (\(what)).")
         case .cancelled: return nil

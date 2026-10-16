@@ -5,6 +5,7 @@ import SwiftUI
 /// Administrator anlegen.
 struct SignInView: View {
     @Environment(AppSession.self) private var session
+    @State private var confirmRemoval = false
 
     var body: some View {
         NavigationStack {
@@ -33,9 +34,9 @@ struct SignInView: View {
                         } label: {
                             Label("Anderer Server", systemImage: "server.rack")
                         }
-                        if let server = session.server {
+                        if session.server != nil {
                             Button(role: .destructive) {
-                                Task { await session.removeServer(server.id) }
+                                confirmRemoval = true
                             } label: {
                                 Label("Server entfernen", systemImage: "trash")
                             }
@@ -49,6 +50,13 @@ struct SignInView: View {
             }
         }
         .task { await session.refreshServerInfo() }
+        .confirmationDialog("Server entfernen?", isPresented: $confirmRemoval, titleVisibility: .visible) {
+            Button("Entfernen", role: .destructive) {
+                if let id = session.server?.id { Task { await session.removeServer(id) } }
+            }
+        } message: {
+            Text("Gespeicherte Anmeldung und bestätigtes Zertifikat werden gelöscht. Auf dem Server selbst ändert sich nichts.")
+        }
     }
 }
 
@@ -117,7 +125,7 @@ private struct SignInForm: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.m) {
-            AppTextField(title: "E-Mail", text: $email, symbol: "envelope")
+            AppTextField(title: "E-Mail", text: $email, symbol: "envelope", identifier: "email")
                 .textContentType(.username)
                 .keyboardType(.emailAddress)
                 .textInputAutocapitalization(.never)
@@ -125,13 +133,11 @@ private struct SignInForm: View {
                 .submitLabel(.next)
                 .focused($focus, equals: .email)
                 .onSubmit { focus = .password }
-                .accessibilityIdentifier("email")
-            AppTextField(title: "Passwort", text: $password, symbol: "key", secure: true)
+            AppTextField(title: "Passwort", text: $password, symbol: "key", secure: true, identifier: "password")
                 .textContentType(.password)
                 .submitLabel(.go)
                 .focused($focus, equals: .password)
                 .onSubmit { Task { await signIn() } }
-                .accessibilityIdentifier("password")
             if let error { InlineError(error: error) }
             Button {
                 Task { await signIn() }

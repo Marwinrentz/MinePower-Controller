@@ -176,6 +176,7 @@ public final class AppSession {
     /// Prüft eine eingegebene Adresse. Liefert den Einrichtungszustand gleich mit.
     public func probe(_ address: String) async throws -> ServerProbe.Result {
         guard let url = ServerAddress.normalize(address) else { throw APIError.invalidAddress }
+        guard !ServerAddress.isInsecureRemote(url) else { throw APIError.insecureRemote }
         configureTransport(demo: false)
         let probe = ServerProbe(session: urlSession, registry: registry)
         do {
@@ -199,7 +200,7 @@ public final class AppSession {
 
     /// Geprüften Server übernehmen und aktivieren.
     @discardableResult
-    public func adopt(_ result: ServerProbe.Result, name: String? = nil) -> ServerProfile {
+    public func adopt(_ result: ServerProbe.Result, name: String? = nil) async -> ServerProfile {
         let host = result.url.host ?? ""
         let pin = registry.allPins[host.lowercased()]
         let profile = directory.add(ServerProfile(
@@ -207,10 +208,11 @@ public final class AppSession {
             url: result.url, fingerprint: pin, lastVersion: result.health.version))
         health = result.health
         setup = result.setup
-        phase = .signedOut
         live.reset()
         user = nil
-        Task { await api.configure(baseURL: profile.url, token: nil) }
+        // Vor dem Phasenwechsel: Die Anmeldeseite fragt sofort den Server ab.
+        await api.configure(baseURL: profile.url, token: nil)
+        phase = .signedOut
         return profile
     }
 
@@ -275,7 +277,8 @@ public final class AppSession {
     public func removeServer(_ id: UUID) async {
         if let profile = directory.profiles.first(where: { $0.id == id }) {
             try? await secrets.removeSecret(for: profile.tokenKey)
-            registry.unpin(host: profile.host)
+            let hostShared = directory.profiles.contains { $0.id != id && $0.host == profile.host }
+            if !hostShared { registry.unpin(host: profile.host) }
         }
         let wasActive = directory.activeID == id
         directory.remove(id)
@@ -354,7 +357,8 @@ public final class AppSession {
                 directory.update(server.id) { $0.lastVersion = health.version }
             }
         }
-        setup = try? await api.setupState()
+        // Nur bei Erfolg ersetzen: Ein Aussetzer darf "Server ist neu" nicht vergessen.
+        if let fresh = try? await api.setupState() { setup = fresh }
     }
 
     public func refreshUser() async {

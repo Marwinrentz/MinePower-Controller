@@ -140,7 +140,7 @@ extension DemoBacked {
             let result = try await session.probe(DemoBackend.baseURL.absoluteString)
             #expect(result.health.version == "3.1.1")
             #expect(result.setup?.needsAdmin == false)
-            let profile = session.adopt(result, name: "Testanlage")
+            let profile = await session.adopt(result, name: "Testanlage")
             #expect(session.phase == .signedOut)
             #expect(session.directory.active?.id == profile.id)
             try await session.signIn(email: "demo@minepower.de", password: "x")
@@ -153,6 +153,7 @@ extension DemoBacked {
         @Test func invalidAddressIsRejectedBeforeNetwork() async {
             let session = makeDemoSession()
             await #expect(throws: APIError.invalidAddress) { _ = try await session.probe("ftp://x") }
+            await #expect(throws: APIError.insecureRemote) { _ = try await session.probe("http://energie.example.de") }
         }
 
         @Test func addingAnotherServerKeepsTheActiveOne() async {

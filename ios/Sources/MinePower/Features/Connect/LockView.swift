@@ -6,6 +6,7 @@ struct LockView: View {
     @Environment(AppSession.self) private var session
     @State private var isUnlocking = false
     @State private var didAutoStart = false
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         VStack(spacing: Space.xl) {
@@ -35,9 +36,10 @@ struct LockView: View {
         .padding(Space.xl)
         .frame(maxWidth: .infinity)
         .background(Color(uiColor: .systemGroupedBackground))
-        .task {
-            // Einmal automatisch fragen; nach Abbruch nur noch auf Knopfdruck.
-            guard !didAutoStart else { return }
+        // Einmal automatisch fragen, und nur wenn die App wirklich vorne ist
+        // (nicht im App-Umschalter); nach Abbruch nur noch auf Knopfdruck.
+        .task(id: scenePhase) {
+            guard scenePhase == .active, !didAutoStart else { return }
             didAutoStart = true
             await unlock()
         }
