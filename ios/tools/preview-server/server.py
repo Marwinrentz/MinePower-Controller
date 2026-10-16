@@ -3,7 +3,7 @@
 
 Nur Standardbibliothek. Lauscht ausschließlich auf 127.0.0.1.
 
-    python3 tools/preview-server/server.py --shots preview/screenshots --port 8765
+    python3 tools/preview-server/server.py --shots preview/screenshots --port 8790
 """
 import argparse
 import hashlib
@@ -53,7 +53,7 @@ def make_handler(shots: pathlib.Path):
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--port", type=int, default=8790)
     parser.add_argument("--shots", default="preview/screenshots")
     args = parser.parse_args()
     shots = pathlib.Path(args.shots).resolve()

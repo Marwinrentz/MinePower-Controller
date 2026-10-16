@@ -11,7 +11,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 DEST=preview/screenshots
-PORT=${PORT:-8765}
+PORT=${PORT:-8790}
 
 if [[ "${1:-}" != "--serve" ]]; then
   RUN=${1:-$(gh run list --workflow ios.yml --limit 20 --json databaseId,status \
