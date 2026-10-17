@@ -19,15 +19,42 @@ import Security
 /// Umschalten erst der neue Eintrag geschrieben, dann der alte gelöscht –
 /// es gibt keinen Moment ohne Token.
 ///
+/// Neue Einträge landen in der App Group (`AppGroup.id`), damit Widget und
+/// Kurzbefehle das ungeschützte Token lesen können. Fehlt die Berechtigung
+/// (Build ohne App Group), wird ohne Gruppe geschrieben wie bisher. Lesen und
+/// Löschen suchen in allen erreichbaren Gruppen.
+///
 /// Ein eigener Aktor, damit `SecItem*` nie auf dem Hauptthread blockiert.
 actor KeychainStore: SecretStore {
     private let service: String
+    private let accessGroup: String?
     /// Zuletzt bestätigter Face-ID-Kontext: Ein direkt folgendes Schreiben
     /// (Token-Verlängerung nach dem Entsperren) fragt nicht ein zweites Mal.
     private var authenticatedContext: LAContext?
 
-    init(service: String = "de.minepower.app") {
+    init(service: String = KeychainStore.service, accessGroup: String? = AppGroup.id) {
         self.service = service
+        self.accessGroup = accessGroup
+    }
+
+    static let service = "de.minepower.app"
+
+    /// Ungeschütztes Token ohne Rückfrage lesen (Widget, Kurzbefehle im
+    /// Hintergrund). Geschützte Einträge bleiben unberührt: `nil`.
+    static func plainSecret(for key: String, service: String = KeychainStore.service) -> String? {
+        let context = LAContext()
+        context.interactionNotAllowed = true
+        let query: [CFString: Any] = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: service,
+            kSecAttrAccount: key,
+            kSecReturnData: true,
+            kSecMatchLimit: kSecMatchLimitOne,
+            kSecUseAuthenticationContext: context,
+        ]
+        var item: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess, let data = item as? Data else { return nil }
+        return String(decoding: data, as: UTF8.self)
     }
 
     func secret(for key: String) async throws -> String? {
@@ -79,6 +106,7 @@ actor KeychainStore: SecretStore {
     /// Anlegen oder ersetzen (kein Löschen-und-neu im Normalfall).
     private func write(_ data: Data, account: String, protected: Bool) throws {
         var add = identity(account)
+        if let accessGroup { add[kSecAttrAccessGroup] = accessGroup }
         add[kSecValueData] = data
         if protected {
             var error: Unmanaged<CFError>?
@@ -92,7 +120,13 @@ actor KeychainStore: SecretStore {
             add[kSecAttrAccessible] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         }
 
-        switch SecItemAdd(add as CFDictionary, nil) {
+        var status = SecItemAdd(add as CFDictionary, nil)
+        if status == errSecMissingEntitlement, add[kSecAttrAccessGroup] != nil {
+            // Ohne App-Group-Berechtigung gebaut: wie bisher ohne Gruppe.
+            add[kSecAttrAccessGroup] = nil
+            status = SecItemAdd(add as CFDictionary, nil)
+        }
+        switch status {
         case errSecSuccess:
             return
         case errSecDuplicateItem:
@@ -104,7 +138,7 @@ actor KeychainStore: SecretStore {
             case errSecUserCanceled, errSecAuthFailed: throw SecretStoreError.userCancelled
             default: throw SecretStoreError.unavailable(status: status)
             }
-        case let status:
+        default:
             throw SecretStoreError.unavailable(status: status)
         }
     }

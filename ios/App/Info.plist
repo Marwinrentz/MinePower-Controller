@@ -9,6 +9,8 @@
 		<string>de</string>
 		<string>en</string>
 	</array>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>CFBundleDisplayName</key>
 	<string>MinePower</string>
 	<key>LSApplicationCategoryType</key>

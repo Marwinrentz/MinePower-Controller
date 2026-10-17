@@ -56,7 +56,9 @@ jobs:
         run: |
           python3 - <<'EOF'
           import plistlib, pathlib
-          for p in ["ios/App/Info.plist", "ios/App/PrivacyInfo.xcprivacy", "ios/tools/ExportOptions.plist"]:
+          for p in ["ios/App/Info.plist", "ios/App/PrivacyInfo.xcprivacy", "ios/tools/ExportOptions.plist",
+                    "ios/App/MinePower.entitlements", "ios/Widgets/Info.plist", "ios/Widgets/MinePowerWidgets.entitlements",
+                    "ios/Widgets/PrivacyInfo.xcprivacy"]:
               plistlib.load(open(p, "rb"))
               print("ok", p)
           EOF

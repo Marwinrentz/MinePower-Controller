@@ -48,11 +48,15 @@ targets:
           - "*.entitlements"
     dependencies:
       - package: MinePowerKit
+      - target: MinePowerWidgets
+        embed: true
     settings:
       base:
         PRODUCT_NAME: MinePower
         PRODUCT_BUNDLE_IDENTIFIER: de.minepower.app
         INFOPLIST_FILE: App/Info.plist
+        # App Group "group.de.minepower.app": geteilter Stand und Token für Widgets.
+        CODE_SIGN_ENTITLEMENTS: App/MinePower.entitlements
         # Ergänzt Version und Build-Nummer aus den Build-Einstellungen.
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
@@ -65,6 +69,42 @@ targets:
         ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: NO
         CODE_SIGN_STYLE: Automatic
         ENABLE_PREVIEWS: YES
+
+  # Widgets (Home-/Sperrbildschirm) und Live-Aktivität. Teilt Farben, Schrift,
+  # Symbole, Logo und den Schlüsselbund-Zugriff mit der App (gleiche Dateien).
+  # Lokal ohne Mac prüfen: tools/check-widgets.sh
+  MinePowerWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Widgets
+        excludes:
+          - "Info.plist"
+          - "*.entitlements"
+      - path: Sources/MinePower/Shared
+      - path: Sources/MinePower/Design/Theme.swift
+      - path: Sources/MinePower/Design/Typography.swift
+      - path: Sources/MinePower/Design/WebIcon.swift
+      - path: Sources/MinePower/Design/WebIconPaths.swift
+      - path: Sources/MinePower/Design/BrandMark.swift
+      - path: Sources/MinePower/Core/KeychainStore.swift
+      - path: Sources/MinePower/Resources/Fonts
+        buildPhase: resources
+    dependencies:
+      - package: MinePowerKit
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+    settings:
+      base:
+        PRODUCT_NAME: MinePowerWidgets
+        PRODUCT_BUNDLE_IDENTIFIER: de.minepower.app.widgets
+        INFOPLIST_FILE: Widgets/Info.plist
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_ENTITLEMENTS: Widgets/MinePowerWidgets.entitlements
+        TARGETED_DEVICE_FAMILY: "1,2"
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
+        CODE_SIGN_STYLE: Automatic
 
   MinePowerUITests:
     type: bundle.ui-testing
@@ -85,6 +125,7 @@ schemes:
     build:
       targets:
         MinePower: all
+        MinePowerWidgets: all
         MinePowerUITests: [test]
     run:
       config: Debug

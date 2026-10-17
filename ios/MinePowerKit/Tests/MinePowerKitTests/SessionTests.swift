@@ -370,3 +370,53 @@ extension DemoBacked {
         }
     }
 }
+
+@Suite("Teilen mit Widgets")
+struct WidgetShareTests {
+    @Test func stateFromDemoSnapshot() throws {
+        let state = WidgetState(snapshot: DemoBackend().snapshot(), serverName: "Demo", isDemo: true, fmt: .de)
+        #expect(!state.headline.isEmpty)
+        #expect(state.pvW > 0)
+        #expect(state.car != nil)
+        #expect(state.water != nil)
+        let defaults = try #require(UserDefaults(suiteName: "widget-test-\(UUID().uuidString)"))
+        state.save(to: defaults)
+        #expect(WidgetState.load(from: defaults) == state)
+        WidgetState.clear(in: defaults)
+        #expect(WidgetState.load(from: defaults) == nil)
+    }
+
+    @Test func staleAfterHalfAnHour() {
+        var state = WidgetState(snapshot: Snapshot(), serverName: "x", isDemo: false, now: .now)
+        state.time = .now.addingTimeInterval(-31 * 60)
+        #expect(state.isStale())
+        state.time = .now.addingTimeInterval(-60)
+        #expect(!state.isStale())
+    }
+}
+
+extension DemoBacked {
+    @Suite("Teilen über die Sitzung")
+    @MainActor
+    struct SessionShareTests {
+        init() { DemoBackend.shared.reset() }
+
+        @Test func sessionSharesServerAndState() async throws {
+            let shared = try #require(UserDefaults(suiteName: "widget-share-\(UUID().uuidString)"))
+            let defaults = try #require(UserDefaults(suiteName: "widget-defaults-\(UUID().uuidString)"))
+            let session = AppSession(secrets: InMemorySecretStore(), defaults: defaults, sharedDefaults: shared) { _ in .demo() }
+            var received: [WidgetState?] = []
+            session.onSharedState = { received.append($0) }
+            await session.startDemo()
+            #expect(SharedServer.load(from: shared)?.isDemo == true)
+            try await session.live.refresh()
+            #expect(WidgetState.load(from: shared) != nil)
+            #expect(received.contains { $0 != nil })
+            await session.signOut()
+            #expect(SharedServer.load(from: shared) == nil)
+            #expect(WidgetState.load(from: shared) == nil)
+            #expect(received.last == .some(nil))
+            session.live.stop()
+        }
+    }
+}

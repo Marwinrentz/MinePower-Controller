@@ -64,15 +64,21 @@ public final class AppSession {
     @ObservationIgnored private var urlSession: URLSession
     @ObservationIgnored private var backgroundedAt: Date?
     @ObservationIgnored private var didBeginLaunch = false
+    /// Gemeinsame Ablage mit Widget und Kurzbefehlen (App Group); `nil` = nicht teilen.
+    @ObservationIgnored private let shared: UserDefaults?
+    /// Neuer geteilter Stand (`nil`: abgemeldet) – die App lädt damit Widgets
+    /// neu und führt Live-Aktivitäten nach.
+    @ObservationIgnored public var onSharedState: (@MainActor (WidgetState?) -> Void)?
 
     static let lockKey = "security.biometricLock"
     static let lockAfter: TimeInterval = 5 * 60
 
     /// - Parameter makeSession: liefert die URLSession; `true` = Demo-Transport.
     public init(secrets: any SecretStore, defaults: UserDefaults = .standard, registry: TrustRegistry = .shared,
-                makeSession: @escaping @Sendable (Bool) -> URLSession) {
+                sharedDefaults: UserDefaults? = nil, makeSession: @escaping @Sendable (Bool) -> URLSession) {
         self.secrets = secrets
         self.defaults = defaults
+        self.shared = sharedDefaults
         self.biometricLock = defaults.bool(forKey: Self.lockKey)
         self.registry = registry
         self.makeSession = makeSession
@@ -85,6 +91,7 @@ public final class AppSession {
         self.directory = ServerDirectory(defaults: defaults)
         self.live = LiveStore()
         live.onAuthExpired = { [weak self] in self?.sessionExpired() }
+        live.onSnapshot = { [weak self] snapshot in self?.share(snapshot) }
     }
 
     // MARK: - Abgeleitet
@@ -267,6 +274,7 @@ public final class AppSession {
         await api.setToken(nil)
         live.reset()
         user = nil
+        unshare()
         phase = directory.active == nil ? .needsServer : .signedOut
     }
 
@@ -292,6 +300,7 @@ public final class AppSession {
             if let next = directory.active { await open(next) } else {
                 live.reset()
                 user = nil
+                unshare()
                 phase = .needsServer
             }
         }
@@ -328,6 +337,7 @@ public final class AppSession {
         }
         defaults.set(enabled, forKey: Self.lockKey)
         biometricLock = enabled
+        shareServer()
     }
 
     // MARK: - Lebenszyklus
@@ -398,6 +408,7 @@ public final class AppSession {
 
     private func startLive(token: String) {
         guard let server = directory.active else { return }
+        shareServer()
         let socket = server.isDemo ? nil : LiveSocket(session: urlSession)
         live.start(api: api, socket: socket, baseURL: server.url, token: token,
                    pollInterval: server.isDemo ? .seconds(3) : .seconds(10))
@@ -415,6 +426,32 @@ public final class AppSession {
               let fresh = try? await api.refreshToken() else { return }
         await api.setToken(fresh.token)
         try? await secrets.setSecret(fresh.token, for: server.tokenKey, protected: biometricLock)
+    }
+
+    // MARK: - Teilen mit Widget und Kurzbefehlen
+
+    /// Aktiven Server ablegen; bei Serverwechsel den alten Stand verwerfen.
+    private func shareServer() {
+        guard let shared, let server = directory.active else { return }
+        if SharedServer.load(from: shared)?.tokenKey != server.tokenKey {
+            WidgetState.clear(in: shared)
+        }
+        SharedServer(server, isProtected: biometricLock).save(to: shared)
+    }
+
+    private func share(_ snapshot: Snapshot) {
+        guard let server = directory.active, phase == .signedIn else { return }
+        let state = WidgetState(snapshot: snapshot, serverName: server.name, isDemo: server.isDemo)
+        if let shared { state.save(to: shared) }
+        onSharedState?(state)
+    }
+
+    private func unshare() {
+        if let shared {
+            SharedServer.clear(in: shared)
+            WidgetState.clear(in: shared)
+        }
+        onSharedState?(nil)
     }
 
     private func sessionExpired() {

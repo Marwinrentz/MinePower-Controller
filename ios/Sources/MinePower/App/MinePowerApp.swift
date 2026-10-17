@@ -13,10 +13,17 @@ struct MinePowerApp: App {
         if let scenario = launch.demoScenario {
             DemoBackend.shared.reset(scenario: scenario)
         }
-        _session = State(initialValue: AppSession(
+        let session = AppSession(
             secrets: launch.isUITest ? InMemorySecretStore() : KeychainStore(),
             defaults: launch.defaults,
-            makeSession: { demo in demo ? .demo() : .minePower() }))
+            // UI-Tests teilen nichts mit Widgets (eigene, leere Ablage).
+            sharedDefaults: launch.isUITest ? nil : AppGroup.defaults,
+            makeSession: { demo in demo ? .demo() : .minePower() })
+        if !launch.isUITest {
+            session.onSharedState = { SharedBridge.handle($0) }
+        }
+        IntentRuntime.session = session
+        _session = State(initialValue: session)
     }
 
     var body: some Scene {
