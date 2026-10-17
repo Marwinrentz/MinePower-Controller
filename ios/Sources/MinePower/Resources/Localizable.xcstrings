@@ -133,10 +133,40 @@
     },
     "%lld Sicherungen vorhanden" : {
       "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Sicherung vorhanden"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Sicherungen vorhanden"
+                }
+              }
+            }
+          }
+        },
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld backups available"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld backup available"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld backups available"
+                }
+              }
+            }
           }
         }
       }
@@ -1631,16 +1661,6 @@
         }
       }
     },
-    "Di" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tu"
-          }
-        }
-      }
-    },
     "Diagnose" : {
       "localizations" : {
         "en" : {
@@ -1757,16 +1777,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "This driver can only read the battery."
-          }
-        }
-      }
-    },
-    "Do" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Th"
           }
         }
       }
@@ -2301,16 +2311,6 @@
         }
       }
     },
-    "Fr" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fr"
-          }
-        }
-      }
-    },
     "Funktionen" : {
       "localizations" : {
         "en" : {
@@ -2783,20 +2783,80 @@
     },
     "Höchstens %lld aktives Gerät" : {
       "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Höchstens %lld aktives Gerät"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Höchstens %lld aktive Geräte"
+                }
+              }
+            }
+          }
+        },
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "At most %lld active device"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "At most %lld active device"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "At most %lld active devices"
+                }
+              }
+            }
           }
         }
       }
     },
     "Höchstens %lld aktives Gerät dieser Art." : {
       "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Höchstens %lld aktives Gerät dieser Art."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Höchstens %lld aktive Geräte dieser Art."
+                }
+              }
+            }
+          }
+        },
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "At most %lld active device of this type."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "At most %lld active device of this type."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "At most %lld active devices of this type."
+                }
+              }
+            }
           }
         }
       }
@@ -3761,16 +3821,6 @@
         }
       }
     },
-    "Mi" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "We"
-          }
-        }
-      }
-    },
     "min. 8" : {
       "localizations" : {
         "en" : {
@@ -4721,16 +4771,6 @@
         }
       }
     },
-    "Sa" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sa"
-          }
-        }
-      }
-    },
     "Schlafendes Auto wecken" : {
       "localizations" : {
         "en" : {
@@ -4971,16 +5011,6 @@
         }
       }
     },
-    "So" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Su"
-          }
-        }
-      }
-    },
     "So aktualisierst du den Server" : {
       "localizations" : {
         "en" : {
@@ -5021,16 +5051,6 @@
         }
       }
     },
-    "Sofort laden in %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fast charge in %@"
-          }
-        }
-      }
-    },
     "Sofort laden?" : {
       "localizations" : {
         "en" : {
@@ -5046,7 +5066,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Full now"
+            "value" : "Charge to Full"
           }
         }
       }
@@ -5861,16 +5881,6 @@
         }
       }
     },
-    "Warmwasser-Boost mit %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hot water boost with %@"
-          }
-        }
-      }
-    },
     "Warmwasser-Boost starten" : {
       "localizations" : {
         "en" : {
@@ -5947,16 +5957,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "What the system is doing right now: summary, PV, grid and battery."
-          }
-        }
-      }
-    },
-    "Was macht %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "What is %@ doing"
           }
         }
       }

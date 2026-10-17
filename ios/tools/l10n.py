@@ -10,6 +10,7 @@ Katalogen.
     python3 ios/tools/l10n.py check          # fehlende Übersetzungen melden (Exit 1)
     python3 ios/tools/l10n.py missing        # fehlende Schlüssel als JSON ausgeben
     python3 ios/tools/l10n.py merge FILE     # Übersetzungen {"Schlüssel": "English"} einspielen
+    python3 ios/tools/l10n.py verify BUILD   # nach dem Xcode-Build: Compiler-Schlüssel prüfen
 
 Zusätzliche Schlüssel im Katalog schaden nicht; fehlt einer, bleibt der Text
 deutsch. Ganzzahlige Interpolationen erkennt eine Liste bekannter Ausdrücke
@@ -38,7 +39,8 @@ SKIP_BEFORE = re.compile(
     r"contains\(\s*|firstMatch\(of:\s*|replacingOccurrences\(of:\s*|with:\s*|string\(\s*|bool\(\s*|double\(\s*|"
     r"int\(\s*|object\(\s*|number\(\s*|set\(\s*|section\(\s*|text\(\s*|flag\(\s*|secret\(\s*|update\(\s*|"
     r"\[\s*|==\s*|!=\s*|case\s+|:\s*\.init\(value:\s*|value:\s*|Character\(\s*|KeyEquivalent\(\s*|"
-    r"keyboardShortcut\(\s*)$")
+    r"keyboardShortcut\(\s*|fatalError\(\s*|print\(\s*|assert\(.*,\s*|precondition\(.*,\s*|"
+    r"assertionFailure\(\s*|preconditionFailure\(\s*|Logger\(.*\)\.\w+\(\s*)$")
 
 # Interpolationen, die Swift als Ganzzahl (%lld) in den Schlüssel schreibt.
 INT_EXPRESSIONS = [
@@ -167,7 +169,8 @@ def extract(paths):
                 continue
             loc_end = -1
             key = key_for(parts, exprs)
-            if not looks_like_text(key):
+            # Siri-Sätze stehen in AppShortcuts.xcstrings, nicht hier.
+            if any(".applicationName" in e for e in exprs) or not looks_like_text(key):
                 continue
             keys.setdefault(key, f"{f.relative_to(ROOT)}:{src.count(chr(10), 0, start) + 1}")
     return keys
@@ -185,16 +188,53 @@ def save(catalog: Path, data):
 
 
 def english(entry):
-    return entry.get("localizations", {}).get("en", {}).get("stringUnit", {}).get("value")
+    en = entry.get("localizations", {}).get("en", {})
+    if "variations" in en:  # Pluralformen
+        return en["variations"].get("plural", {}).get("other", {}).get("stringUnit", {}).get("value")
+    return en.get("stringUnit", {}).get("value")
+
+
+def emitted_keys(build_dir: Path):
+    """Schlüssel, die der Swift-Compiler beim Xcode-Build ausgibt (*.stringsdata)."""
+    keys = {}
+    for f in build_dir.rglob("*.stringsdata"):
+        raw = f.read_bytes()
+        try:
+            data = json.loads(raw)
+        except ValueError:
+            import plistlib
+            data = plistlib.loads(raw)
+        for table, entries in data.get("tables", {}).items():
+            if table != "Localizable":
+                continue
+            for entry in entries:
+                keys.setdefault(entry["key"], str(f.name))
+    return keys
 
 
 def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else "check"
+    if cmd == "verify":
+        # macOS-CI nach dem Build: echte Schlüssel des Compilers gegen die Kataloge.
+        emitted = emitted_keys(Path(sys.argv[2]))
+        known = {}
+        for catalog, _ in CATALOGS.values():
+            known.update(load(catalog)["strings"])
+        missing = sorted(k for k in emitted if not english(known.get(k, {})))
+        for key in missing:
+            print(f"{emitted[key]}: {key}")
+        print(f"{len(emitted)} Schlüssel vom Compiler, {len(missing)} ohne englische Übersetzung")
+        sys.exit(1 if missing or not emitted else 0)
     if cmd == "merge":
         translations = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
         for name, (catalog, paths) in CATALOGS.items():
             data = load(catalog)
-            for key in extract(paths):
+            found = extract(paths)
+            # Was im Code nicht mehr vorkommt, fliegt raus.
+            data["strings"] = {k: v for k, v in data["strings"].items() if k in found}
+            for key in found:
+                if "variations" in data["strings"].get(key, {}).get("localizations", {}).get("en", {}):
+                    continue
                 if key in translations:
                     data["strings"].setdefault(key, {}).setdefault("localizations", {})["en"] = {
                         "stringUnit": {"state": "translated", "value": translations[key]}}

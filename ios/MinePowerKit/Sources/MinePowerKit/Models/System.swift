@@ -166,8 +166,8 @@ public struct Weekdays: OptionSet, Sendable, Hashable {
     }
 
     public func label(short names: [String] = Weekdays.shortNames,
-                      daily: String = Loc.t("täglich", "daily"), workdays: String = Loc.t("Mo–Fr", "Mon–Fri"),
-                      weekend: String = Loc.t("Sa, So", "Sat, Sun")) -> String {
+                      daily: String = Loc.t("täglich", "daily"), workdays: String = Loc.t("Mo–Fr", "Mo–Fr"),
+                      weekend: String = Loc.t("Sa, So", "Sa, Su")) -> String {
         if self == .all { return daily }
         if self == .workdays { return workdays }
         if self == .weekend { return weekend }

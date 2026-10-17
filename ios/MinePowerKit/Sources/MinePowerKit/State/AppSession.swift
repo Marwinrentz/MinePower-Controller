@@ -255,7 +255,7 @@ public final class AppSession {
         await api.configure(baseURL: server.url, token: nil)
         let response = try await api.createFirstAdmin(SetupRequest(
             email: email.trimmingCharacters(in: .whitespaces), password: password, name: name,
-            language: Loc.isEnglish ? "en" : "de"))
+            language: Loc.accountLanguage))
         try await finishSignIn(response, email: email, server: server)
     }
 

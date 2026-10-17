@@ -153,6 +153,12 @@ jobs:
           name: xcresult
           path: ios/results
 
+      # Zum Schluss, damit Screenshots auch bei fehlenden Übersetzungen entstehen:
+      # Schlüssel, die der Compiler tatsächlich ausgibt, müssen im Katalog stehen.
+      - name: Übersetzungen gegen Compiler-Schlüssel prüfen
+        working-directory: ios
+        run: python3 tools/l10n.py verify build
+
   testflight:
     name: TestFlight
     if: github.event_name == 'workflow_dispatch' && inputs.testflight
