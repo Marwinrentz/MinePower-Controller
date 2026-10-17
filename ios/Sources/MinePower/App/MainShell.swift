@@ -34,6 +34,7 @@ struct MainShell: View {
         .fullScreenCover(isPresented: $router.showWall) {
             WallView()
         }
+        .modifier(UpdateSheet())
         .environment(session.settings)
     }
 }
