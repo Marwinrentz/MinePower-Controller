@@ -55,6 +55,8 @@ struct Page<Content: View>: View {
     var maxWidth: CGFloat = 1320
     var refresh: (@MainActor () async -> Void)?
     @ViewBuilder var content: Content
+    @Environment(Router.self) private var router: Router?
+    @State private var onScreen = false
 
     var body: some View {
         ScrollView {
@@ -70,6 +72,12 @@ struct Page<Content: View>: View {
         .background { AppBackground() }
         .softScrollEdges()
         .refreshableIf(refresh)
+        .onAppear { onScreen = true }
+        .onDisappear { onScreen = false }
+        .onChange(of: router?.refreshRequest) {
+            guard onScreen, let refresh else { return }
+            Task { await refresh() }
+        }
     }
 }
 

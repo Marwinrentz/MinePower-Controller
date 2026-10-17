@@ -49,12 +49,8 @@ struct WallView: View {
         .accessibilityIdentifier("wall")
         .statusBarHidden()
         .persistentSystemOverlays(.hidden)
-        .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
-        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
-        .onKeyPress(.escape) {
-            close()
-            return .handled
-        }
+        .onAppear { KeepAwake.hold() }
+        .onDisappear { KeepAwake.release() }
         .task {
             while !Task.isCancelled {
                 now = .now
@@ -159,6 +155,7 @@ struct WallView: View {
                     }
                     .buttonStyle(.plain)
                     .glassControl()
+                    .keyboardShortcut(.cancelAction)
                     .accessibilityLabel(Text("Verlassen"))
                     .accessibilityIdentifier("wallExit")
                 }
@@ -548,5 +545,22 @@ private struct WallTile: View {
         case "error": String(localized: "Fehler")
         default: String(localized: "kein Fahrzeug")
         }
+    }
+}
+
+/// Bildschirm wach halten, solange mindestens eine Wand-Ansicht offen ist
+/// (Vollbild und eigenes Fenster können gleichzeitig offen sein).
+@MainActor
+enum KeepAwake {
+    private static var holders = 0
+
+    static func hold() {
+        holders += 1
+        UIApplication.shared.isIdleTimerDisabled = true
+    }
+
+    static func release() {
+        holders = max(0, holders - 1)
+        UIApplication.shared.isIdleTimerDisabled = holders > 0
     }
 }

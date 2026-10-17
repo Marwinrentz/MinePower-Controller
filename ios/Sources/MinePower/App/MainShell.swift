@@ -272,15 +272,24 @@ struct WallWindow: View {
     @Environment(\.dismissWindow) private var dismissWindow
 
     var body: some View {
-        if session.phase == .signedIn {
-            WallView { dismissWindow(id: Self.id) }
-        } else {
-            VStack(spacing: Space.l) {
-                BrandMark(size: 64)
-                Text("Zuerst in MinePower anmelden.").font(Typo.title3).foregroundStyle(Web.textStrong)
+        Group {
+            if session.phase == .signedIn {
+                WallView { dismissWindow(id: Self.id) }
+            } else {
+                VStack(spacing: Space.l) {
+                    BrandMark(size: 64)
+                    Text(session.phase == .launching ? "MinePower wird gestartet" : "Zuerst in MinePower anmelden.")
+                        .font(Typo.title3).foregroundStyle(Web.textStrong)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Web.bg)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Web.bg)
+        }
+        // Wird nur dieses Fenster wiederhergestellt, startet es die Sitzung selbst
+        // (beginLaunch verhindert einen doppelten Start neben dem Hauptfenster).
+        .task {
+            guard session.beginLaunch() else { return }
+            await session.launch()
         }
     }
 }

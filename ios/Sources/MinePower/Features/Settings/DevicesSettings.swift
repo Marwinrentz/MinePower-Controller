@@ -59,6 +59,7 @@ struct DevicesSettings: View {
                     VStack(spacing: Space.m) {
                         ForEach(list) { device in
                             DeviceRow(device: device, live: session.live.snapshot?.allDevices.first { $0.id == device.id },
+                                      editable: session.canConfigure,
                                       onToggle: { await toggle(device) },
                                       onEdit: { edit(device) },
                                       onDelete: { deleting = device })
@@ -159,6 +160,8 @@ extension DeviceCategory {
 private struct DeviceRow: View {
     let device: Device
     let live: SnapshotDevice?
+    /// Nur Admins: sonst kein Kontextmenü (die Knöpfe sind dann gesperrt).
+    var editable = true
     var onToggle: () async -> Void
     var onEdit: () -> Void
     var onDelete: () -> Void
@@ -214,8 +217,10 @@ private struct DeviceRow: View {
         .opacity(device.enabled ? 1 : 0.7)
         // Rechtsklick / langes Drücken (iPad mit Trackpad): dieselben Aktionen.
         .contextMenu {
-            Button(action: onEdit) { Label("Bearbeiten", web: .settings) }
-            Button(role: .destructive, action: onDelete) { Label("Löschen", web: .close) }
+            if editable {
+                Button(action: onEdit) { Label("Bearbeiten", web: .settings) }
+                Button(role: .destructive, action: onDelete) { Label("Löschen", web: .close) }
+            }
         }
     }
 

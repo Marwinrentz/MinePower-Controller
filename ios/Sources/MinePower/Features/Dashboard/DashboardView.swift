@@ -10,8 +10,6 @@ struct DashboardView: View {
     @Environment(Router.self) private var router
     @State private var stats: Resource<Statistics>?
     @State private var forecast: Resource<Forecast>?
-    /// Breite des Seiteninhalts für `.home-grid` (wie die Breakpoints im Web).
-    @State private var contentWidth: CGFloat = 0
 
     var body: some View {
         Group {
@@ -51,8 +49,7 @@ struct DashboardView: View {
             Page(refresh: { await refresh() }) {
                 DashboardBanners(snapshot: snapshot)
                 HeroCard(snapshot: snapshot, explanation: explanation)
-                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { contentWidth = $0 }
-                HomeGrid(width: contentWidth) {
+                HomeGrid {
                     Card {
                         VStack(alignment: .leading, spacing: Space.s) {
                             CardHead("Energiefluss")
@@ -97,23 +94,77 @@ struct DashboardView: View {
 
 /// `.home-grid`: ab 1024 pt Fluss links (1,3) und Schnellkarten rechts
 /// (mindestens 340 pt); darunter untereinander, ab 640 pt die Karten zweispaltig.
+/// `ViewThatFits` wählt in einem Durchgang nach der angebotenen Breite.
 private struct HomeGrid<Flow: View, Side: View>: View {
-    let width: CGFloat
     @ViewBuilder var flow: Flow
     @ViewBuilder var side: (QuickCards.Arrangement) -> Side
 
     var body: some View {
-        if width >= 1024 {
-            let gap = Space.xl
-            let sideWidth = max(340, (width - gap) / 2.3)
-            HStack(alignment: .top, spacing: gap) {
-                flow.frame(width: width - gap - sideWidth)
-                side(.stack).frame(width: sideWidth)
+        // Die Schwellen als feste Idealbreite: Sonst zählte ViewThatFits die
+        // einzeilige Breite langer Texte mit und wählte zu früh die schmale Form.
+        ViewThatFits(in: .horizontal) {
+            WidthThreshold(1024) {
+                HomeColumns(spacing: Space.xl) {
+                    flow
+                    side(.stack)
+                }
             }
-        } else {
-            flow
-            side(width >= 640 ? .twoColumns : .stack)
+            WidthThreshold(640) {
+                VStack(alignment: .leading, spacing: Space.xl) {
+                    flow
+                    side(.twoColumns)
+                }
+            }
+            VStack(alignment: .leading, spacing: Space.xl) {
+                flow
+                side(.stack)
+            }
         }
+    }
+}
+
+/// Meldet als Idealbreite genau die Schwelle, sonst die angebotene Breite.
+private struct WidthThreshold: Layout {
+    let minimum: CGFloat
+
+    init(_ minimum: CGFloat) { self.minimum = minimum }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? minimum
+        let height = subviews.map { $0.sizeThatFits(.init(width: width, height: nil)).height }.max() ?? 0
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        for subview in subviews {
+            subview.place(at: bounds.origin, proposal: .init(width: bounds.width, height: nil))
+        }
+    }
+}
+
+/// Zwei Spalten im Verhältnis 1,3 : 1, die rechte mindestens 340 pt breit.
+private struct HomeColumns: Layout {
+    var spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard subviews.count == 2 else { return .zero }
+        let width = proposal.width ?? 1024
+        let (left, right) = widths(width)
+        let height = max(subviews[0].sizeThatFits(.init(width: left, height: nil)).height,
+                         subviews[1].sizeThatFits(.init(width: right, height: nil)).height)
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard subviews.count == 2 else { return }
+        let (left, right) = widths(bounds.width)
+        subviews[0].place(at: bounds.origin, proposal: .init(width: left, height: nil))
+        subviews[1].place(at: CGPoint(x: bounds.minX + left + spacing, y: bounds.minY), proposal: .init(width: right, height: nil))
+    }
+
+    private func widths(_ total: CGFloat) -> (CGFloat, CGFloat) {
+        let right = max(340, (total - spacing) / 2.3)
+        return (max(0, total - spacing - right), right)
     }
 }
 

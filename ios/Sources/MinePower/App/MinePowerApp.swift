@@ -35,7 +35,9 @@ struct MinePowerApp: App {
             WallWindow()
                 .environment(session)
                 .appTypography()
-                .preferredColorScheme(appearance.colorScheme)
+                .tint(Palette.accent)
+                .preferredColorScheme(LaunchOptions.current.colorScheme ?? appearance.colorScheme)
+                .dynamicTypeSizeOverride(LaunchOptions.current.textSize)
         }
         .onChange(of: scenePhase) { _, phase in
             // iOS trennt Sockets beim Sperren; beim Zurückkommen sofort neu verbinden.

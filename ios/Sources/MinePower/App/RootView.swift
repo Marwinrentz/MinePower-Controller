@@ -77,6 +77,10 @@ final class Router {
     var settingsTab: SettingsTab?
     /// Gerät, dessen Formular sich öffnen soll (wie `?edit=` im Web).
     var editDevice: Int?
+    /// ⌘R: Die sichtbare Seite lädt neu (wie Ziehen zum Aktualisieren).
+    private(set) var refreshRequest = 0
+
+    func requestRefresh() { refreshRequest += 1 }
 
     func show(_ section: AppSection) {
         showWall = false
