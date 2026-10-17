@@ -26,7 +26,7 @@ struct CarView: View {
                         Card {
                             EmptyState(icon: .car, title: "Kein Auto eingerichtet", message: "Einstellungen → Geräte") {
                                 if session.canConfigure {
-                                    Button("Gerät anlegen") { router.show(.settings) }
+                                    Button("Gerät anlegen") { router.showSettings(.devices) }
                                         .buttonStyle(.web(.primary, fullWidth: false))
                                 }
                             }

@@ -27,6 +27,9 @@ public struct SettingsDraft: Sendable, Equatable {
 
     public mutating func reset() { draft = saved }
 
+    /// Einen Schlüssel auf den gespeicherten Stand zurücksetzen (auch "nicht gesetzt").
+    public mutating func restore(_ key: String) { draft[key] = saved[key] }
+
     /// Nach erfolgreichem Speichern bzw. neuen Serverdaten: Stand übernehmen,
     /// eigene ungespeicherte Änderungen bleiben erhalten.
     public mutating func rebase(_ newSaved: JSONObject) {

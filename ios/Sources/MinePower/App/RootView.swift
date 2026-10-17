@@ -71,6 +71,11 @@ final class Router {
     var showWizard = false
     /// Automatisch höchstens einmal je Sitzung anbieten.
     var wizardOffered = false
+    /// Bereich der Einstellungen, in den ein Sprung führt (wie `?tab=` im Web);
+    /// die Einstellungen übernehmen ihn und setzen ihn zurück.
+    var settingsTab: SettingsTab?
+    /// Gerät, dessen Formular sich öffnen soll (wie `?edit=` im Web).
+    var editDevice: Int?
 
     func show(_ section: AppSection) {
         showWall = false
@@ -78,11 +83,24 @@ final class Router {
         request = Request(section: section)
     }
 
+    /// Einstellungen in einem bestimmten Bereich öffnen.
+    func showSettings(_ tab: SettingsTab, editDevice: Int? = nil) {
+        settingsTab = tab
+        self.editDevice = editDevice
+        show(.settings)
+    }
+
     func open(_ url: URL) {
         if url.host == "wall" || url.host == "wand" {
             showWall = true
         } else if let section = AppSection(url: url) {
-            show(section)
+            let tab = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?.first { $0.name == "tab" }?.value.flatMap(SettingsTab.init(rawValue:))
+            if section == .settings, let tab {
+                showSettings(tab)
+            } else {
+                show(section)
+            }
         }
     }
 }

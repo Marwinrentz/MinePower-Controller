@@ -43,7 +43,7 @@ struct BatteryView: View {
                                 CardHead(title: "Ladestand 24 h") {
                                     if session.canConfigure {
                                         Button {
-                                            router.show(.settings)
+                                            router.showSettings(.battery)
                                         } label: {
                                             HStack(spacing: 4) { Icon(.settings, size: 16); Text("Batterie-Einstellungen") }
                                         }
@@ -189,7 +189,7 @@ private struct ManualControl: View {
                         text: device.controlCapable == false ? String(localized: "Dieser Treiber kann den Speicher nur lesen.")
                                                              : String(localized: "Steuerung nicht freigeschaltet, nur lesend")) {
                     if device.controlCapable != false, session.canConfigure {
-                        Button("Steuerung freischalten") { router.show(.settings) }
+                        Button("Steuerung freischalten") { router.showSettings(.devices) }
                             .buttonStyle(.web(.normal, size: .small, fullWidth: false))
                     }
                 }

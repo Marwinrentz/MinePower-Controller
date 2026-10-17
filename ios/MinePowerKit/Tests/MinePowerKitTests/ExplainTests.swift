@@ -89,4 +89,12 @@ struct ExplainTests {
         #expect(small >= 0.12 && small < large && large <= 1)
         #expect(EnergyFlow.Branch(node: .car, watts: 5000, direction: .idle).intensity == 0)
     }
+
+    @Test func shortErrorStripsTypeAndTail() {
+        #expect(shortError(nil) == "")
+        #expect(shortError("ConnectionError: Zeitüberschreitung – nach 3 Versuchen") == "Zeitüberschreitung")
+        #expect(shortError(String(repeating: "x", count: 200)).count == 120)
+        let proxy = shortError("ProxyError: http://192.168.1.20:8080/api failed")
+        #expect(proxy.hasPrefix("192.168.1.20:8080"))
+    }
 }

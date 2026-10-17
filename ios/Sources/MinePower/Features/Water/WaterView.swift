@@ -28,7 +28,7 @@ struct WaterView: View {
                         Card {
                             EmptyState(icon: .water, title: "Kein Warmwassergerät eingerichtet", message: "Einstellungen → Geräte") {
                                 if session.canConfigure {
-                                    Button("Gerät anlegen") { router.show(.settings) }
+                                    Button("Gerät anlegen") { router.showSettings(.devices) }
                                         .buttonStyle(.web(.primary, fullWidth: false))
                                 }
                             }
@@ -52,6 +52,7 @@ private struct WaterDetail: View {
     let device: SnapshotDevice
     let store: DeviceSettingsStore?
     @Environment(AppSession.self) private var session
+    @Environment(Router.self) private var router
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var confirmBoost = false
     @State private var target: Double = 60
@@ -75,6 +76,12 @@ private struct WaterDetail: View {
                 Icon(.info, size: 18).foregroundStyle(Palette.warn.fill)
                 Text("Geräteprogramm (\(Fmt().watts(power)))").font(Typo.body).foregroundStyle(Web.text)
                 Text(own).font(Typo.subheadline).foregroundStyle(Web.textDim)
+                Spacer(minLength: 0)
+                if session.canConfigure {
+                    Button("Details") { router.showSettings(.devices, editDevice: device.id) }
+                        .font(Typo.subheadlineMedium)
+                        .foregroundStyle(Palette.accent)
+                }
             }
             .padding(.horizontal, Space.s)
         }

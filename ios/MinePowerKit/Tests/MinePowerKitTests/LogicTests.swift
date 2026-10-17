@@ -198,6 +198,16 @@ struct SettingsDraftTests {
         draft.reset()
         #expect(!draft.isDirty)
     }
+
+    @Test func restoreUndoesOneKeyIncludingUnset() {
+        var draft = SettingsDraft(["token": "•••"])
+        draft.set("token", "neu")
+        draft.set("chat", "42")
+        draft.restore("token")
+        draft.restore("chat")
+        #expect(!draft.isDirty)
+        #expect(draft.draft["chat"] == nil)
+    }
 }
 
 @Suite("Zahlen aus Eingaben")
@@ -211,5 +221,27 @@ struct ParseNumberTests {
     @Test func rejectsGarbage() {
         #expect(Fmt.parseNumber("") == nil)
         #expect(Fmt.parseNumber("abc") == nil)
+    }
+}
+
+@Suite("MCP-Anleitungen")
+struct McpClientTests {
+    @Test func connectorsUseKeyURLAndBridgeForHTTP() throws {
+        let clients = McpClient.all(url: "http://192.168.1.5:8080/mcp", token: "mp_abc", publicBase: "https://mp.example.de/")
+        let grok = try #require(clients.first { $0.id == "grok" })
+        #expect(grok.urlOnly)
+        #expect(grok.code == "https://mp.example.de/mcp/k/mp_abc")
+        let desktop = try #require(clients.first { $0.id == "claude_desktop" })
+        #expect(desktop.code.contains("--allow-http"))
+        #expect(desktop.code.contains("\"AUTH\" : \"Bearer mp_abc\"") || desktop.code.contains("\"AUTH\": \"Bearer mp_abc\""))
+        let code = try #require(clients.first { $0.id == "claude_code" })
+        #expect(code.code == "claude mcp add --transport http minepower http://192.168.1.5:8080/mcp --header \"Authorization: Bearer mp_abc\"")
+        #expect(clients.count == 15)
+        #expect(clients.allSatisfy { !$0.steps.isEmpty })
+    }
+
+    @Test func localhostNeedsNoAllowHTTP() throws {
+        let clients = McpClient.all(url: "http://localhost:8080/mcp", token: "t", publicBase: "")
+        #expect(!(try #require(clients.first { $0.id == "codex" })).code.contains("--allow-http"))
     }
 }

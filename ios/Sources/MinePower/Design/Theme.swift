@@ -39,6 +39,8 @@ enum Palette {
 
     /// `--accent`: Knöpfe, Auswahl, Verweise.
     static let accent = Color(light: 0x0F7A4D, dark: 0x3DDC97)
+    /// Akzent als Abzeichenfarbe (`.badge.accent`).
+    static let accentDomain = DomainColor(light: 0x0F7A4D, dark: 0x3DDC97)
 
     static func category(_ category: DeviceCategory) -> DomainColor {
         switch category {

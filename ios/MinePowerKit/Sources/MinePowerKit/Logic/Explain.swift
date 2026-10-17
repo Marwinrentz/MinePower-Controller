@@ -301,6 +301,20 @@ public struct Explanation: Sendable, Equatable {
     }
 }
 
+/// Gerätefehler kurz für Listen (Spiegel von `shortError()` im Web): ohne
+/// Ausnahmetyp, ohne Nachsatz, höchstens 120 Zeichen; ein Proxy-Fehler nennt
+/// den Rechner, der nicht antwortet.
+public func shortError(_ error: String?) -> String {
+    guard let error, !error.isEmpty else { return "" }
+    if error.localizedCaseInsensitiveContains("proxy"),
+       let host = error.firstMatch(of: /https?:\/\/([\w.-]+(?::\d+)?)/)?.1 {
+        return Loc.t("\(host) antwortet nicht", "\(host) is not responding")
+    }
+    let stripped = error.replacing(#/^[A-Za-z]+(Error|Exception|Problem|Rejected)?: /#, with: "", maxReplacements: 1)
+    let head = stripped.components(separatedBy: " – ").first ?? stripped
+    return String(head.prefix(120))
+}
+
 /// Zustand des Autos an der Wallbox (Spiegel von `carState()` im Web).
 public enum CarState: String, Sendable {
     case none, offline, proxy, unknown, asleep, away, unplugged, charging, waiting, complete

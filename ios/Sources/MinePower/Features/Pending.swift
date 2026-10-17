@@ -11,5 +11,4 @@ struct PendingSection: View {
 }
 
 struct WallView: View { var body: some View { PendingSection(section: .dashboard).accessibilityIdentifier("wall") } }
-struct SettingsView: View { var body: some View { PendingSection(section: .settings) } }
 struct ChangelogView: View { var body: some View { PendingSection(section: .changelog) } }

@@ -105,6 +105,21 @@ extension CardHead where Trailing == EmptyView {
     }
 }
 
+/// `.group-title`: Zwischenüberschrift innerhalb einer Karte.
+struct GroupTitle: View {
+    var title: LocalizedStringKey
+
+    init(_ title: LocalizedStringKey) { self.title = title }
+
+    var body: some View {
+        Text(title)
+            .font(Typo.headline)
+            .foregroundStyle(Web.textStrong)
+            .padding(.top, Space.s)
+            .accessibilityAddTraits(.isHeader)
+    }
+}
+
 /// Überschrift einer Gruppe außerhalb von Karten.
 struct SectionHeader<Trailing: View>: View {
     var title: LocalizedStringKey

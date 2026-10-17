@@ -127,8 +127,7 @@ struct TariffView: View {
                 if provider == "tibber" {
                     Field(label: "Tibber-Zugangsschlüssel", help: "developer.tibber.com") {
                         AppTextField(verbatim: tariff.string("tibber_token", "") == secretMask ? String(localized: "gespeichert") : "",
-                                     text: Binding(get: { let v = tariff.string("tibber_token", ""); return v == secretMask ? "" : v },
-                                                   set: { value in editor.update("tariff") { $0.set("tibber_token", value.isEmpty ? secretMask : value) } }),
+                                     text: editor.secret("tariff", "tibber_token"),
                                      secure: true)
                             .textContentType(nil)
                     }
@@ -190,7 +189,7 @@ struct TariffView: View {
                         state: gridCharge ? String(localized: "lädt bis \(Int(gridSoc)) % aus dem Netz")
                                           : String(localized: "lädt nicht aus dem Netz (ausgeschaltet)")) {
                     if session.canConfigure {
-                        Button("Batterie-Einstellungen") { router.show(.settings) }
+                        Button("Batterie-Einstellungen") { router.showSettings(.battery) }
                             .buttonStyle(.web(.ghost, size: .small, fullWidth: false))
                     }
                 }
