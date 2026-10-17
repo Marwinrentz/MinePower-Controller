@@ -212,6 +212,11 @@ private struct DeviceRow: View {
             }
         }
         .opacity(device.enabled ? 1 : 0.7)
+        // Rechtsklick / langes Drücken (iPad mit Trackpad): dieselben Aktionen.
+        .contextMenu {
+            Button(action: onEdit) { Label("Bearbeiten", web: .settings) }
+            Button(role: .destructive, action: onDelete) { Label("Löschen", web: .close) }
+        }
     }
 
     private func subtitle(_ fmt: Fmt) -> String {

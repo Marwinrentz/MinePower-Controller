@@ -7,6 +7,8 @@ import SwiftUI
 /// färbt den Schein am oberen Rand, nachts dunkelt die Ansicht ab, der
 /// Bildschirm bleibt an. Schrift wächst mit der Breite (wie `clamp()` im Web).
 struct WallView: View {
+    /// Schließen im eigenen Fenster (iPad); sonst schließt das Vollbild.
+    var onClose: (() -> Void)?
     @Environment(AppSession.self) private var session
     @Environment(\.dismiss) private var dismiss
     @State private var now = Date()
@@ -50,7 +52,7 @@ struct WallView: View {
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
         .onKeyPress(.escape) {
-            dismiss()
+            close()
             return .handled
         }
         .task {
@@ -59,6 +61,10 @@ struct WallView: View {
                 try? await Task.sleep(for: .seconds(10))
             }
         }
+    }
+
+    private func close() {
+        if let onClose { onClose() } else { dismiss() }
     }
 
     /// Nachts (22–6 Uhr) dunkler, außer kurz nach einer Berührung.
@@ -145,7 +151,7 @@ struct WallView: View {
                         .font(Typo.subheadlineMedium)
                         .foregroundStyle(Palette.warn.ink)
                     }
-                    Button { dismiss() } label: {
+                    Button { close() } label: {
                         Icon(.close, size: 17)
                             .foregroundStyle(Web.text)
                             .frame(width: 44, height: 44)

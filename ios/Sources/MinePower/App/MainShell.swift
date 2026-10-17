@@ -158,6 +158,8 @@ private struct MoreRow: View {
 
 private struct SplitShell: View {
     @Environment(Router.self) private var router
+    @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
+    @Environment(\.openWindow) private var openWindow
     @State private var visibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
@@ -175,6 +177,15 @@ private struct SplitShell: View {
                         router.showWall = true
                     } label: {
                         Label("Wand-Ansicht", web: .fullscreen).font(Typo.bodyMedium)
+                    }
+                    .contextMenu {
+                        if supportsMultipleWindows {
+                            Button {
+                                openWindow(id: WallWindow.id)
+                            } label: {
+                                Label("In neuem Fenster öffnen", web: .fullscreen)
+                            }
+                        }
                     }
                     Link(destination: githubURL) {
                         Label("GitHub", web: .github).font(Typo.bodyMedium)
@@ -251,5 +262,25 @@ private extension View {
         #else
         self
         #endif
+    }
+}
+
+/// Fenster nur mit der Wand-Ansicht; ohne Anmeldung ein Hinweis.
+struct WallWindow: View {
+    static let id = "wall"
+    @Environment(AppSession.self) private var session
+    @Environment(\.dismissWindow) private var dismissWindow
+
+    var body: some View {
+        if session.phase == .signedIn {
+            WallView { dismissWindow(id: Self.id) }
+        } else {
+            VStack(spacing: Space.l) {
+                BrandMark(size: 64)
+                Text("Zuerst in MinePower anmelden.").font(Typo.title3).foregroundStyle(Web.textStrong)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Web.bg)
+        }
     }
 }

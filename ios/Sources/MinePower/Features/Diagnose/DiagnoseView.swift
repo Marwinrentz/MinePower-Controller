@@ -51,32 +51,44 @@ struct DiagnoseView: View {
 struct SubNav<Value: Hashable>: View {
     let items: [(Value, String, WebIcon)]
     @Binding var selection: Value
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Space.s) {
-                ForEach(items, id: \.0) { value, title, icon in
-                    let active = value == selection
-                    Button {
-                        selection = value
-                    } label: {
-                        HStack(spacing: Space.s) {
-                            Icon(icon, size: 18)
-                            Text(title).font(Typo.bodyMedium)
-                        }
-                        .foregroundStyle(active ? Palette.accent : Web.text)
-                        .padding(.horizontal, Space.l)
-                        .frame(minHeight: 44)
-                        .background(active ? Web.accentSoft : Web.surface, in: .capsule)
-                        .overlay(Capsule().strokeBorder(active ? Palette.accent : Web.line, lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(active ? .isSelected : [])
+        // Breit (iPad) umbrechend wie `.subnav` ab 1024 px im Web, sonst wischbar.
+        Group {
+            if sizeClass == .regular {
+                FlowLayout(spacing: Space.s) { chips }
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Space.s) { chips }
+                        .padding(.vertical, 2)
                 }
             }
-            .padding(.vertical, 2)
         }
         .sensoryFeedback(.selection, trigger: selection)
+    }
+
+    private var chips: some View {
+        ForEach(items, id: \.0) { value, title, icon in
+            let active = value == selection
+            Button {
+                selection = value
+            } label: {
+                HStack(spacing: Space.s) {
+                    Icon(icon, size: 18)
+                    Text(title).font(Typo.bodyMedium)
+                }
+                .foregroundStyle(active ? Palette.accent : Web.text)
+                .padding(.horizontal, Space.l)
+                .frame(minHeight: 44)
+                .background(active ? Web.accentSoft : Web.surface, in: .capsule)
+                .overlay(Capsule().strokeBorder(active ? Palette.accent : Web.line, lineWidth: 1))
+                .contentShape(.hoverEffect, .capsule)
+                .hoverEffect(.highlight)
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(active ? .isSelected : [])
+        }
     }
 }
 

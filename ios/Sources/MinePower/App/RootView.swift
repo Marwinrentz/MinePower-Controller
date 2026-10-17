@@ -48,6 +48,7 @@ struct RootView: View {
             }
         }
         .onOpenURL { url in router.open(url) }
+        .focusedSceneValue(\.router, router)
     }
 }
 

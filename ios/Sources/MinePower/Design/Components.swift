@@ -51,7 +51,8 @@ struct Panel<Content: View>: View {
 
 /// Seite mit Web-Hintergrund, Lesebreite und Ziehen zum Aktualisieren.
 struct Page<Content: View>: View {
-    var maxWidth: CGFloat = 900
+    /// Wie `.main > *` im Web: höchstens 1320 pt breit.
+    var maxWidth: CGFloat = 1320
     var refresh: (@MainActor () async -> Void)?
     @ViewBuilder var content: Content
 
@@ -296,6 +297,9 @@ struct WebButtonStyle: ButtonStyle {
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.snappy(duration: 0.12), value: configuration.isPressed)
             .contentShape(.rect(cornerRadius: radius))
+            // iPad mit Zeiger/Trackpad: Hervorhebung in Knopfform.
+            .contentShape(.hoverEffect, .rect(cornerRadius: radius))
+            .hoverEffect(.highlight)
     }
 
     private var height: CGFloat {

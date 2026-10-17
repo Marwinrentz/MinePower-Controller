@@ -28,6 +28,15 @@ struct MinePowerApp: App {
                 .preferredColorScheme(LaunchOptions.current.colorScheme ?? appearance.colorScheme)
                 .dynamicTypeSizeOverride(LaunchOptions.current.textSize)
         }
+        .commands { AppCommands(session: session) }
+
+        // Wand-Ansicht als eigenes Fenster (iPad: neben der App oder auf einem zweiten Bildschirm).
+        WindowGroup("Wand-Ansicht", id: WallWindow.id) {
+            WallWindow()
+                .environment(session)
+                .appTypography()
+                .preferredColorScheme(appearance.colorScheme)
+        }
         .onChange(of: scenePhase) { _, phase in
             // iOS trennt Sockets beim Sperren; beim Zurückkommen sofort neu verbinden.
             switch phase {

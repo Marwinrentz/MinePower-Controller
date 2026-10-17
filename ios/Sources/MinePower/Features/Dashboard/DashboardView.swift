@@ -10,6 +10,8 @@ struct DashboardView: View {
     @Environment(Router.self) private var router
     @State private var stats: Resource<Statistics>?
     @State private var forecast: Resource<Forecast>?
+    /// Breite des Seiteninhalts für `.home-grid` (wie die Breakpoints im Web).
+    @State private var contentWidth: CGFloat = 0
 
     var body: some View {
         Group {
@@ -49,13 +51,17 @@ struct DashboardView: View {
             Page(refresh: { await refresh() }) {
                 DashboardBanners(snapshot: snapshot)
                 HeroCard(snapshot: snapshot, explanation: explanation)
-                Card {
-                    VStack(alignment: .leading, spacing: Space.s) {
-                        CardHead("Energiefluss")
-                        PowerFlowView(snapshot: snapshot) { router.show($0) }
+                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { contentWidth = $0 }
+                HomeGrid(width: contentWidth) {
+                    Card {
+                        VStack(alignment: .leading, spacing: Space.s) {
+                            CardHead("Energiefluss")
+                            PowerFlowView(snapshot: snapshot) { router.show($0) }
+                        }
                     }
+                } side: { arrangement in
+                    QuickCards(snapshot: snapshot, arrangement: arrangement)
                 }
-                QuickCards(snapshot: snapshot)
                 Figures(snapshot: snapshot, stats: stats?.value, forecast: forecast?.value)
                 HistoryCard()
             }
@@ -84,6 +90,30 @@ struct DashboardView: View {
         try? await session.live.refresh()
         await stats?.reload()
         await forecast?.reload()
+    }
+}
+
+// MARK: - Fluss und Schnellzugriff
+
+/// `.home-grid`: ab 1024 pt Fluss links (1,3) und Schnellkarten rechts
+/// (mindestens 340 pt); darunter untereinander, ab 640 pt die Karten zweispaltig.
+private struct HomeGrid<Flow: View, Side: View>: View {
+    let width: CGFloat
+    @ViewBuilder var flow: Flow
+    @ViewBuilder var side: (QuickCards.Arrangement) -> Side
+
+    var body: some View {
+        if width >= 1024 {
+            let gap = Space.xl
+            let sideWidth = max(340, (width - gap) / 2.3)
+            HStack(alignment: .top, spacing: gap) {
+                flow.frame(width: width - gap - sideWidth)
+                side(.stack).frame(width: sideWidth)
+            }
+        } else {
+            flow
+            side(width >= 640 ? .twoColumns : .stack)
+        }
     }
 }
 

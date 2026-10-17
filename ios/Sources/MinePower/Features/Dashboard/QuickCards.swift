@@ -2,20 +2,33 @@ import MinePowerKit
 import SwiftUI
 
 /// Schnellkarten der Übersicht (`QuickWater`, `QuickCar`, `QuickBattery` im Web).
+///
+/// `.home-side`: untereinander (Handy, Seitenspalte am breiten iPad) oder
+/// mittelbreit zweispaltig mit Warmwasser über die ganze Breite.
 struct QuickCards: View {
+    enum Arrangement { case stack, twoColumns }
+
     let snapshot: Snapshot
-    @Environment(\.horizontalSizeClass) private var sizeClass
+    var arrangement: Arrangement = .stack
 
     var body: some View {
         let devices = snapshot.enabledDevices
         let heaters = devices.filter { $0.category == .waterHeater }
         let cars = devices.filter { $0.category == .wallbox }
-        LazyVGrid(columns: sizeClass == .regular ? [GridItem(.flexible(), spacing: Space.l), GridItem(.flexible(), spacing: Space.l)]
-                                                 : [GridItem(.flexible())],
-                  alignment: .leading, spacing: Space.l) {
+        VStack(alignment: .leading, spacing: Space.l) {
             ForEach(heaters) { QuickWater(device: $0, named: heaters.count > 1) }
-            ForEach(cars) { QuickCar(device: $0) }
-            if snapshot.battery?.soc != nil { QuickBattery(snapshot: snapshot) }
+            switch arrangement {
+            case .stack:
+                ForEach(cars) { QuickCar(device: $0) }
+                if snapshot.battery?.soc != nil { QuickBattery(snapshot: snapshot) }
+            case .twoColumns:
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: Space.l, alignment: .top),
+                                    GridItem(.flexible(), spacing: Space.l, alignment: .top)],
+                          alignment: .leading, spacing: Space.l) {
+                    ForEach(cars) { QuickCar(device: $0) }
+                    if snapshot.battery?.soc != nil { QuickBattery(snapshot: snapshot) }
+                }
+            }
         }
     }
 }
