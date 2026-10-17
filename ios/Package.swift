@@ -26,6 +26,9 @@ let package = Package(
             name: "MinePower",
             dependencies: [.product(name: "MinePowerKit", package: "MinePowerKit")],
             path: "Sources/MinePower",
+            // String-Kataloge übersetzt nur Xcode (xcstringstool gibt es unter
+            // Linux nicht): xtool-Builds sind deutsch, Xcode/CI zweisprachig.
+            exclude: ["Resources/Localizable.xcstrings", "Resources/InfoPlist.xcstrings", "Resources/AppShortcuts.xcstrings"],
             resources: [.copy("Resources/Fonts")],
             swiftSettings: [.enableUpcomingFeature("ExistentialAny")]
         ),

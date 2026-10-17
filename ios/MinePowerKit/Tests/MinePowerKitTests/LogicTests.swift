@@ -148,8 +148,9 @@ struct SetupFlowTests {
     @Test func weekdays() {
         #expect(Weekdays.workdays.rawValue == 31)
         #expect(Weekdays.weekend.rawValue == 96)
-        #expect(Weekdays(rawValue: 127).label() == "täglich")
-        #expect(Weekdays([.monday, .wednesday]).label() == "Mo, Mi")
+        #expect(Weekdays(rawValue: 127).label() == Loc.t("täglich", "daily"))
+        #expect(Weekdays([.monday, .wednesday]).label(short: ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]) == "Mo, Mi")
+        #expect(Weekdays.shortNames.count == 7)
         #expect(ClockTime.isValid("06:30"))
         #expect(!ClockTime.isValid("24:00"))
         #expect(!ClockTime.isValid("6:30"))

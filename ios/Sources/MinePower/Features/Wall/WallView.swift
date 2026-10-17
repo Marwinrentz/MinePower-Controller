@@ -47,6 +47,8 @@ struct WallView: View {
         .contentShape(.rect)
         .onTapGesture { awakeUntil = .now.addingTimeInterval(30) }
         .accessibilityIdentifier("wall")
+        // Schrift wächst schon mit der Fläche; Dynamic Type nur noch begrenzt dazu.
+        .dynamicTypeSize(...DynamicTypeSize.xLarge)
         .statusBarHidden()
         .persistentSystemOverlays(.hidden)
         .onAppear { KeepAwake.hold() }

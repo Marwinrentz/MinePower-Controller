@@ -1,0 +1,86 @@
+{
+  "sourceLanguage" : "de",
+  "strings" : {
+    "Status von ${applicationName}" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${applicationName} status"
+          }
+        }
+      }
+    },
+    "Was macht ${applicationName}" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What is ${applicationName} doing"
+          }
+        }
+      }
+    },
+    "Boost in ${applicationName} starten" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start boost in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Warmwasser-Boost mit ${applicationName}" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hot water boost with ${applicationName}"
+          }
+        }
+      }
+    },
+    "Auto sofort laden mit ${applicationName}" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fast charge the car with ${applicationName}"
+          }
+        }
+      }
+    },
+    "Sofort laden in ${applicationName}" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fast charge in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Auto auf Automatik in ${applicationName}" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set the car to automatic in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Auto nicht laden mit ${applicationName}" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop charging the car with ${applicationName}"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

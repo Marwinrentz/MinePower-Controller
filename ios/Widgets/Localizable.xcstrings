@@ -1,0 +1,166 @@
+{
+  "sourceLanguage" : "de",
+  "strings" : {
+    " · Boost" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " · Boost"
+          }
+        }
+      }
+    },
+    "Batterie" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Battery"
+          }
+        }
+      }
+    },
+    "Bezug %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importing %@"
+          }
+        }
+      }
+    },
+    "Boost" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Boost"
+          }
+        }
+      }
+    },
+    "Boost läuft" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Boost running"
+          }
+        }
+      }
+    },
+    "Dein E-Auto lädt, wenn die Sonne scheint." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your EV charges when the sun shines."
+          }
+        }
+      }
+    },
+    "Einspeisung %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporting %@"
+          }
+        }
+      }
+    },
+    "Gesperrt – App öffnen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Locked – open the app"
+          }
+        }
+      }
+    },
+    "Haus" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Home"
+          }
+        }
+      }
+    },
+    "In der App anmelden" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign in in the app"
+          }
+        }
+      }
+    },
+    "Kernaussage, PV, Netz und Batterie auf einen Blick." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Summary, PV, grid and battery at a glance."
+          }
+        }
+      }
+    },
+    "Netz" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grid"
+          }
+        }
+      }
+    },
+    "Netz ausgeglichen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grid balanced"
+          }
+        }
+      }
+    },
+    "Sofort laden" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fast charge"
+          }
+        }
+      }
+    },
+    "Vermutlich beendet – App öffnen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Probably ended – open the app"
+          }
+        }
+      }
+    },
+    "Was die Anlage gerade tut." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What the system is doing right now."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

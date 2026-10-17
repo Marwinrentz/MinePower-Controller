@@ -333,7 +333,7 @@ private struct DashboardBanners: View {
         Button {
             withAnimation { _ = dismissed.insert(key) }
         } label: {
-            Icon(.close, size: 16).foregroundStyle(Web.textDim).frame(width: 40, height: 40)
+            Icon(.close, size: 16).foregroundStyle(Web.textDim).frame(width: 44, height: 44)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text("Schließen"))

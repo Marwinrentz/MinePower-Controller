@@ -412,7 +412,7 @@ struct ScheduleEditor: View {
     @State private var end = "08:00"
     @State private var busy = false
 
-    private static let dayNames = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+    private static var dayNames: [String] { Weekdays.shortNames }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.m) {

@@ -1,0 +1,26 @@
+{
+  "sourceLanguage" : "de",
+  "strings" : {
+    "NSLocalNetworkUsageDescription" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MinePower looks for your MinePower server on your home network and connects to it to show live values and control devices."
+          }
+        }
+      }
+    },
+    "NSFaceIDUsageDescription" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Face ID protects access to your system when the app lock is turned on."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

@@ -160,8 +160,14 @@ public struct Weekdays: OptionSet, Sendable, Hashable {
     /// Index 0 = Montag.
     public static func day(_ index: Int) -> Weekdays { Weekdays(rawValue: 1 << index) }
 
-    public func label(short names: [String] = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"],
-                      daily: String = "täglich", workdays: String = "Mo–Fr", weekend: String = "Sa, So") -> String {
+    /// Kurznamen ab Montag in der Sprache der App.
+    public static var shortNames: [String] {
+        Loc.isEnglish ? ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"] : ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+    }
+
+    public func label(short names: [String] = Weekdays.shortNames,
+                      daily: String = Loc.t("täglich", "daily"), workdays: String = Loc.t("Mo–Fr", "Mon–Fri"),
+                      weekend: String = Loc.t("Sa, So", "Sat, Sun")) -> String {
         if self == .all { return daily }
         if self == .workdays { return workdays }
         if self == .weekend { return weekend }
