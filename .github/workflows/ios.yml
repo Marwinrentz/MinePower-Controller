@@ -86,7 +86,7 @@ jobs:
       - name: Simulatoren wählen
         id: sims
         run: |
-          # Neuestes "Pro"-iPhone und größtes iPad Pro des Runners statt fester Namen.
+          # Neuestes "Pro Max"-iPhone und größtes iPad Pro des Runners statt fester Namen.
           pick() {
             xcrun simctl list devices available -j | python3 -c '
           import json, re, sys
@@ -99,7 +99,8 @@ jobs:
                   print(names[-1]["udid"]); break
           ' "$1"
           }
-          echo "iphone=$(pick '^iPhone \d+ Pro$')" >> "$GITHUB_OUTPUT"
+          # Pro Max: 6,9-Zoll-Screenshots, die Pflichtgröße im App Store.
+          echo "iphone=$(pick '^iPhone \d+ Pro Max$')" >> "$GITHUB_OUTPUT"
           echo "ipad=$(pick '^iPad Pro 13')" >> "$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
 
