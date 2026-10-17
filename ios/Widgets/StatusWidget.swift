@@ -15,6 +15,8 @@ struct StatusEntry: TimelineEntry {
     let date: Date
     let state: WidgetState?
     var note: Note?
+    /// App mit Face ID gesperrt: Werte auf dem gesperrten Gerät ausblenden.
+    var isPrivate = false
 
     static let preview = StatusEntry(date: .now, state: WidgetState(
         snapshot: DemoBackend().snapshot(), serverName: "Demo", isDemo: true))
@@ -37,9 +39,12 @@ struct StatusProvider: AppIntentTimelineProvider {
     private func load(refresh: Bool) async -> StatusEntry {
         let cached = WidgetState.load()
         guard let server = SharedServer.load() else { return StatusEntry(date: .now, state: nil, note: .signedOut) }
-        guard refresh else { return StatusEntry(date: .now, state: cached) }
-        // Mit Face-ID-Sperre bleibt das Token unlesbar: nur den letzten Stand der App zeigen.
-        if server.isProtected { return StatusEntry(date: .now, state: cached, note: cached == nil ? .locked : nil) }
+        guard refresh else { return StatusEntry(date: .now, state: cached, isPrivate: server.isProtected) }
+        // Mit Face-ID-Sperre bleibt das Token unlesbar: nur den letzten Stand der App zeigen,
+        // auf dem gesperrten Gerät verdeckt.
+        if server.isProtected {
+            return StatusEntry(date: .now, state: cached, note: cached == nil ? .locked : nil, isPrivate: true)
+        }
         let token = server.isDemo ? nil : KeychainStore.plainSecret(for: server.tokenKey)
         guard server.isDemo || token != nil else { return StatusEntry(date: .now, state: cached) }
         do {
@@ -56,6 +61,7 @@ struct StatusWidget: Widget {
     var body: some WidgetConfiguration {
         AppIntentConfiguration(kind: "de.minepower.status", intent: StatusConfigurationIntent.self, provider: StatusProvider()) { entry in
             StatusWidgetView(entry: entry)
+                .privacySensitive(entry.isPrivate)
                 .containerBackground(for: .widget) { Web.surface }
                 .widgetURL(URL(string: "minepower://dashboard"))
         }

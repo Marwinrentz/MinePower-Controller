@@ -49,9 +49,15 @@ enum LiveActivities {
     private static func upsert(_ kind: Attributes.Kind, name: String, _ state: Attributes.ContentState) {
         let content = ActivityContent(state: state, staleDate: state.endsAt)
         if let activity = Activity<Attributes>.activities.first(where: { $0.attributes.kind == kind }) {
-            // Höchstens alle 20 s, außer das Ende hat sich verschoben.
+            // Höchstens alle 20 s, außer das Ende hat sich spürbar verschoben
+            // (`endsAt` wird je Live-Wert neu berechnet und schwankt um Millisekunden).
             let due = Date.now.timeIntervalSince(lastUpdate[kind] ?? .distantPast) > 20
-            guard due || activity.content.state.endsAt != state.endsAt else { return }
+            let shifted = switch (activity.content.state.endsAt, state.endsAt) {
+            case let (old?, new?): abs(old.timeIntervalSince(new)) > 30
+            case (nil, nil): false
+            default: true
+            }
+            guard due || shifted else { return }
             lastUpdate[kind] = .now
             let id = activity.id
             Task.detached { await update(id: id, content) }

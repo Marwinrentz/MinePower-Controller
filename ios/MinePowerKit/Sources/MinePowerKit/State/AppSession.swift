@@ -69,6 +69,9 @@ public final class AppSession {
     /// Neuer geteilter Stand (`nil`: abgemeldet) – die App lädt damit Widgets
     /// neu und führt Live-Aktivitäten nach.
     @ObservationIgnored public var onSharedState: (@MainActor (WidgetState?) -> Void)?
+    /// Zuletzt geteilt: Zustandsmerkmale und Zeitpunkt (nicht bei jedem Live-Wert schreiben).
+    @ObservationIgnored private var sharedFlags: [String] = []
+    @ObservationIgnored private var sharedAt = Date.distantPast
 
     static let lockKey = "security.biometricLock"
     static let lockAfter: TimeInterval = 5 * 60
@@ -139,6 +142,9 @@ public final class AppSession {
 
     /// Sitzung für einen gespeicherten Server aufbauen.
     private func open(_ server: ServerProfile) async {
+        // Anderer Server: Widget und Kurzbefehle sofort vom alten lösen, auch
+        // wenn die Anmeldung am neuen scheitert.
+        if let shared, SharedServer.load(from: shared)?.tokenKey != server.tokenKey { unshare() }
         live.reset()
         user = nil
         health = nil
@@ -439,14 +445,23 @@ public final class AppSession {
         SharedServer(server, isProtected: biometricLock).save(to: shared)
     }
 
+    /// Höchstens einmal pro Minute teilen, sofort bei Boost, Eingriff am Auto
+    /// oder neuem Zustand eines Geräts (Live-Aktivität, Widget).
     private func share(_ snapshot: Snapshot) {
         guard let server = directory.active, phase == .signedIn else { return }
+        let flags = snapshot.enabledDevices.map { "\($0.id):\($0.boost == true):\($0.override ?? "-"):\($0.online)" }
+            + [String(snapshot.isPaused), snapshot.safety ?? ""]
+        guard flags != sharedFlags || Date.now.timeIntervalSince(sharedAt) >= 60 else { return }
+        sharedFlags = flags
+        sharedAt = .now
         let state = WidgetState(snapshot: snapshot, serverName: server.name, isDemo: server.isDemo)
         if let shared { state.save(to: shared) }
         onSharedState?(state)
     }
 
     private func unshare() {
+        sharedFlags = []
+        sharedAt = .distantPast
         if let shared {
             SharedServer.clear(in: shared)
             WidgetState.clear(in: shared)

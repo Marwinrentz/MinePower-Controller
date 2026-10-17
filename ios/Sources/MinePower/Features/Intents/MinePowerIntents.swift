@@ -12,8 +12,15 @@ enum IntentRuntime {
     /// Angemeldete Sitzung, notfalls erst starten (Kurzbefehl bei geschlossener App).
     static func signedIn() async throws -> AppSession {
         guard let session else { throw MinePowerIntentError.notSignedIn }
-        if session.phase == .launching, session.beginLaunch() {
-            await session.launch()
+        if session.phase == .launching {
+            if session.beginLaunch() {
+                await session.launch()
+            } else {
+                // Das Fenster startet die Sitzung gerade: kurz darauf warten statt abzulehnen.
+                for _ in 0..<50 where session.phase == .launching {
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+            }
         }
         switch session.phase {
         case .signedIn: return session
@@ -25,6 +32,8 @@ enum IntentRuntime {
     /// Erstes aktives Gerät der Kategorie; Befehl senden (Server prüft die Rechte).
     static func send(_ action: DeviceAction, to category: DeviceCategory) async throws -> String {
         let session = try await signedIn()
+        // Offline gestartet: Rolle unbekannt, der Server ist das Problem, nicht die Rechte.
+        if session.isOffline || session.user == nil { throw MinePowerIntentError.offline }
         guard session.canControl else { throw MinePowerIntentError.notAllowed }
         let snapshot: Snapshot
         if let current = session.live.snapshot {
@@ -42,7 +51,7 @@ enum IntentRuntime {
 }
 
 enum MinePowerIntentError: Error, CustomLocalizedStringResourceConvertible {
-    case notSignedIn, locked, notAllowed, noDevice
+    case notSignedIn, locked, notAllowed, noDevice, offline
 
     var localizedStringResource: LocalizedStringResource {
         switch self {
@@ -50,6 +59,7 @@ enum MinePowerIntentError: Error, CustomLocalizedStringResourceConvertible {
         case .locked: "MinePower ist gesperrt. Bitte die App öffnen und entsperren."
         case .notAllowed: "Dein Konto darf nur lesen."
         case .noDevice: "Kein passendes Gerät eingerichtet."
+        case .offline: "Der MinePower-Server ist gerade nicht erreichbar."
         }
     }
 }

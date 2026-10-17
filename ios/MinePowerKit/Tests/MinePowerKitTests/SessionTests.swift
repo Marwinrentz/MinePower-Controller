@@ -379,7 +379,9 @@ struct WidgetShareTests {
         #expect(state.pvW > 0)
         #expect(state.car != nil)
         #expect(state.water != nil)
-        let defaults = try #require(UserDefaults(suiteName: "widget-test-\(UUID().uuidString)"))
+        let suite = "widget-test-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
         state.save(to: defaults)
         #expect(WidgetState.load(from: defaults) == state)
         WidgetState.clear(in: defaults)
@@ -402,8 +404,13 @@ extension DemoBacked {
         init() { DemoBackend.shared.reset() }
 
         @Test func sessionSharesServerAndState() async throws {
-            let shared = try #require(UserDefaults(suiteName: "widget-share-\(UUID().uuidString)"))
-            let defaults = try #require(UserDefaults(suiteName: "widget-defaults-\(UUID().uuidString)"))
+            let sharedSuite = "widget-share-\(UUID().uuidString)", defaultsSuite = "widget-defaults-\(UUID().uuidString)"
+            let shared = try #require(UserDefaults(suiteName: sharedSuite))
+            let defaults = try #require(UserDefaults(suiteName: defaultsSuite))
+            defer {
+                shared.removePersistentDomain(forName: sharedSuite)
+                defaults.removePersistentDomain(forName: defaultsSuite)
+            }
             let session = AppSession(secrets: InMemorySecretStore(), defaults: defaults, sharedDefaults: shared) { _ in .demo() }
             var received: [WidgetState?] = []
             session.onSharedState = { received.append($0) }
@@ -416,6 +423,34 @@ extension DemoBacked {
             #expect(SharedServer.load(from: shared) == nil)
             #expect(WidgetState.load(from: shared) == nil)
             #expect(received.last == .some(nil))
+            session.live.stop()
+        }
+    }
+}
+
+extension DemoBacked {
+    @Suite("Teilen bei Serverwechsel")
+    @MainActor
+    struct SwitchShareTests {
+        init() { DemoBackend.shared.reset() }
+
+        @Test func switchingToSignedOutServerUnshares() async throws {
+            let sharedSuite = "widget-switch-\(UUID().uuidString)", defaultsSuite = "widget-switch-d-\(UUID().uuidString)"
+            let shared = try #require(UserDefaults(suiteName: sharedSuite))
+            let defaults = try #require(UserDefaults(suiteName: defaultsSuite))
+            defer {
+                shared.removePersistentDomain(forName: sharedSuite)
+                defaults.removePersistentDomain(forName: defaultsSuite)
+            }
+            let session = AppSession(secrets: InMemorySecretStore(), defaults: defaults, sharedDefaults: shared) { _ in .demo() }
+            await session.startDemo()
+            #expect(SharedServer.load(from: shared) != nil)
+            // Zweiter Server ohne Token: Anmeldung nötig, Widget darf nicht beim Demo-Server bleiben.
+            let other = session.directory.add(ServerProfile(name: "Andere", url: URL(string: "https://example.invalid")!),
+                                              activate: false)
+            await session.switchServer(to: other.id)
+            #expect(session.phase == .signedOut)
+            #expect(SharedServer.load(from: shared) == nil)
             session.live.stop()
         }
     }

@@ -147,19 +147,15 @@ public struct SharedServer: Codable, Sendable, Equatable {
         defaults.removeObject(forKey: key)
     }
 
-    /// API-Zugang mit eigenem Vertrauensspeicher (nur dieses Zertifikat).
-    public func client(token: String?) -> APIClient {
-        if isDemo {
-            return APIClient(session: .demo(), baseURL: url, token: DemoBackend.token)
-        }
+    /// Frischen Stand holen (Widget) mit eigenem Vertrauensspeicher (nur
+    /// dieses Zertifikat). Die URLSession wird danach freigegeben.
+    public func fetchState(token: String?, now: Date = .now) async throws -> WidgetState {
         let registry = TrustRegistry()
         if let fingerprint, let host = url.host { registry.pin(host: host, fingerprint: fingerprint) }
-        return APIClient(session: .minePower(registry: registry), baseURL: url, token: token, registry: registry)
-    }
-
-    /// Frischen Stand holen (Widget, Kurzbefehl "Status").
-    public func fetchState(token: String?, now: Date = .now) async throws -> WidgetState {
-        let snapshot = try await client(token: token).liveStatus()
+        let session: URLSession = isDemo ? .demo() : .minePower(registry: registry)
+        defer { session.finishTasksAndInvalidate() }
+        let client = APIClient(session: session, baseURL: url, token: isDemo ? DemoBackend.token : token, registry: registry)
+        let snapshot = try await client.liveStatus()
         return WidgetState(snapshot: snapshot, serverName: name, isDemo: isDemo, now: now)
     }
 }

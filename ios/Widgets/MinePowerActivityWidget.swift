@@ -8,7 +8,7 @@ import WidgetKit
 struct MinePowerActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: MinePowerActivityAttributes.self) { context in
-            LockScreenActivityView(attributes: context.attributes, state: context.state)
+            LockScreenActivityView(attributes: context.attributes, state: context.state, isStale: context.isStale)
                 .padding(16)
                 .activityBackgroundTint(Web.surface)
                 .activitySystemActionForegroundColor(Web.textStrong)
@@ -30,7 +30,7 @@ struct MinePowerActivityWidget: Widget {
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
-                            Text(context.state.detail).font(.subheadline)
+                            Text(context.isStale ? Self.staleText : context.state.detail).font(.subheadline)
                             Spacer()
                             Remaining(endsAt: context.state.endsAt).font(.subheadline.weight(.semibold))
                         }
@@ -54,6 +54,9 @@ struct MinePowerActivityWidget: Widget {
             .keylineTint(tone)
         }
     }
+
+    /// Nach dem Ende (staleDate) ohne neue Werte: nicht mehr behaupten, dass es läuft.
+    static let staleText = String(localized: "Vermutlich beendet – App öffnen")
 
     static func icon(_ kind: MinePowerActivityAttributes.Kind) -> WebIcon {
         kind == .boost ? .boost : .bolt
@@ -86,6 +89,7 @@ private struct Remaining: View {
 private struct LockScreenActivityView: View {
     let attributes: MinePowerActivityAttributes
     let state: MinePowerActivityAttributes.ContentState
+    let isStale: Bool
 
     var body: some View {
         let tone = MinePowerActivityWidget.tone(attributes.kind)
@@ -96,10 +100,11 @@ private struct LockScreenActivityView: View {
                     .frame(width: 40, height: 40)
                     .background(tone.opacity(0.15), in: .rect(cornerRadius: 12, style: .continuous))
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(attributes.kind == .boost ? String(localized: "Boost läuft") : String(localized: "Sofort laden"))
+                    Text(isStale ? (attributes.kind == .boost ? String(localized: "Boost") : String(localized: "Sofort laden"))
+                         : attributes.kind == .boost ? String(localized: "Boost läuft") : String(localized: "Sofort laden"))
                         .font(Typo.font(16, .bold, relativeTo: .headline))
                         .foregroundStyle(Web.textStrong)
-                    Text("\(attributes.deviceName) · \(state.detail)")
+                    Text("\(attributes.deviceName) · \(isStale ? MinePowerActivityWidget.staleText : state.detail)")
                         .font(Typo.font(13, .regular, relativeTo: .subheadline))
                         .foregroundStyle(Web.textDim)
                         .lineLimit(1)
