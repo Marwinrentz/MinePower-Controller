@@ -52,10 +52,17 @@ public final class SettingsEditor {
         guard !changed.isEmpty else { return true }
         isSaving = true
         defer { isSaving = false }
+        let sent = changed.mapValues(\.draft)
         do {
-            try await api.saveSettings(changed.mapValues { .object($0.draft) })
+            try await api.saveSettings(sent.mapValues { .object($0) })
             let envelope = try await api.settings()
-            for name in changed.keys { drafts[name] = SettingsDraft(envelope.section(name)) }
+            for (name, sentDraft) in sent {
+                // Was während des Speicherns geändert wurde, bleibt als Änderung stehen.
+                let current = drafts[name]?.draft ?? sentDraft
+                var fresh = SettingsDraft(envelope.section(name))
+                for (key, value) in current where sentDraft[key] != value { fresh.set(key, value) }
+                drafts[name] = fresh
+            }
             error = nil
             return true
         } catch let apiError as APIError {

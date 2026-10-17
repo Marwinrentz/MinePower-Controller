@@ -171,19 +171,44 @@ public extension JSONEncoder {
 }
 
 public extension Fmt {
+    /// Zahl für ein Eingabefeld: ohne Tausendertrenner, damit sie beim
+    /// Zurücklesen in jeder Sprache eindeutig ist ("3000", nicht "3,000").
+    func editableNumber(_ value: Double, digits: Int = 0) -> String {
+        value.formatted(.number.precision(.fractionLength(digits)).locale(locale).grouping(.never))
+    }
+
+    /// Eingabetext in dieser Sprache lesen (siehe `parseNumber(_:locale:)`).
+    func parse(_ raw: String) -> Double? { Self.parseNumber(raw, locale: locale) }
+
     /// Zahl aus Eingabetext: "1.400" (Tausenderpunkt), "0,5", "0.5", "-12", "1 400".
-    /// Ein Punkt gilt als Tausendertrenner, wenn danach genau drei Ziffern folgen
-    /// und kein Komma vorkommt; sonst als Dezimalpunkt.
-    static func parseNumber(_ raw: String) -> Double? {
-        var text = raw.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: " ", with: "")
-            .replacingOccurrences(of: "\u{00A0}", with: "")
+    ///
+    /// Kommen Punkt und Komma vor, ist das letzte Zeichen das Dezimalzeichen.
+    /// Kommt nur eines vor, gilt es als Dezimalzeichen, wenn es das der Sprache
+    /// ist; sonst als Tausendertrenner, sofern danach jeweils genau drei
+    /// Ziffern folgen ("3,000" im Englischen, "1.400" im Deutschen).
+    static func parseNumber(_ raw: String, locale: Locale = Locale(identifier: "de_DE")) -> Double? {
+        let spaces: Set<Character> = [" ", "\u{00A0}", "\u{202F}", "'", "\u{2019}"]
+        var text = String(raw.trimmingCharacters(in: .whitespaces).filter { !spaces.contains($0) })
+            .replacingOccurrences(of: "\u{2212}", with: "-")
         guard !text.isEmpty else { return nil }
-        if text.contains(",") {
-            text = text.replacingOccurrences(of: ".", with: "").replacingOccurrences(of: ",", with: ".")
-        } else if let dot = text.lastIndex(of: "."), text.filter({ $0 == "." }).count >= 1 {
-            let tail = text[text.index(after: dot)...]
-            if tail.count == 3, tail.allSatisfy(\.isNumber), text.first(where: { $0 != "-" }) != "." {
-                text = text.replacingOccurrences(of: ".", with: "")
+        let decimal = locale.decimalSeparator == "," ? "," : "."
+        let hasComma = text.contains(","), hasDot = text.contains(".")
+        func normalize(decimalMark: String) -> String {
+            let group = decimalMark == "," ? "." : ","
+            return text.replacingOccurrences(of: group, with: "").replacingOccurrences(of: decimalMark, with: ".")
+        }
+        if hasComma, hasDot {
+            let lastComma = text.lastIndex(of: ",")!, lastDot = text.lastIndex(of: ".")!
+            text = normalize(decimalMark: lastComma > lastDot ? "," : ".")
+        } else if hasComma || hasDot {
+            let mark = hasComma ? "," : "."
+            if mark == decimal {
+                text = normalize(decimalMark: mark)
+            } else {
+                let parts = text.components(separatedBy: mark)
+                let grouped = parts.count > 1 && parts.dropFirst().allSatisfy { $0.count == 3 && $0.allSatisfy(\.isNumber) }
+                    && parts[0].contains(where: \.isNumber)
+                text = grouped ? parts.joined() : normalize(decimalMark: mark)
             }
         }
         return Double(text)

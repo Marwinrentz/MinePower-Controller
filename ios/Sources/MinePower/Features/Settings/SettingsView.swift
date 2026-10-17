@@ -17,29 +17,32 @@ struct SettingsView: View {
         let tabs = Tab.allCases.filter { !$0.adminOnly || session.canConfigure }
         Page(refresh: { await editor.load(force: true) }) {
             SubNav(items: tabs.map { ($0, $0.title, $0.icon) }, selection: $tab)
-            if !editor.isLoaded, ![Tab.devices, .account, .info, .appearance, .users, .mcp, .backup].contains(tab) {
-                if let error = editor.error {
-                    Card { ErrorState(error: error) { await editor.load(force: true) } }
+            Group {
+                if !editor.isLoaded, ![Tab.devices, .account, .info, .appearance, .users, .mcp, .backup].contains(tab) {
+                    if let error = editor.error {
+                        Card { ErrorState(error: error) { await editor.load(force: true) } }
+                    } else {
+                        SkeletonCards(count: 1, height: 300)
+                    }
                 } else {
-                    SkeletonCards(count: 1, height: 300)
-                }
-            } else {
-                switch tab {
-                case .regulation: RegulationSettings()
-                case .battery: BatterySettings()
-                case .priority: PrioritySettings()
-                case .devices: DevicesSettings()
-                case .notifications: NotificationSettings()
-                case .users: UsersSettings()
-                case .appearance: AppearanceSettings()
-                case .backup: BackupSettings()
-                case .mcp: McpSettings()
-                case .account: AccountSettings()
-                case .info: InfoSettings()
+                    switch tab {
+                    case .regulation: RegulationSettings()
+                    case .battery: BatterySettings()
+                    case .priority: PrioritySettings()
+                    case .devices: DevicesSettings()
+                    case .notifications: NotificationSettings()
+                    case .users: UsersSettings()
+                    case .appearance: AppearanceSettings()
+                    case .backup: BackupSettings()
+                    case .mcp: McpSettings()
+                    case .account: AccountSettings()
+                    case .info: InfoSettings()
+                    }
                 }
             }
+            // Nur der Inhalt: Die Reiterleiste bleibt für alle Rollen bedienbar.
+            .disabled(!session.canConfigure && ![Tab.appearance, .account, .info, .mcp].contains(tab))
         }
-        .disabled(!session.canConfigure && ![Tab.appearance, .account, .info, .mcp].contains(tab))
         .safeAreaInset(edge: .bottom) { SaveBar() }
         .navigationTitle("Einstellungen")
         .toolbar { BrandToolbar() }
@@ -309,6 +312,8 @@ private struct PrioritySettings: View {
     @Environment(SettingsEditor.self) private var editor
     @State private var devices: [Device]?
     @State private var order: [Int] = []
+    /// Speichern nacheinander, damit schnelles Umsortieren nicht in falscher Reihenfolge ankommt.
+    @State private var saving: Task<Void, Never>?
 
     var body: some View {
         Card {
@@ -327,7 +332,11 @@ private struct PrioritySettings: View {
                         PriorityList(order: $order, devices: loads)
                             .onChange(of: order) { old, new in
                                 guard !old.isEmpty, old != new else { return }
-                                Task { await save(new) }
+                                let previous = saving
+                                saving = Task {
+                                    await previous?.value
+                                    await save(new)
+                                }
                             }
                     }
                 } else {
@@ -377,8 +386,6 @@ private struct NotificationSettings: View {
                     AppTextField(verbatim: "", text: editor.text("notifications", "telegram_chat_id"))
                         .keyboardType(.numbersAndPunctuation)
                 }
-                Text("Auf diesem iPhone meldet die App sich zusätzlich selbst, wenn Geräte ausfallen oder das Auto fertig ist (Mitteilungen in den iOS-Einstellungen).")
-                    .font(Typo.subheadline).foregroundStyle(Web.textDim)
             }
         }
     }

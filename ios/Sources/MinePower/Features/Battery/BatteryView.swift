@@ -310,9 +310,14 @@ private struct ManualControl: View {
         }
     }
 
-    static func action(_ manual: BatteryManual) -> BatteryCommand.Action {
-        if let intent = manual.intent, let action = BatteryCommand.Action(rawValue: intent), action != .auto { return action }
-        switch manual.mode {
+    static func action(_ manual: BatteryManual) -> BatteryCommand.Action { manual.action }
+}
+
+extension BatteryManual {
+    /// Was von Hand läuft; ältere Server melden nur den Modus, nicht die Absicht.
+    var action: BatteryCommand.Action {
+        if let intent, let action = BatteryCommand.Action(rawValue: intent), action != .auto { return action }
+        switch mode {
         case "force_discharge": return .discharge
         case "hold": return .hold
         default: return .charge

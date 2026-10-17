@@ -458,6 +458,7 @@ struct StepSlider: View {
     var onCommit: (Double) -> Void
 
     @State private var dragging = false
+    @Environment(\.isEnabled) private var isEnabled
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -476,9 +477,20 @@ struct StepSlider: View {
                     if !editing { onCommit(value) }
                 }
                 .tint(tone)
-                .accessibilityLabel(Text(label))
-                .accessibilityValue(Text(format(value)))
                 roundButton(.plus, enabled: value < range.upperBound) { nudge(step) }
+            }
+            // Ein Element für VoiceOver: Wischen ändert und sendet wie −/+
+            // (der Slider meldet Bedienhilfen-Änderungen nicht über onEditingChanged).
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(label))
+            .accessibilityValue(Text(format(value)))
+            .accessibilityAdjustableAction { direction in
+                guard isEnabled else { return }
+                switch direction {
+                case .increment: if value < range.upperBound { nudge(step) }
+                case .decrement: if value > range.lowerBound { nudge(-step) }
+                @unknown default: break
+                }
             }
             if let help { Text(help).font(Typo.subheadline).foregroundStyle(Web.textDim) }
         }

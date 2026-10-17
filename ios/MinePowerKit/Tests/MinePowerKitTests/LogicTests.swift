@@ -222,6 +222,24 @@ struct ParseNumberTests {
         #expect(Fmt.parseNumber("") == nil)
         #expect(Fmt.parseNumber("abc") == nil)
     }
+
+    @Test func englishGroupingIsNotADecimal() {
+        let en = Locale(identifier: "en_US")
+        #expect(Fmt.parseNumber("3,000", locale: en) == 3000)
+        #expect(Fmt.parseNumber("20,000", locale: en) == 20000)
+        #expect(Fmt.parseNumber("1.5", locale: en) == 1.5)
+        #expect(Fmt.parseNumber("1,5", locale: en) == 1.5)
+        #expect(Fmt.parseNumber("1,234.5", locale: en) == 1234.5)
+    }
+
+    @Test(arguments: ["en_US", "de_DE", "fr_FR", "de_CH"])
+    func editableTextRoundTrips(identifier: String) {
+        let fmt = Fmt(locale: Locale(identifier: identifier))
+        for value in [3000.0, 20000, 0.5, -1500, 52.5208, 1234.5] {
+            let text = fmt.editableNumber(value, digits: 4)
+            #expect(fmt.parse(text) == value, "\(identifier): \(text)")
+        }
+    }
 }
 
 @Suite("MCP-Anleitungen")
@@ -233,7 +251,9 @@ struct McpClientTests {
         #expect(grok.code == "https://mp.example.de/mcp/k/mp_abc")
         let desktop = try #require(clients.first { $0.id == "claude_desktop" })
         #expect(desktop.code.contains("--allow-http"))
-        #expect(desktop.code.contains("\"AUTH\" : \"Bearer mp_abc\"") || desktop.code.contains("\"AUTH\": \"Bearer mp_abc\""))
+        #expect(desktop.code.contains("\n      \"env\": {\n        \"AUTH\": \"Bearer mp_abc\"\n      }"))
+        #expect(desktop.code.hasPrefix("{\n  \"mcpServers\": {\n    \"minepower\": {\n      \"args\": [\n        \"-y\","))
+        #expect(McpClient.jsonString("a\"b\\c") == "\"a\\\"b\\\\c\"")
         let code = try #require(clients.first { $0.id == "claude_code" })
         #expect(code.code == "claude mcp add --transport http minepower http://192.168.1.5:8080/mcp --header \"Authorization: Bearer mp_abc\"")
         #expect(clients.count == 15)

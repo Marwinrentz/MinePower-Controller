@@ -68,6 +68,18 @@ struct WallView: View {
         return (awakeUntil ?? .distantPast) < now
     }
 
+    /// Keine Verbindung oder seit über einer Minute kein neuer Stand (wie
+    /// LiveIndicator): Ein Wandgerät darf nicht stundenlang alte Werte zeigen.
+    private var isStale: Bool {
+        guard session.live.connection == .live, let last = session.live.lastUpdate else { return true }
+        return now.timeIntervalSince(last) > 60
+    }
+
+    private var staleText: String {
+        guard let last = session.live.lastUpdate else { return String(localized: "Keine Live-Verbindung") }
+        return String(localized: "Keine Live-Verbindung · Stand \(Fmt().ago(last, now: now))")
+    }
+
     private func glow(_ tone: WallState.Tone?) -> Color {
         switch tone {
         case .ok, nil: Palette.pv.fill
@@ -125,10 +137,10 @@ struct WallView: View {
                     .monospacedDigit()
                     .foregroundStyle(Web.textDim)
                 HStack(spacing: Space.s) {
-                    if session.live.connection != .live {
+                    if isStale {
                         HStack(spacing: 4) {
                             Icon(.warning, size: 15)
-                            Text("Keine Live-Verbindung")
+                            Text(staleText)
                         }
                         .font(Typo.subheadlineMedium)
                         .foregroundStyle(Palette.warn.ink)

@@ -14,6 +14,8 @@ struct StatisticsView: View {
     @Environment(AppSession.self) private var session
     @State private var range: StatsRange = .month
     @State private var stats: Statistics?
+    /// Zeitraum, zu dem `stats` gehört (nach einem Fehler beim Wechsel nicht die alten Zahlen zeigen).
+    @State private var statsRange: StatsRange?
     @State private var sessions: [ChargeSession]?
     @State private var loadError: APIError?
     @State private var share: ShareFile?
@@ -24,7 +26,7 @@ struct StatisticsView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 SmallSegment(options: StatsRange.allCases.map { ($0, $0.title) }, selection: $range)
             }
-            if let stats {
+            if let stats, statsRange == range {
                 Figures(stats: stats)
             } else if let loadError {
                 Card { ErrorState(error: loadError) { await load() } }
@@ -82,10 +84,12 @@ struct StatisticsView: View {
     }
 
     private func load() async {
+        let requested = range
         do {
-            async let s = session.api.statistics(range)
+            async let s = session.api.statistics(requested)
             async let list = session.api.sessions(limit: 50)
             stats = try await s
+            statsRange = requested
             sessions = (try? await list) ?? sessions ?? []
             loadError = nil
         } catch let error as APIError {
@@ -130,7 +134,8 @@ extension StatsRange {
         switch self {
         case .day: .day
         case .week: .week
-        case .month, .year: .month
+        case .month: .month
+        case .year: .year
         }
     }
 }

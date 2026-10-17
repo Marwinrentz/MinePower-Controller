@@ -236,7 +236,11 @@ struct PriceCurve: View {
     var body: some View {
         Chart {
             ForEach(Array(prices.enumerated()), id: \.element.id) { index, slot in
-                BarMark(x: .value("Zeit", slot.start, unit: .hour), y: .value("ct", slot.priceCt), width: .ratio(0.82))
+                // Je Zeitfenster von Beginn bis Ende (15 oder 60 min), mit kleiner Lücke.
+                // Mit `unit: .hour` würden Viertelstunden derselben Stunde gestapelt.
+                BarMark(xStart: .value("Beginn", slot.start),
+                        xEnd: .value("Ende", slot.end.addingTimeInterval(-Double(slot.minutes) * 60 * 0.18)),
+                        y: .value("ct", slot.priceCt))
                     .foregroundStyle(limit.map { slot.priceCt <= $0 } == true ? Palette.pv.fill : Web.lineStrong)
                     .clipShape(UnevenRoundedRectangle(cornerRadii: .init(topLeading: 3, topTrailing: 3)))
                     .annotation(position: .overlay) {

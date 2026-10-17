@@ -52,19 +52,24 @@ struct NumberField: View {
         .background(Web.surface, in: .rect(cornerRadius: Radius.medium, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Radius.medium, style: .continuous)
             .strokeBorder(focused ? Palette.accent : Web.lineStrong, lineWidth: 1))
-        .onAppear { text = Fmt().number(value, digits: digits) }
-        .onChange(of: value) { _, new in if !focused { text = Fmt().number(new, digits: digits) } }
+        .onAppear { text = shown(value) }
+        .onChange(of: value) { _, new in if !focused { text = shown(new) } }
         .onChange(of: focused) { _, isFocused in if !isFocused { commit() } }
     }
 
+    /// Ohne Tausendertrenner: "3000" liest sich in jeder Sprache gleich zurück.
+    private func shown(_ number: Double) -> String { Fmt().editableNumber(number, digits: digits) }
+
     private func commit() {
-        guard var parsed = Fmt.parseNumber(text) else {
-            text = Fmt().number(value, digits: digits)
+        // Unverändert: nichts übernehmen (sonst änderte schon das Antippen den Wert durch Runden).
+        guard text != shown(value) else { return }
+        guard var parsed = Fmt().parse(text) else {
+            text = shown(value)
             return
         }
         if let range { parsed = min(range.upperBound, max(range.lowerBound, parsed)) }
         value = parsed
-        text = Fmt().number(parsed, digits: digits)
+        text = shown(parsed)
     }
 }
 

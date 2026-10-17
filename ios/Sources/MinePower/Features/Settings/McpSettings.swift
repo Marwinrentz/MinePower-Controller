@@ -1,5 +1,6 @@
 import MinePowerKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Einstellungen → KI-Assistent (Spiegel von `McpSettings.tsx`):
 /// Zugangsschlüssel, Anleitung je KI-Anwendung, Funktionsliste.
@@ -81,7 +82,7 @@ struct McpSettings: View {
                 if let fresh {
                     VStack(alignment: .leading, spacing: Space.s) {
                         Callout(.ok, String(localized: "Neuer Schlüssel"), text: String(localized: "Nur jetzt sichtbar. In der KI-Anwendung eintragen."))
-                        CopyBlock(text: fresh)
+                        CopyBlock(text: fresh, secret: true)
                     }
                 }
             }
@@ -121,7 +122,7 @@ struct McpSettings: View {
                         }
                     }
                 }
-                CopyBlock(text: active.code)
+                CopyBlock(text: active.code, secret: fresh != nil)
                 if fresh == nil {
                     Text("Platzhalter <SCHLÜSSEL> durch einen erzeugten Schlüssel ersetzen.")
                         .font(Typo.subheadline).foregroundStyle(Web.textDim)
@@ -239,8 +240,12 @@ extension User.Role {
 }
 
 /// `.copy-block`: Text in Festbreitenschrift mit "Kopieren".
+///
+/// `secret`: enthält einen Zugangsschlüssel – dann nur auf diesem Gerät
+/// (keine universelle Zwischenablage) und nach zwei Minuten wieder weg.
 struct CopyBlock: View {
     let text: String
+    var secret = false
     @Environment(AppSession.self) private var session
     @State private var copied = 0
 
@@ -255,7 +260,9 @@ struct CopyBlock: View {
                     .padding(Space.m)
             }
             Button {
-                UIPasteboard.general.string = text
+                var options: [UIPasteboard.OptionsKey: Any] = [.localOnly: true]
+                if secret { options[.expirationDate] = Date.now.addingTimeInterval(120) }
+                UIPasteboard.general.setItems([[UTType.plainText.identifier: text]], options: options)
                 copied += 1
                 session.show(Notice(.success, String(localized: "Kopiert")))
             } label: {

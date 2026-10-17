@@ -498,6 +498,7 @@ public final class DemoBackend: Sendable {
         case .day: (86_400, 600)
         case .week: (7 * 86_400, 3600)
         case .month: (30 * 86_400, 4 * 3600)
+        case .year: (365 * 86_400, 86_400)
         }
         let calendar = Calendar(identifier: .gregorian)
         let start = now.addingTimeInterval(-span)

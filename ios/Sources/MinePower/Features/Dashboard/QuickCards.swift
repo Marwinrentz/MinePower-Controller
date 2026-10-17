@@ -249,7 +249,7 @@ struct QuickBattery: View {
         let fmt = Fmt()
         let power = snapshot.battery?.power ?? 0
         if let manual = snapshot.batteryManual {
-            let what = Explanation.batteryAction(manual.intent ?? (manual.mode == "force_charge" ? "charge" : "discharge"))
+            let what = Explanation.batteryAction(manual.action.rawValue)
             return "\(what) · " + String(localized: "noch \(fmt.duration(manual.remainingS))")
         }
         if let plan = snapshot.batteryPlan, plan.intent != "auto" { return plan.reason }

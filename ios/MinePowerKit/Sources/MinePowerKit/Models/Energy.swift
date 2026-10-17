@@ -45,7 +45,7 @@ public enum StatsRange: String, CaseIterable, Sendable, Identifiable {
 }
 
 public enum HistoryRange: String, CaseIterable, Sendable, Identifiable {
-    case hour = "1h", sixHours = "6h", day = "24h", week = "7d", month = "30d"
+    case hour = "1h", sixHours = "6h", day = "24h", week = "7d", month = "30d", year = "365d"
     public var id: String { rawValue }
 }
 

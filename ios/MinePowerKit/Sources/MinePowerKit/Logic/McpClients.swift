@@ -19,11 +19,7 @@ public struct McpClient: Sendable, Identifiable, Equatable {
         let insecure = url.hasPrefix("http://") && url.firstMatch(of: /\/\/(localhost|127\.0\.0\.1)[:\/]/) == nil
         let bridge = ["-y", "mcp-remote", url, "--header", "Authorization:${AUTH}"] + (insecure ? ["--allow-http"] : [])
         let auth = "Bearer \(token)"
-        func json(_ value: Any) -> String {
-            guard let data = try? JSONSerialization.data(withJSONObject: value, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]),
-                  let text = String(data: data, encoding: .utf8) else { return "" }
-            return text.replacingOccurrences(of: "    ", with: "  ")
-        }
+        func json(_ value: Any) -> String { prettyJSON(value) }
         func quoted(_ s: String) -> String { "\"\(s.replacingOccurrences(of: "\"", with: "\\\""))\"" }
         func connector(_ id: String, _ name: String) -> McpClient {
             McpClient(id: id, name: name, code: keyURL, urlOnly: true, steps: steps(id))
@@ -71,6 +67,47 @@ public struct McpClient: Sendable, Identifiable, Equatable {
                 "  -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}'",
             ].joined(separator: "\n"), urlOnly: false, steps: steps("manual")),
         ]
+    }
+
+    /// JSON mit zwei Leerzeichen Einzug und sortierten Schlüsseln, auf allen
+    /// Plattformen gleich (JSONSerialization rückt je nach System anders ein).
+    static func prettyJSON(_ value: Any, indent: Int = 0) -> String {
+        let pad = String(repeating: "  ", count: indent + 1), end = String(repeating: "  ", count: indent)
+        switch value {
+        case let object as [String: Any]:
+            guard !object.isEmpty else { return "{}" }
+            let items = object.keys.sorted().map { "\(pad)\(jsonString($0)): \(prettyJSON(object[$0]!, indent: indent + 1))" }
+            return "{\n" + items.joined(separator: ",\n") + "\n\(end)}"
+        case let array as [Any]:
+            guard !array.isEmpty else { return "[]" }
+            return "[\n" + array.map { pad + prettyJSON($0, indent: indent + 1) }.joined(separator: ",\n") + "\n\(end)]"
+        case let text as String:
+            return jsonString(text)
+        case let flag as Bool:
+            return flag ? "true" : "false"
+        case let number as Int:
+            return String(number)
+        case let number as Double:
+            return number.rounded() == number ? String(Int(number)) : String(number)
+        default:
+            return "null"
+        }
+    }
+
+    static func jsonString(_ text: String) -> String {
+        var out = "\""
+        for scalar in text.unicodeScalars {
+            switch scalar {
+            case "\"": out += "\\\""
+            case "\\": out += "\\\\"
+            case "\n": out += "\\n"
+            case "\r": out += "\\r"
+            case "\t": out += "\\t"
+            case let c where c.value < 0x20: out += String(format: "\\u%04x", c.value)
+            default: out.unicodeScalars.append(scalar)
+            }
+        }
+        return out + "\""
     }
 
     static func steps(_ id: String) -> [String] {

@@ -73,6 +73,7 @@ public final class AppSession {
                 makeSession: @escaping @Sendable (Bool) -> URLSession) {
         self.secrets = secrets
         self.defaults = defaults
+        self.biometricLock = defaults.bool(forKey: Self.lockKey)
         self.registry = registry
         self.makeSession = makeSession
         let session = makeSession(false)
@@ -100,7 +101,8 @@ public final class AppSession {
     }
 
     /// Face ID beim Öffnen verlangen (Token nur nach Bestätigung lesbar).
-    public var biometricLock: Bool { defaults.bool(forKey: Self.lockKey) }
+    /// Gespeichert in UserDefaults, hier gespiegelt, damit Ansichten Änderungen sehen.
+    public private(set) var biometricLock: Bool
 
     // MARK: - Start
 
@@ -325,6 +327,7 @@ public final class AppSession {
             try await secrets.setSecret(token, for: server.tokenKey, protected: enabled)
         }
         defaults.set(enabled, forKey: Self.lockKey)
+        biometricLock = enabled
     }
 
     // MARK: - Lebenszyklus

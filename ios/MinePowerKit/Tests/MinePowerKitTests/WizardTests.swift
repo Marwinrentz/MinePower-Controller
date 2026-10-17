@@ -194,5 +194,20 @@ extension DemoBacked {
             reloaded.discard()
             #expect(!reloaded.isDirty)
         }
+
+        @Test func editsDuringSaveSurvive() async {
+            let editor = SettingsEditor(api: api)
+            await editor.load()
+            editor.update("tariff") { $0.set("grid_charge_limit_ct", 18.0) }
+            let saving = Task { await editor.save() }
+            await Task.yield()
+            editor.update("tariff") { $0.set("vat_pct", 19.0) }
+            #expect(await saving.value)
+            #expect(editor.section("tariff").number("grid_charge_limit_ct", 0) == 18)
+            #expect(editor.section("tariff").number("vat_pct", 0) == 19)
+            // Die zweite Änderung kam nach dem Absenden: gespeichert ist sie nicht, sichtbar bleibt sie.
+            #expect(editor.section("tariff").saved.double("vat_pct") != 19)
+            #expect(editor.isDirty)
+        }
     }
 }

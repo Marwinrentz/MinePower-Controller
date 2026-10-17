@@ -25,74 +25,79 @@ struct DevicesSettings: View {
         let list = devices?.value ?? []
         let full = Self.categories.filter { !SetupFlow.canAdd($0, devices: list, limits: limits) }
         VStack(alignment: .leading, spacing: Space.xl) {
-        Card {
-            VStack(alignment: .leading, spacing: Space.l) {
-                CardHead(title: "Geräte") {
-                    Button { router.showWizard = true } label: {
-                        HStack(spacing: 4) { Icon(.flask, size: 16); Text("Assistent") }
-                    }
-                    .buttonStyle(.web(.ghost, size: .small, fullWidth: false))
-                }
-                FlowLayout(spacing: Space.s) {
-                    ForEach(Self.categories, id: \.self) { category in
-                        Button {
-                            open(DeviceEditor(api: session.api, category: category),
-                                 title: String(localized: "Gerät hinzufügen: \(category.label)"))
-                        } label: {
-                            HStack(spacing: 6) { Icon(category.webIcon, size: 16); Text("+ \(category.label)") }
+            Card {
+                VStack(alignment: .leading, spacing: Space.l) {
+                    CardHead(title: "Geräte") {
+                        Button { router.showWizard = true } label: {
+                            HStack(spacing: 4) { Icon(.flask, size: 16); Text("Assistent") }
                         }
-                        .buttonStyle(.web(.normal, size: .small, fullWidth: false))
-                        .disabled(full.contains(category))
-                        .accessibilityHint(full.contains(category)
-                            ? Text("Höchstens \(limits[category.rawValue] ?? 1) aktives Gerät") : Text(""))
+                        .buttonStyle(.web(.ghost, size: .small, fullWidth: false))
                     }
-                }
-                if !full.isEmpty {
-                    Text("Limit erreicht: \(full.map(\.label).joined(separator: ", "))")
-                        .font(Typo.subheadline).foregroundStyle(Web.textDim)
+                    FlowLayout(spacing: Space.s) {
+                        ForEach(Self.categories, id: \.self) { category in
+                            Button {
+                                open(DeviceEditor(api: session.api, category: category),
+                                     title: String(localized: "Gerät hinzufügen: \(category.label)"))
+                            } label: {
+                                HStack(spacing: 6) { Icon(category.webIcon, size: 16); Text("+ \(category.label)") }
+                            }
+                            .buttonStyle(.web(.normal, size: .small, fullWidth: false))
+                            .disabled(full.contains(category))
+                            .accessibilityHint(full.contains(category)
+                                ? Text("Höchstens \(limits[category.rawValue] ?? 1) aktives Gerät") : Text(""))
+                        }
+                    }
+                    if !full.isEmpty {
+                        Text("Limit erreicht: \(full.map(\.label).joined(separator: ", "))")
+                            .font(Typo.subheadline).foregroundStyle(Web.textDim)
+                    }
                 }
             }
-        }
-        if let devices {
-            ResourceContent(resource: devices, isEmpty: \.isEmpty, emptyTitle: "Noch keine Geräte", emptyIcon: .devices,
-                            emptyMessage: "Wechselrichter und Netzzähler einrichten") { list in
-                VStack(spacing: Space.m) {
-                    ForEach(list) { device in
-                        DeviceRow(device: device, live: session.live.snapshot?.allDevices.first { $0.id == device.id },
-                                  onToggle: { await toggle(device) },
-                                  onEdit: { edit(device) },
-                                  onDelete: { deleting = device })
+            if let devices {
+                ResourceContent(resource: devices, isEmpty: \.isEmpty, emptyTitle: "Noch keine Geräte", emptyIcon: .devices,
+                                emptyMessage: "Wechselrichter und Netzzähler einrichten") { list in
+                    VStack(spacing: Space.m) {
+                        ForEach(list) { device in
+                            DeviceRow(device: device, live: session.live.snapshot?.allDevices.first { $0.id == device.id },
+                                      onToggle: { await toggle(device) },
+                                      onEdit: { edit(device) },
+                                      onDelete: { deleting = device })
+                        }
                     }
+                } placeholder: {
+                    SkeletonCards(count: 1, height: 200)
                 }
-            } placeholder: {
+            } else {
                 SkeletonCards(count: 1, height: 200)
             }
-        } else {
-            SkeletonCards(count: 1, height: 200)
         }
+        .task {
+            if devices == nil { devices = Resource { [api = session.api] in try await api.devices() } }
+            await devices?.load(maxAge: 5)
+            limits = (try? await session.api.deviceLimits()) ?? [:]
         }
-            .task {
-                if devices == nil { devices = Resource { [api = session.api] in try await api.devices() } }
-                await devices?.load(maxAge: 5)
-                limits = (try? await session.api.deviceLimits()) ?? [:]
+        // Sprung aus einer Meldung ("Details"): Formular öffnen, sobald die Liste da ist.
+        .onChange(of: router.editDevice, initial: true) { openRequestedDevice() }
+        .onChange(of: devices?.value?.count) { openRequestedDevice() }
+        .sheet(item: $form) { target in
+            DeviceFormSheet(target: target) {
+                form = nil
+                session.show(Notice(.success, String(localized: "Gespeichert")))
+                Task { await reload() }
             }
-            // Sprung aus einer Meldung ("Details"): Formular öffnen, sobald die Liste da ist.
-            .onChange(of: router.editDevice, initial: true) { openRequestedDevice() }
-            .onChange(of: devices?.value?.count) { openRequestedDevice() }
-            .sheet(item: $form) { target in
-                DeviceFormSheet(target: target) {
-                    form = nil
-                    session.show(Notice(.success, String(localized: "Gespeichert")))
-                    Task { await reload() }
-                }
+        }
+        .confirmationDialog(Text("Löschen: \(deleting?.name ?? "")?"), isPresented: Binding(
+            get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible, presenting: deleting) { device in
+            Button("Löschen", role: .destructive) { Task { await delete(device) } }
+            Button("Abbrechen", role: .cancel) {}
+        } message: { device in
+            // Das Backend löscht Ladevorgänge und Zeitfenster des Geräts mit (Fremdschlüssel mit CASCADE).
+            if device.category == .wallbox || device.category == .waterHeater {
+                Text("Ladevorgänge und Zeitfenster dieses Geräts werden mitgelöscht. Das lässt sich nicht rückgängig machen.")
+            } else {
+                Text("Das lässt sich nicht rückgängig machen.")
             }
-            .confirmationDialog(Text("Löschen: \(deleting?.name ?? "")?"), isPresented: Binding(
-                get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible, presenting: deleting) { device in
-                Button("Löschen", role: .destructive) { Task { await delete(device) } }
-                Button("Abbrechen", role: .cancel) {}
-            } message: { _ in
-                Text("Messwerte und Verlauf des Geräts bleiben erhalten.")
-            }
+        }
     }
 
     private func open(_ editor: DeviceEditor, title: String) {
