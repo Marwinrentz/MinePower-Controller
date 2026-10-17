@@ -103,6 +103,11 @@ public extension APIClient {
         return try await get("api/history", query: query)
     }
 
+    /// Energie je Tag: `{"2026-10-15": {"pv_power": 31.2, "grid_import": 4.1, "grid_export": 12.5}}`.
+    func energyBalance(_ range: StatsRange) async throws -> [String: [String: Double]] {
+        try await get("api/history/energy", query: ["range": range.rawValue])
+    }
+
     func sessions(limit: Int = 100) async throws -> [ChargeSession] {
         try await get("api/sessions", query: ["limit": String(limit)])
     }
@@ -116,11 +121,15 @@ public extension APIClient {
 
     // MARK: Diagnose
 
-    func events(limit: Int = 100, category: String? = nil) async throws -> [AppEvent] {
+    func events(limit: Int = 100, category: String? = nil, level: String? = nil) async throws -> [AppEvent] {
         var query = ["limit": String(limit)]
         if let category { query["category"] = category }
+        if let level { query["level"] = level }
         return try await get("api/events", query: query)
     }
+
+    /// Live-Diagnose (Geräte, Regelgüte, Batteriebefehle); bewusst als freies JSON.
+    func diagnostics() async throws -> JSONObject { try await get("api/system/diagnostics") }
 
     func findings(range: String = "7d") async throws -> FindingsReport {
         try await get("api/system/findings", query: ["range": range])

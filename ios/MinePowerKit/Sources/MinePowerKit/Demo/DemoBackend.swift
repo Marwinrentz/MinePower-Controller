@@ -220,6 +220,23 @@ public final class DemoBackend: Sendable {
         case ("GET", "api/history"):
             let fields = (query["fields"] ?? "pv_power").split(separator: ",").map(String.init)
             return ok(history(HistoryRange(rawValue: query["range"] ?? "24h") ?? .day, fields: fields))
+        case ("GET", "api/history/energy"):
+            let days: Int = switch query["range"] ?? "30d" {
+            case "7d": 7
+            case "365d": 365
+            default: 30
+            }
+            let calendar = Calendar(identifier: .gregorian)
+            var out: [String: [String: Double]] = [:]
+            for i in 0..<days {
+                guard let day = calendar.date(byAdding: .day, value: -i, to: .now) else { continue }
+                let key = BackendDate.format(day).prefix(10)
+                let sun = 0.55 + 0.45 * sin(Double(i) * 0.9)
+                out[String(key)] = ["pv_power": (34 * sun).rounded(toPlaces: 1),
+                                    "grid_import": (6 - 4 * sun).rounded(toPlaces: 1),
+                                    "grid_export": (14 * sun).rounded(toPlaces: 1)]
+            }
+            return ok(out)
         case ("GET", "api/sessions"):
             return ok(sessions())
         case ("GET", "api/statistics/export.csv"):
@@ -233,12 +250,16 @@ public final class DemoBackend: Sendable {
             return ok(events())
         case ("GET", "api/system/findings"):
             return ok(findings())
+        case ("GET", "api/system/diagnostics"):
+            return raw("diagnostics")
         case ("GET", "api/system/diagnostic-report"):
             return raw("diagnostics")
         case ("GET", "api/system/changelog"):
             return raw("changelog")
         case ("GET", "api/system/backup-status"):
-            return ok(BackupStatus(count: 7, latest: "minepower-2026-10-16.json", dir: "/app/data/backups"))
+            // Wie das Backend: Zeitpunkt der neuesten Sicherung (ISO), nicht der Dateiname.
+            return ok(BackupStatus(count: 7, latest: BackendDate.format(.now.addingTimeInterval(-3 * 3600)),
+                                   dir: "/app/data/backups"))
         case ("GET", "api/system/export"):
             let export: JSONObject = ["version": "3.1.1", "settings": .object(state.current.settings)]
             return ok(export)
