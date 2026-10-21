@@ -4,6 +4,17 @@ Format: eine Version je Abschnitt, Einträge gruppiert in Neu, Geändert und
 Behoben, ein Eintrag je Zeile. Die App zeigt diese Datei unter „Changelog“
 und nach einem Update als Hinweisfenster.
 
+## 3.2.0 (2026-10-21)
+
+### Neu
+- Tarif: Automatische Grenze. Die Preisgrenze liegt immer auf dem tiefsten Preis der nächsten 24 Stunden, Auto, Warmwasser und Netzladen laden genau dann
+- Automatische Grenze einstellbar: Mindestdauer des günstigen Fensters (Standard 2 Stunden) und Toleranz
+- Tarif-Seite zeigt die wirksame Grenze, den Tiefstpreis und wie lange es günstig ist
+- iOS-App für iPhone und iPad (Quellcode im Ordner ios)
+
+### Geändert
+- Fehlen Preise für die nächsten 6 Stunden, gilt weiter die feste Grenze
+
 ## 3.1.1 (2026-10-15)
 
 ### Behoben
