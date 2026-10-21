@@ -73,6 +73,10 @@ DEFAULT_SETTINGS: dict[str, dict] = {
         "supplier_margin_ct": 0,
         "vat_pct": 0,
         "charge_on_negative": True,
+        # Automatische Grenze: immer der tiefste Preis der naechsten 24 h.
+        "auto_limit": False,
+        "auto_limit_window_h": 2,
+        "auto_limit_tolerance_ct": 0,
     },
     "forecast": {"provider": "none"},
     "notifications": {"ntfy_url": "", "telegram_token": "", "telegram_chat_id": "", "email": ""},

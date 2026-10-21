@@ -143,6 +143,79 @@ def _as_utc(when: datetime) -> datetime:
     return when if when.tzinfo is not None else when.replace(tzinfo=timezone.utc)
 
 
+#: Weniger Preisvorschau als das: Die Tiefstgrenze waere unzuverlaessig (der
+#: eigentlich guenstige Zeitraum liegt womoeglich ausserhalb der bekannten Daten).
+AUTO_MIN_COVERAGE_H = 6.0
+
+
+@dataclass(frozen=True)
+class AutoLimit:
+    """Ergebnis von `auto_limit`: die Grenze und woraus sie entstand."""
+
+    limit_ct: float
+    #: Tiefster Endpreis im betrachteten Zeitraum.
+    lowest_ct: float
+    #: Wie lange es unter oder auf der Grenze guenstig ist (Stunden).
+    window_h: float
+    #: Beginn des guenstigsten Slots (UTC), fuer die Anzeige.
+    lowest_at: datetime
+
+
+def auto_limit(
+    table: PriceTable,
+    when: datetime,
+    components: PriceComponents | None = None,
+    *,
+    hours: int = 24,
+    min_window_h: float = 2.0,
+    tolerance_ct: float = 0.0,
+) -> AutoLimit | None:
+    """Preisgrenze, die immer auf dem tiefsten Preis der naechsten `hours` liegt.
+
+    Verglichen wird wie ueberall der **Endpreis**. Die Grenze ist der tiefste
+    Preis plus `tolerance_ct`; ist das Fenster darunter kuerzer als
+    `min_window_h`, wird sie so weit angehoben, dass die guenstigsten Slots
+    zusammen mindestens so lange dauern (bei Gleichstand kommen alle mit).
+    Sonst fuehrte ein einzelner Ausreisser nach unten zu einem Ladefenster von
+    einer Viertelstunde, in dem das Auto kaum etwas bekommt.
+
+    `None` ohne Preise oder bei zu kurzer Vorschau (`AUTO_MIN_COVERAGE_H`): Der
+    Aufrufer faellt dann auf die feste Grenze zurueck -- raten gilt nicht.
+    """
+    components = components or PriceComponents()
+    when = _as_utc(when)
+    slots = table.upcoming(when, hours)
+    if not slots:
+        return None
+    covered_h = (max(s.end for s in slots) - when).total_seconds() / 3600
+    if covered_h < AUTO_MIN_COVERAGE_H:
+        return None
+
+    priced = sorted(((components.apply(s.price_ct), s) for s in slots), key=lambda item: item[0])
+    lowest, first = priced[0]
+    limit = lowest + max(0.0, tolerance_ct)
+
+    # Mindestfenster: von unten auffuellen, bis genug Minuten zusammen sind.
+    need = max(0.0, min_window_h) * 60
+    total = 0.0
+    for price, slot in priced:
+        total += _minutes_left(slot, when)
+        if total >= need:
+            limit = max(limit, price)
+            break
+    else:
+        # Weniger bekannte Zeit als verlangt: alles Bekannte zaehlt als Fenster.
+        limit = max(limit, priced[-1][0])
+
+    window_min = sum(_minutes_left(s, when) for price, s in priced if price <= limit + 1e-9)
+    return AutoLimit(limit, lowest, window_min / 60, first.start)
+
+
+def _minutes_left(slot: PriceSlot, when: datetime) -> float:
+    """Restdauer des Slots ab `when` (ein laufender Slot zaehlt nur anteilig)."""
+    return max(0.0, (slot.end - max(slot.start, when)).total_seconds() / 60)
+
+
 @dataclass(frozen=True)
 class PriceDecision:
     """Ergebnis der Preispruefung -- inklusive Begruendung im Klartext.

@@ -1118,7 +1118,7 @@ class ControlLoop:
                 house_current_a=house_power / (3 * VOLTAGE),
                 other_wallbox_current_a=other_wb_current,
                 house_limit_a=self.cfg.house_limit_a,
-                price_limit_ct=getattr(self.tariff, "cheap_limit_ct", None),
+                price_limit_ct=self._price_limit_ct(),
                 solar_recovery_expected=recovery,
                 forecast_surplus_kwh=forecast_surplus,
                 battery_handled_globally=True,
@@ -1657,6 +1657,15 @@ class ControlLoop:
         label = {"no_discharge": "Entladesperre", "hold": "Sperre"}.get(
             m.intent or "", "Laden" if m.mode == BatteryMode.FORCE_CHARGE else "Entladen")
         await log_event(f"Batterie: manuelle {label} beendet – {reason}", category="battery")
+
+    def _price_limit_ct(self) -> float | None:
+        """Die gerade gueltige Preisgrenze (automatisch oder fest)."""
+        if self.tariff is None:
+            return None
+        effective = getattr(self.tariff, "effective_limit_ct", None)
+        if callable(effective):
+            return effective()
+        return getattr(self.tariff, "cheap_limit_ct", None)
 
     async def _manual_battery_tick(self, battery: BatteryData | None) -> BatteryManual | None:
         m = self.battery_manual
@@ -2432,7 +2441,7 @@ class ControlLoop:
             "deadband_max_w": self.cfg.deadband_max_w,
             "adaptive_deadband": self.cfg.adaptive_deadband,
             "interval_s": self.cfg.interval_s,
-            "price_limit_ct": getattr(self.tariff, "cheap_limit_ct", None),
+            "price_limit_ct": self._price_limit_ct(),
             "weather": self.volatility.describe(),
             "devices": devices_payload,
         }

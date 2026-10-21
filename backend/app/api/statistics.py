@@ -159,7 +159,8 @@ async def tariff_prices(_: User = Depends(get_current_user)):
     if loop.tariff is None:
         return {"provider": "none", "prices": []}
     return {"provider": loop.tariff.provider, "current_ct": loop.tariff.current_price_ct(),
-            "cheap_limit_ct": loop.tariff.cheap_limit_ct, "prices": loop.tariff.upcoming()}
+            "cheap_limit_ct": loop.tariff.cheap_limit_ct, "prices": loop.tariff.upcoming(),
+            **_auto_fields(loop.tariff)}
 
 
 @router.get("/forecast")
@@ -169,3 +170,16 @@ async def forecast(_: User = Depends(get_current_user)):
     loop = runtime.get_loop()
     svc = getattr(loop, "forecast", None)
     return svc.summary() if svc else {"provider": "none"}
+
+
+def _auto_fields(tariff) -> dict:
+    """Wirksame Grenze und Stand der automatischen Grenze fuer die Oberflaeche."""
+    effective = getattr(tariff, "effective_limit_ct", None)
+    auto = tariff.auto_status() if hasattr(tariff, "auto_status") else None
+    return {
+        "effective_limit_ct": effective() if callable(effective) else tariff.cheap_limit_ct,
+        "auto_limit": bool(getattr(tariff, "auto_limit", False)),
+        "auto_active": auto is not None,
+        "auto_lowest_ct": round(auto.lowest_ct, 2) if auto else None,
+        "auto_window_h": round(auto.window_h, 2) if auto else None,
+    }

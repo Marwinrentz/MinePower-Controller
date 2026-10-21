@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 import aiohttp
 from sqlalchemy import select
 
-from ..core.pricing import PriceComponents, PriceSlot, PriceTable, evaluate_price
+from ..core.pricing import AutoLimit, PriceComponents, PriceSlot, PriceTable, auto_limit, evaluate_price
 from ..db import async_session
 from ..models import Setting
 
@@ -40,6 +40,10 @@ class TariffService:
         self.components = PriceComponents()
         self.table = PriceTable()
         self.charge_on_negative = True
+        #: Automatische Grenze: immer der tiefste Preis der naechsten 24 h.
+        self.auto_limit = False
+        self.auto_window_h = 2.0
+        self.auto_tolerance_ct = 0.0
         self._task: asyncio.Task | None = None
         #: Letzter Abruffehler (Klartext) und Zeitpunkt – für die Diagnose.
         self.last_error: str | None = None
@@ -99,6 +103,9 @@ class TariffService:
         )
         self.components = PriceComponents.from_dict(cfg)
         self.charge_on_negative = bool(cfg.get("charge_on_negative", True))
+        self.auto_limit = bool(cfg.get("auto_limit", False))
+        self.auto_window_h = _number(cfg.get("auto_limit_window_h"), 2.0, 0.0, 12.0)
+        self.auto_tolerance_ct = _number(cfg.get("auto_limit_tolerance_ct"), 0.0, 0.0, 20.0)
         self.config = cfg
 
     async def _refresh(self) -> None:
@@ -181,12 +188,33 @@ class TariffService:
         """Der reine Boersenpreis -- fuer die Anzeige und die Negativ-Regel."""
         return self.table.at(datetime.now(timezone.utc))
 
+    def auto_status(self) -> AutoLimit | None:
+        """Die automatische Grenze, falls eingeschaltet und berechenbar."""
+        if not self.auto_limit:
+            return None
+        return auto_limit(
+            self.table, datetime.now(timezone.utc), self.effective_components,
+            min_window_h=self.auto_window_h, tolerance_ct=self.auto_tolerance_ct,
+        )
+
+    def effective_limit_ct(self) -> float:
+        """Die Grenze, die gerade gilt: die automatische (tiefster Preis der
+        naechsten 24 h) oder die feste. Fehlen Preise fuer die Vorschau, gilt
+        die feste -- eine Automatik ohne Daten darf nicht raten."""
+        auto = self.auto_status()
+        return auto.limit_ct if auto else self.cheap_limit_ct
+
     def decide(self):
         """Volle Preisentscheidung mit Begruendung (siehe core/pricing.py)."""
-        return evaluate_price(
-            self.table, datetime.now(timezone.utc), self.cheap_limit_ct,
+        auto = self.auto_status()
+        limit = auto.limit_ct if auto else self.cheap_limit_ct
+        result = evaluate_price(
+            self.table, datetime.now(timezone.utc), limit,
             self.effective_components, charge_on_negative=self.charge_on_negative,
         )
+        if auto and not result.fell_back:
+            result = dataclasses.replace(result, reason=result.reason + " (automatisch: Tiefstpreis)")
+        return result
 
     def is_cheap_hour(self) -> bool:
         return self.decide().should_charge
@@ -197,9 +225,15 @@ class TariffService:
         Fall ist, muss man sehen können."""
         now = datetime.now(timezone.utc)
         covered = max((slot.end for slot in self.table.slots), default=None)
+        auto = self.auto_status()
         return {
             "provider": self.provider,
-            "limit_ct": self.cheap_limit_ct,
+            "limit_ct": self.effective_limit_ct(),
+            "fixed_limit_ct": self.cheap_limit_ct,
+            "auto_limit": self.auto_limit,
+            "auto_active": auto is not None,
+            "auto_lowest_ct": round(auto.lowest_ct, 2) if auto else None,
+            "auto_window_h": round(auto.window_h, 2) if auto else None,
             "price_now_ct": self.current_price_ct(),
             "spot_now_ct": self.spot_price_ct(),
             "fetched_at": self.table.fetched_at.isoformat() if self.table.fetched_at else None,
@@ -224,3 +258,12 @@ class TariffService:
             }
             for slot in self.table.upcoming(now, hours=36)
         ]
+
+
+def _number(value, default: float, low: float, high: float) -> float:
+    """Zahl aus den Einstellungen, auf [low, high] begrenzt; Muell -> Standard."""
+    try:
+        number = float(value if value not in (None, "") else default)
+    except (TypeError, ValueError):
+        return default
+    return min(high, max(low, number))

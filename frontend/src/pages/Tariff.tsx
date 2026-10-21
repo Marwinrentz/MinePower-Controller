@@ -22,7 +22,11 @@ import { useDevices } from "../lib/useDevices";
 import { useLive } from "../store/live";
 import { useSection, useSettings } from "../store/settings";
 
-type TariffInfo = { provider: string; current_ct: number | null; cheap_limit_ct: number; prices: PriceSlot[] };
+type TariffInfo = {
+  provider: string; current_ct: number | null; cheap_limit_ct: number; prices: PriceSlot[];
+  effective_limit_ct?: number; auto_limit?: boolean; auto_active?: boolean;
+  auto_lowest_ct?: number | null; auto_window_h?: number | null;
+};
 
 function nextWindow(prices: PriceSlot[], limit: number) {
   const end = (p: PriceSlot) => new Date(new Date(p.start).getTime() + p.minutes * 60000);
@@ -58,7 +62,12 @@ export function Tariff() {
   }, []);
 
   const provider = tariff.str("provider", "none");
-  const limit = tariff.num("grid_charge_limit_ct", tariff.num("cheap_limit_ct", 15));
+  const fixedLimit = tariff.num("grid_charge_limit_ct", tariff.num("cheap_limit_ct", 15));
+  // Automatik an: die vom Server berechnete Grenze (tiefster Preis der nächsten 24 h)
+  // gilt; ungespeicherte Änderungen am Schalter zeigt erst die nächste Abfrage.
+  const autoOn = tariff.bool("auto_limit", false);
+  const autoShown = autoOn && info?.auto_limit === true && info.auto_active === true;
+  const limit = autoShown ? (info?.effective_limit_ct ?? fixedLimit) : fixedLimit;
   const prices = info?.prices ?? [];
   const now = snapshot?.price_ct ?? info?.current_ct ?? null;
   const cheapNow = now != null && now <= limit;
@@ -151,10 +160,31 @@ export function Tariff() {
           </>
         )}
 
+        <ToggleRow label={t("tariff.autoLimit")} help={t("tariff.autoLimitHelp")}
+                   on={autoOn} onChange={(v) => tariff.set("auto_limit", v)} />
+        {autoOn && (
+          <>
+            <p className="field-help strong">
+              {autoShown
+                ? t("tariff.autoActive", { lowest: fmtCt(info?.auto_lowest_ct ?? limit), hours: String(Math.round((info?.auto_window_h ?? 0) * 10) / 10) })
+                : t("tariff.autoInactive")}
+            </p>
+            <div className="form-grid">
+              <Field label={t("tariff.autoWindow")} help={t("tariff.autoWindowHelp")}>
+                <NumberInput value={tariff.num("auto_limit_window_h", 2)} min={0} max={12} step={0.5} unit="h"
+                             onChange={(v) => tariff.set("auto_limit_window_h", v ?? 0)} />
+              </Field>
+              <Field label={t("tariff.autoTolerance")} help={t("tariff.autoToleranceHelp")}>
+                <NumberInput value={tariff.num("auto_limit_tolerance_ct", 0)} min={0} max={20} step={0.1} unit="ct"
+                             onChange={(v) => tariff.set("auto_limit_tolerance_ct", v ?? 0)} />
+              </Field>
+            </div>
+          </>
+        )}
         <Slider
-          label={t("tariff.threshold")}
-          help={t("tariff.thresholdHelp")}
-          value={limit} min={0} max={50} step={0.5} tone="pv"
+          label={autoOn ? t("tariff.fixedThreshold") : t("tariff.threshold")}
+          help={autoOn ? t("tariff.fixedThresholdHelp") : t("tariff.thresholdHelp")}
+          value={fixedLimit} min={0} max={50} step={0.5} tone="pv"
           format={(v) => fmtCt(v)}
           onChange={(v) => tariff.set("grid_charge_limit_ct", v)}
           marks={[{ value: 0, label: "0" }, { value: 25, label: "25" }, { value: 50, label: "50 ct" }]}
