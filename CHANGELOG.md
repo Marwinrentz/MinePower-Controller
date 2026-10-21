@@ -15,6 +15,9 @@ und nach einem Update als Hinweisfenster.
 ### Geändert
 - Fehlen Preise für die nächsten 6 Stunden, gilt weiter die feste Grenze
 
+### Behoben
+- KI-Zugangsschlüssel (MCP) gingen verloren, wenn die Datenbank aus der automatischen Sicherung wiederhergestellt wurde; die Sicherung enthält jetzt ihre Prüfsummen (nie den Schlüssel selbst)
+
 ## 3.1.1 (2026-10-15)
 
 ### Behoben

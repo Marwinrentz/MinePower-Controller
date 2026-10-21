@@ -160,3 +160,45 @@ async def test_status_reports_latest_after_backup(tmp_path, monkeypatch):
     info = backup.status()
     assert info["count"] == 1
     assert info["latest"] is not None
+
+
+async def test_api_tokens_survive_restore(tmp_path, monkeypatch):
+    """Eingetragene KI-Schlüssel (MCP) müssen nach einer Wiederherstellung
+    weiter gelten -- sonst ist nach jedem Neuaufbau der Datenbank jede
+    Anwendung ausgesperrt und der Schlüssel (nur einmal sichtbar) verloren."""
+    from app.api.mcp import hash_token
+    from app.models import ApiToken
+
+    await _clear_schema()
+    monkeypatch.setattr(get_settings(), "backup_dir", str(tmp_path))
+    await _seed()
+    token = "mp_demo_geheimer_schluessel"
+    async with async_session() as session:
+        user = await session.scalar(select(User))
+        session.add(ApiToken(user_id=user.id, name="Grok", token_hash=hash_token(token), prefix=token[:7],
+                             role="user"))
+        await session.commit()
+
+    path = await backup.run_once()
+    assert token not in path.read_text(), "der Schlüssel selbst darf nie in der Sicherung stehen"
+
+    await _clear_schema()
+    await backup.restore(path)
+
+    async with async_session() as session:
+        row = await session.scalar(select(ApiToken).where(ApiToken.token_hash == hash_token(token)))
+        assert row is not None
+        assert (row.name, row.role, row.prefix) == ("Grok", "user", token[:7])
+        assert (await session.get(User, row.user_id)).email == "a@b.de"
+
+
+async def test_restore_of_old_backup_without_tokens(tmp_path, monkeypatch):
+    import json
+
+    await _clear_schema()
+    path = tmp_path / "minepower-20260101-000000.json"
+    path.write_text(json.dumps({"version": 1, "devices": [], "settings": {}, "users": [
+        {"email": "x@y.de", "name": "X", "password_hash": "h", "role": "admin"}]}))
+    await backup.restore(path)
+    async with async_session() as session:
+        assert (await session.scalar(select(User))).email == "x@y.de"

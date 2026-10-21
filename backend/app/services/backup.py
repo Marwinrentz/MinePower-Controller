@@ -35,7 +35,7 @@ from sqlalchemy import select
 
 from ..config import get_settings
 from ..db import async_session
-from ..models import Device, Schedule, Setting, User, Vehicle
+from ..models import ApiToken, Device, Schedule, Setting, User, Vehicle
 
 log = logging.getLogger(__name__)
 
@@ -57,6 +57,8 @@ async def _snapshot() -> dict[str, Any]:
         vehicles = (await session.scalars(select(Vehicle))).all()
         schedules = (await session.scalars(select(Schedule))).all()
         users = (await session.scalars(select(User))).all()
+        tokens = (await session.execute(
+            select(ApiToken, User.email).join(User, User.id == ApiToken.user_id))).all()
         return {
             "version": BACKUP_VERSION,
             "created_at": datetime.now(timezone.utc).isoformat(),
@@ -84,6 +86,15 @@ async def _snapshot() -> dict[str, Any]:
                 {"email": u.email, "name": u.name, "password_hash": u.password_hash,
                  "role": u.role, "rfid_tag": u.rfid_tag, "language": u.language, "disabled": u.disabled}
                 for u in users
+            ],
+            # KI-Zugangsschlüssel (MCP): nur die Hash-Werte, nie der Schlüssel
+            # selbst. Ohne sie wären nach einer Wiederherstellung alle
+            # eingetragenen Schlüssel ungültig und müssten überall neu
+            # angelegt werden. Nicht im manuellen Export, wie bei den Konten.
+            "api_tokens": [
+                {"user_email": email, "name": t.name, "token_hash": t.token_hash, "prefix": t.prefix,
+                 "role": t.role, "created_at": t.created_at, "last_used_at": t.last_used_at}
+                for t, email in tokens
             ],
         }
 
@@ -148,6 +159,16 @@ def status() -> dict[str, Any]:
     }
 
 
+def _parse_time(value) -> datetime | None:
+    """Zeitstempel aus der JSON-Sicherung (ISO-Text) zurück in ein datetime."""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+
+
 async def restore(path: Path) -> int:
     """Sicherung einspielen. Setzt eine leere Datenbank voraus (siehe
     `startup.maybe_restore_from_backup`) – es wird nichts gelöscht, nur
@@ -192,6 +213,19 @@ async def restore(path: Path) -> int:
                              password_hash=u["password_hash"], role=u.get("role", "user"),
                              rfid_tag=u.get("rfid_tag"), language=u.get("language", "de"),
                              disabled=u.get("disabled", False)))
+        await session.flush()
+
+        # Schlüssel dem Konto über die E-Mail zuordnen (IDs werden neu vergeben).
+        user_ids = {email: uid for uid, email in (await session.execute(select(User.id, User.email))).all()}
+        for tok in data.get("api_tokens", []):
+            user_id = user_ids.get(tok.get("user_email"))
+            if user_id is None or not tok.get("token_hash"):
+                continue
+            session.add(ApiToken(
+                user_id=user_id, name=tok.get("name", "KI"), token_hash=tok["token_hash"],
+                prefix=tok.get("prefix", ""), role=tok.get("role", "readonly"),
+                created_at=_parse_time(tok.get("created_at")), last_used_at=_parse_time(tok.get("last_used_at")),
+            ))
 
         await session.commit()
         return len(data.get("devices", []))
