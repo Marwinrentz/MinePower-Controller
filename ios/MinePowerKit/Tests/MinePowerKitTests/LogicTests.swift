@@ -266,3 +266,56 @@ struct McpClientTests {
         #expect(!(try #require(clients.first { $0.id == "codex" })).code.contains("--allow-http"))
     }
 }
+
+
+@Suite("Automatische Preisgrenze")
+struct AutoPriceLimitTests {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    func slots(_ prices: [Double], minutes: Int = 60) -> [PriceSlot] {
+        prices.enumerated().map { index, price in
+            PriceSlot(start: now.addingTimeInterval(Double(index * minutes * 60)), minutes: minutes, spotCt: price, priceCt: price)
+        }
+    }
+
+    static let day: [Double] = [20, 19, 18, 12, 9, 8, 9, 14, 22, 25, 24, 23, 21, 20, 19, 18, 21, 28, 30, 27, 24, 22, 21, 20]
+
+    @Test func lowestPriceWithoutWindow() throws {
+        let result = try #require(AutoPriceLimit.compute(slots(Self.day), at: now, windowH: 0))
+        #expect(result.limitCt == 8)
+        #expect(result.windowH == 1)
+    }
+
+    @Test func windowRaisesLimitUntilLongEnough() throws {
+        let result = try #require(AutoPriceLimit.compute(slots(Self.day), at: now, windowH: 3))
+        #expect(result.limitCt == 9)
+        #expect(result.windowH == 3)
+    }
+
+    @Test func toleranceWidensWindow() throws {
+        let result = try #require(AutoPriceLimit.compute(slots(Self.day), at: now, windowH: 0, toleranceCt: 1))
+        #expect(result.limitCt == 9)
+    }
+
+    @Test func sameShapeAtAnyPriceLevel() throws {
+        let cheap = try #require(AutoPriceLimit.compute(slots(Self.day.map { $0 / 10 }), at: now, windowH: 0))
+        let dear = try #require(AutoPriceLimit.compute(slots(Self.day.map { $0 * 10 }), at: now, windowH: 0))
+        #expect(abs(cheap.limitCt - 0.8) < 1e-9)
+        #expect(abs(dear.limitCt - 80) < 1e-9)
+    }
+
+    @Test func tooLittlePreviewReturnsNil() {
+        #expect(AutoPriceLimit.compute(slots([5, 6, 7, 8, 9]), at: now) == nil)
+        #expect(AutoPriceLimit.compute([], at: now) == nil)
+    }
+
+    @Test func quarterHoursCountByDuration() throws {
+        let result = try #require(AutoPriceLimit.compute(slots(Array(repeating: [9.0, 5, 5, 20], count: 12).flatMap { $0 }, minutes: 15), at: now, windowH: 1))
+        #expect(result.limitCt == 5)
+    }
+
+    @Test func olderServerDecodesWithFixedLimit() throws {
+        let info = try JSONDecoder.minePower().decode(TariffInfo.self, from: Data(#"{"provider":"awattar","cheap_limit_ct":15,"prices":[]}"#.utf8))
+        #expect(!info.autoLimit && !info.autoActive && info.effectiveLimitCt == nil)
+    }
+}

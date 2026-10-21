@@ -455,3 +455,20 @@ extension DemoBacked {
         }
     }
 }
+
+extension DemoBacked {
+    @Suite("Automatische Grenze in der Demo")
+    struct AutoLimitDemoTests {
+        @Test func demoFollowsTheSetting() async throws {
+            DemoBackend.shared.reset()
+            let api = APIClient(session: .demo(), baseURL: DemoBackend.baseURL, token: DemoBackend.token)
+            #expect(try await api.tariff().autoActive == false)
+            try await api.saveSettings(["tariff": .object(["auto_limit": true, "auto_limit_window_h": 0])])
+            let info = try await api.tariff()
+            #expect(info.autoLimit && info.autoActive)
+            #expect(info.effectiveLimitCt == info.autoLowestCt)
+            #expect(info.prices.map(\.priceCt).min() == info.autoLowestCt)
+            DemoBackend.shared.reset()
+        }
+    }
+}

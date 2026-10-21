@@ -17,7 +17,10 @@ struct TariffView: View {
         let tariff = editor.section("tariff")
         let regulation = editor.section("regulation")
         let provider = tariff.string("provider", "none")
-        let limit = tariff.number("grid_charge_limit_ct", tariff.number("cheap_limit_ct", 15))
+        let fixedLimit = tariff.number("grid_charge_limit_ct", tariff.number("cheap_limit_ct", 15))
+        // Automatik an: die vom Server berechnete Grenze (Tiefstpreis der nächsten 24 h).
+        let autoShown = tariff.bool("auto_limit", false) && info?.autoLimit == true && info?.autoActive == true
+        let limit = autoShown ? (info?.effectiveLimitCt ?? fixedLimit) : fixedLimit
         let prices = info?.prices ?? []
         let now = session.live.snapshot?.priceCt ?? info?.currentCt
         Page(refresh: { await loadPrices(); await editor.load(force: true) }) {
@@ -31,7 +34,7 @@ struct TariffView: View {
                 }
             }
             if session.canConfigure {
-                settingsCard(tariff: tariff, provider: provider, limit: limit)
+                settingsCard(tariff: tariff, provider: provider, limit: fixedLimit, autoShown: autoShown)
             }
             usersCard(regulation: regulation)
         }
@@ -112,7 +115,7 @@ struct TariffView: View {
 
     // MARK: Einstellungen
 
-    private func settingsCard(tariff: SettingsDraft, provider: String, limit: Double) -> some View {
+    private func settingsCard(tariff: SettingsDraft, provider: String, limit: Double, autoShown: Bool) -> some View {
         let fmt = Fmt()
         let surcharge = tariff.number("grid_fees_ct", 0) + tariff.number("levies_ct", 0) + tariff.number("supplier_margin_ct", 0)
         let vat = tariff.number("vat_pct", 0)
@@ -158,10 +161,34 @@ struct TariffView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Web.surface2, in: .rect(cornerRadius: Radius.medium, style: .continuous))
                 }
-                StepSlider(label: "Günstig, wenn unter",
+                let auto = tariff.bool("auto_limit", false)
+                ToggleRow(label: "Automatische Grenze",
+                          help: String(localized: "Die Grenze liegt immer auf dem tiefsten Preis der nächsten 24 Stunden. Geladen wird genau in diesem günstigsten Zeitraum, egal wie hoch die Preise insgesamt sind."),
+                          isOn: Binding(get: { auto }, set: { value in editor.update("tariff") { $0.set("auto_limit", value) } }))
+                if auto {
+                    Text(autoShown
+                         ? String(localized: "Automatisch: tiefster Preis \(fmt.cents(info?.autoLowestCt)), günstig \(fmt.number(info?.autoWindowH ?? 0, digits: 1)) h")
+                         : String(localized: "Automatik wartet auf Preise. Bis dahin gilt die feste Grenze."))
+                        .font(Typo.subheadlineMedium).foregroundStyle(Web.textStrong)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 200), spacing: Space.l, alignment: .top)], spacing: Space.l) {
+                        Field(label: "Mindestens günstig für",
+                              help: String(localized: "Das Fenster unter der Grenze dauert mindestens so lange. 0 = nur der absolut tiefste Preis.")) {
+                            NumberField(value: Binding(get: { tariff.number("auto_limit_window_h", 2) },
+                                                       set: { value in editor.update("tariff") { $0.set("auto_limit_window_h", value) } }),
+                                        range: 0...12, unit: "h", digits: 1)
+                        }
+                        Field(label: "Toleranz", help: String(localized: "Preise bis so viel über dem Tiefstpreis zählen mit.")) {
+                            NumberField(value: Binding(get: { tariff.number("auto_limit_tolerance_ct", 0) },
+                                                       set: { value in editor.update("tariff") { $0.set("auto_limit_tolerance_ct", value) } }),
+                                        range: 0...20, unit: "ct", digits: 1)
+                        }
+                    }
+                }
+                StepSlider(label: auto ? "Feste Grenze (Rückfall)" : "Günstig, wenn unter",
                            value: Binding(get: { limit }, set: { value in editor.update("tariff") { $0.set("grid_charge_limit_ct", value) } }),
                            range: 0...50, step: 0.5, tone: Palette.pv.fill, format: { fmt.cents($0) },
-                           help: String(localized: "Darunter: Netzladen für 'Sonne + günstig' und Batterie (falls aktiviert)")) { _ in }
+                           help: auto ? String(localized: "Gilt, wenn die Automatik aus ist oder keine Preise für die nächsten Stunden vorliegen.")
+                                      : String(localized: "Darunter: Netzladen für 'Sonne + günstig' und Batterie (falls aktiviert)")) { _ in }
                 ToggleRow(label: "Bei negativem Preis immer laden", help: String(localized: "Unter 0 ct: Netzladen auch über der Grenze"),
                           isOn: Binding(get: { tariff.bool("charge_on_negative", true) },
                                         set: { value in editor.update("tariff") { $0.set("charge_on_negative", value) } }))

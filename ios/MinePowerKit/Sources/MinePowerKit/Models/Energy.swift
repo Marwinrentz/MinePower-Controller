@@ -111,18 +111,37 @@ public struct TariffInfo: Codable, Sendable, Hashable {
     public var currentCt: Double?
     public var cheapLimitCt: Double?
     public var prices: [PriceSlot]
+    /// Gerade gültige Grenze (bei eingeschalteter Automatik der Tiefstpreis der nächsten 24 h).
+    public var effectiveLimitCt: Double?
+    public var autoLimit: Bool
+    /// Automatik an und berechenbar (genug Preise); sonst gilt die feste Grenze.
+    public var autoActive: Bool
+    public var autoLowestCt: Double?
+    public var autoWindowH: Double?
 
     enum CodingKeys: String, CodingKey {
         case provider, prices
         case currentCt = "current_ct"
         case cheapLimitCt = "cheap_limit_ct"
+        case effectiveLimitCt = "effective_limit_ct"
+        case autoLimit = "auto_limit"
+        case autoActive = "auto_active"
+        case autoLowestCt = "auto_lowest_ct"
+        case autoWindowH = "auto_window_h"
     }
 
-    public init(provider: String, currentCt: Double? = nil, cheapLimitCt: Double? = nil, prices: [PriceSlot] = []) {
+    public init(provider: String, currentCt: Double? = nil, cheapLimitCt: Double? = nil, prices: [PriceSlot] = [],
+                effectiveLimitCt: Double? = nil, autoLimit: Bool = false, autoActive: Bool = false,
+                autoLowestCt: Double? = nil, autoWindowH: Double? = nil) {
         self.provider = provider
         self.currentCt = currentCt
         self.cheapLimitCt = cheapLimitCt
         self.prices = prices
+        self.effectiveLimitCt = effectiveLimitCt
+        self.autoLimit = autoLimit
+        self.autoActive = autoActive
+        self.autoLowestCt = autoLowestCt
+        self.autoWindowH = autoWindowH
     }
 
     public init(from decoder: any Decoder) throws {
@@ -131,6 +150,49 @@ public struct TariffInfo: Codable, Sendable, Hashable {
         currentCt = try c.decodeIfPresent(Double.self, forKey: .currentCt)
         cheapLimitCt = try c.decodeIfPresent(Double.self, forKey: .cheapLimitCt)
         prices = try c.decodeIfPresent([PriceSlot].self, forKey: .prices) ?? []
+        // Ältere Server kennen die Automatik nicht: dann gilt die feste Grenze.
+        effectiveLimitCt = try c.decodeIfPresent(Double.self, forKey: .effectiveLimitCt)
+        autoLimit = try c.decodeIfPresent(Bool.self, forKey: .autoLimit) ?? false
+        autoActive = try c.decodeIfPresent(Bool.self, forKey: .autoActive) ?? false
+        autoLowestCt = try c.decodeIfPresent(Double.self, forKey: .autoLowestCt)
+        autoWindowH = try c.decodeIfPresent(Double.self, forKey: .autoWindowH)
+    }
+}
+
+/// Automatische Preisgrenze (Spiegel von `auto_limit` im Backend, `core/pricing.py`):
+/// der tiefste Endpreis der nächsten 24 Stunden, auf Wunsch mit Toleranz und
+/// Mindestdauer des günstigen Fensters. `nil` ohne Preise oder bei weniger als
+/// sechs Stunden Vorschau – dann gilt die feste Grenze.
+public enum AutoPriceLimit {
+    public struct Result: Sendable, Equatable {
+        public var limitCt: Double
+        public var lowestCt: Double
+        public var windowH: Double
+    }
+
+    public static let minimumCoverageH = 6.0
+
+    public static func compute(_ slots: [PriceSlot], at now: Date = .now, windowH: Double = 2, toleranceCt: Double = 0) -> Result? {
+        let upcoming = slots.filter { $0.end > now && $0.start < now.addingTimeInterval(24 * 3600) }
+        guard let last = upcoming.map(\.end).max(),
+              last.timeIntervalSince(now) / 3600 >= minimumCoverageH else { return nil }
+        func minutes(_ slot: PriceSlot) -> Double { max(0, slot.end.timeIntervalSince(max(slot.start, now)) / 60) }
+        let sorted = upcoming.sorted { $0.priceCt < $1.priceCt }
+        let lowest = sorted[0].priceCt
+        var limit = lowest + max(0, toleranceCt)
+        var total = 0.0
+        var reached = false
+        for slot in sorted {
+            total += minutes(slot)
+            if total >= max(0, windowH) * 60 {
+                limit = max(limit, slot.priceCt)
+                reached = true
+                break
+            }
+        }
+        if !reached { limit = max(limit, sorted[sorted.count - 1].priceCt) }
+        let window = sorted.filter { $0.priceCt <= limit + 1e-9 }.reduce(0) { $0 + minutes($1) } / 60
+        return Result(limitCt: limit, lowestCt: lowest, windowH: window)
     }
 }
 

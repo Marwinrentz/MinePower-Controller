@@ -569,7 +569,14 @@ public final class DemoBackend: Sendable {
             return PriceSlot(start: time, minutes: 60, spotCt: spot.rounded(toPlaces: 2),
                              priceCt: (spot * 1.19 + 14.2).rounded(toPlaces: 2))
         }
-        return TariffInfo(provider: "awattar", currentCt: slots.first?.priceCt, cheapLimitCt: 22, prices: slots)
+        let settings = state.current.settings["tariff"]?.object ?? [:]
+        let auto = settings.bool("auto_limit") == true
+            ? AutoPriceLimit.compute(slots, at: now, windowH: settings.double("auto_limit_window_h") ?? 2,
+                                     toleranceCt: settings.double("auto_limit_tolerance_ct") ?? 0)
+            : nil
+        return TariffInfo(provider: "awattar", currentCt: slots.first?.priceCt, cheapLimitCt: 22, prices: slots,
+                          effectiveLimitCt: auto?.limitCt ?? 22, autoLimit: settings.bool("auto_limit") == true,
+                          autoActive: auto != nil, autoLowestCt: auto?.lowestCt, autoWindowH: auto?.windowH)
     }
 
     private func events(now: Date = .now) -> [AppEvent] {
