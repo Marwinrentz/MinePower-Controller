@@ -52,14 +52,18 @@ export function Tariff() {
   const { devices, saveSettings } = useDevices();
   const [info, setInfo] = useState<TariffInfo | null>(null);
 
+  const waitingForAuto = tariff.bool("auto_limit", false) && info?.auto_active !== true;
+
   useEffect(() => { if (!loaded) void load(); }, [loaded, load]);
   useEffect(() => {
     let alive = true;
     const fetchPrices = () => get<TariffInfo>("/api/statistics/tariff").then((r) => alive && setInfo(r)).catch(() => {});
     fetchPrices();
-    const timer = window.setInterval(fetchPrices, 300000);
+    // Solange die Automatik eingeschaltet, aber noch nicht wirksam ist (gerade
+    // gespeichert), öfter nachfragen; sonst genügt alle 5 Minuten.
+    const timer = window.setInterval(fetchPrices, waitingForAuto ? 10000 : 300000);
     return () => { alive = false; window.clearInterval(timer); };
-  }, []);
+  }, [waitingForAuto]);
 
   const provider = tariff.str("provider", "none");
   const fixedLimit = tariff.num("grid_charge_limit_ct", tariff.num("cheap_limit_ct", 15));
@@ -167,6 +171,7 @@ export function Tariff() {
             <p className="field-help strong">
               {autoShown
                 ? t("tariff.autoActive", { lowest: fmtCt(info?.auto_lowest_ct ?? limit), hours: String(Math.round((info?.auto_window_h ?? 0) * 10) / 10) })
+                : info?.auto_limit !== true ? t("tariff.autoUnsaved")
                 : t("tariff.autoInactive")}
             </p>
             <div className="form-grid">

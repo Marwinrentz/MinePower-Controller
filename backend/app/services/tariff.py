@@ -45,6 +45,8 @@ class TariffService:
         self.auto_window_h = 2.0
         self.auto_tolerance_ct = 0.0
         self._task: asyncio.Task | None = None
+        #: Weckruf nach geaenderten Einstellungen (siehe request_reload).
+        self._wake = asyncio.Event()
         #: Letzter Abruffehler (Klartext) und Zeitpunkt – für die Diagnose.
         self.last_error: str | None = None
         self.last_attempt: datetime | None = None
@@ -66,18 +68,37 @@ class TariffService:
             except asyncio.CancelledError:
                 pass
 
+    def request_reload(self) -> None:
+        """Einstellungen sofort neu lesen (nach "Speichern"), nicht erst beim
+        naechsten Takt in bis zu 30 Minuten. Preise werden dabei nur neu
+        geholt, wenn sich Anbieter, Zugang oder Region geaendert haben."""
+        self._wake.set()
+
+    def _source_key(self) -> tuple:
+        return (self.provider, self.config.get("tibber_token"), self.config.get("awattar_region"))
+
     async def _run(self) -> None:
         failures = 0
+        woken = False
+        last_key: tuple | None = None
         while True:
+            self._wake.clear()
             try:
                 await self._load_config()
-                if self.provider != "none":
-                    self.last_attempt = datetime.now(timezone.utc)
-                    await self._refresh()
-                    if self.table.at(datetime.now(timezone.utc)) is None:
-                        raise RuntimeError("Anbieter lieferte keinen Preis für die aktuelle Stunde")
-                self.last_error = None
-                failures = 0
+                key = self._source_key()
+                source_changed = key != last_key
+                last_key = key
+                # Nach einem Weckruf nur dann ins Netz, wenn die Quelle neu ist
+                # oder noch keine Preise vorliegen -- sonst genuegt das Neulesen.
+                reread_only = woken and not source_changed and not self.table.is_empty
+                if not reread_only:
+                    if self.provider != "none":
+                        self.last_attempt = datetime.now(timezone.utc)
+                        await self._refresh()
+                        if self.table.at(datetime.now(timezone.utc)) is None:
+                            raise RuntimeError("Anbieter lieferte keinen Preis für die aktuelle Stunde")
+                    self.last_error = None
+                    failures = 0
             except Exception as exc:  # noqa: BLE001
                 failures += 1
                 self.last_error = f"{type(exc).__name__}: {exc}"
@@ -89,7 +110,11 @@ class TariffService:
             # vorher wartete ein einziger Aussetzer beim Start 30 Minuten,
             # in denen ohne Preis auch nicht preisoptimiert geladen wurde.
             delay = 1800 if failures == 0 else min(1800, 60 * 2 ** min(failures - 1, 5))
-            await asyncio.sleep(delay)
+            try:
+                await asyncio.wait_for(self._wake.wait(), timeout=delay)
+                woken = True
+            except asyncio.TimeoutError:
+                woken = False
 
     async def _load_config(self) -> None:
         async with async_session() as session:

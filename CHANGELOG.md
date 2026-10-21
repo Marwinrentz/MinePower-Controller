@@ -16,6 +16,7 @@ und nach einem Update als Hinweisfenster.
 - Fehlen Preise für die nächsten 6 Stunden, gilt weiter die feste Grenze
 
 ### Behoben
+- Tarif-Einstellungen (Anbieter, Grenze, Automatik) wirkten erst nach bis zu 30 Minuten; jetzt sofort nach dem Speichern
 - KI-Zugangsschlüssel (MCP) gingen verloren, wenn die Datenbank aus der automatischen Sicherung wiederhergestellt wurde; die Sicherung enthält jetzt ihre Prüfsummen (nie den Schlüssel selbst)
 
 ## 3.1.1 (2026-10-15)

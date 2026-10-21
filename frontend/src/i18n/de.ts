@@ -805,6 +805,7 @@ export const de = {
     autoLimit: "Automatische Grenze",
     autoLimitHelp: "Die Grenze liegt immer auf dem tiefsten Preis der nächsten 24 Stunden. Geladen wird genau in diesem günstigsten Zeitraum, egal wie hoch die Preise insgesamt sind.",
     autoActive: "Automatisch: tiefster Preis {lowest}, günstig {hours} h",
+    autoUnsaved: "Wird nach dem Speichern berechnet.",
     autoInactive: "Automatik wartet auf Preise. Bis dahin gilt die feste Grenze.",
     autoWindow: "Mindestens günstig für",
     autoWindowHelp: "Das Fenster unter der Grenze dauert mindestens so lange. 0 = nur der absolut tiefste Preis.",

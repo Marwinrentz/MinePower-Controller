@@ -407,6 +407,7 @@ export const en: DeepPartial<Dict> = {
     autoLimit: "Automatic limit",
     autoLimitHelp: "The limit always sits at the lowest price of the next 24 hours. Charging happens in exactly that cheapest period, however high prices are overall.",
     autoActive: "Automatic: lowest price {lowest}, cheap for {hours} h",
+    autoUnsaved: "Calculated after saving.",
     autoInactive: "Automatic mode is waiting for prices. Until then the fixed limit applies.",
     autoWindow: "Cheap for at least",
     autoWindowHelp: "The period below the limit lasts at least this long. 0 = only the absolute lowest price.",

@@ -6291,6 +6291,16 @@
         }
       }
     },
+    "Wird nach dem Speichern berechnet." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calculated after saving."
+          }
+        }
+      }
+    },
     "Wird übernommen" : {
       "localizations" : {
         "en" : {

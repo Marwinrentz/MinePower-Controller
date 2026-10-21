@@ -147,3 +147,41 @@ class TestTariffService:
     def test_window_setting_is_clamped(self, raw, expected):
         from app.services.tariff import _number
         assert _number(raw, 2.0, 0.0, 12.0) == expected
+
+
+class TestReloadAfterSave:
+    async def test_saving_applies_without_waiting_for_the_next_cycle(self, monkeypatch):
+        """Nach dem Speichern der Tarif-Einstellungen gilt die Automatik sofort,
+        nicht erst nach bis zu 30 Minuten."""
+        import asyncio
+
+        svc = TariffService()
+        loads, refreshes = [], []
+
+        async def fake_load():
+            loads.append(1)
+            svc.provider = "awattar"
+            svc.auto_limit = len(loads) > 1  # beim zweiten Lesen eingeschaltet
+            svc.config = {"awattar_region": "de"}
+
+        async def fake_refresh():
+            refreshes.append(1)
+            now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+            svc.table = PriceTable([PriceSlot(now + timedelta(hours=i), p, 60) for i, p in enumerate([20, 5] + [25] * 12)])
+
+        monkeypatch.setattr(svc, "_load_config", fake_load)
+        monkeypatch.setattr(svc, "_refresh", fake_refresh)
+        svc.start()
+        for _ in range(100):
+            if svc.table.slots:
+                break
+            await asyncio.sleep(0.01)
+        assert not svc.auto_limit
+        svc.request_reload()
+        for _ in range(100):
+            if svc.auto_limit:
+                break
+            await asyncio.sleep(0.01)
+        await svc.stop()
+        assert svc.auto_limit, "Einstellung wurde nicht sofort neu gelesen"
+        assert len(refreshes) == 1, "gleiche Quelle: keine neuen Preise aus dem Netz holen"

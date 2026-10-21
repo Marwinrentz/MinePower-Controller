@@ -47,7 +47,9 @@ struct TariffView: View {
             await store?.devices.load(maxAge: 30)
             while !Task.isCancelled {
                 await loadPrices()
-                try? await Task.sleep(for: .seconds(300))
+                // Automatik an, aber noch nicht wirksam (gerade gespeichert): öfter nachfragen.
+                let waiting = editor.section("tariff").bool("auto_limit", false) && info?.autoActive != true
+                try? await Task.sleep(for: .seconds(waiting ? 10 : 300))
             }
         }
     }
@@ -168,6 +170,7 @@ struct TariffView: View {
                 if auto {
                     Text(autoShown
                          ? String(localized: "Automatisch: tiefster Preis \(fmt.cents(info?.autoLowestCt)), günstig \(fmt.number(info?.autoWindowH ?? 0, digits: 1)) h")
+                         : info?.autoLimit != true ? String(localized: "Wird nach dem Speichern berechnet.")
                          : String(localized: "Automatik wartet auf Preise. Bis dahin gilt die feste Grenze."))
                         .font(Typo.subheadlineMedium).foregroundStyle(Web.textStrong)
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 200), spacing: Space.l, alignment: .top)], spacing: Space.l) {

@@ -556,6 +556,11 @@ class ControlLoop:
             schedules = (await session.scalars(select(Schedule))).all()
             settings_rows = (await session.scalars(select(Setting))).all()
 
+        # Der Tarif-Dienst liest seine Einstellungen sonst nur alle 30 min.
+        reload_tariff = getattr(self.tariff, "request_reload", None)
+        if callable(reload_tariff):
+            reload_tariff()
+
         settings = {s.key: s.value for s in settings_rows}
         reg = settings.get("regulation", {})
         self.cfg = config_from_settings(reg, self.cfg.interval_s)
