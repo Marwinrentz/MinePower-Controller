@@ -3,7 +3,8 @@
 # Multi-Arch (amd64/arm64): docker buildx build --platform linux/amd64,linux/arm64 .
 
 # --- Stage 1: Frontend bauen ---
-FROM node:20-alpine AS frontend
+# Node 22 (LTS): Node 20 erhält seit April 2026 keine Sicherheitsupdates mehr.
+FROM node:22-alpine AS frontend
 WORKDIR /fe
 # Lockfile mitkopieren: `npm ci` installiert exakt die geprüften Versionen,
 # statt bei jedem Build neu aufzulösen. Reproduzierbar und schneller.
@@ -30,15 +31,30 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+# Exakt gepinnte Versionen (requirements.txt, erzeugt aus requirements.in)
 COPY backend/requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install --no-compile -r requirements.txt
 
 COPY backend/ .
 COPY VERSION CHANGELOG.md LICENSE NOTICE ./
 COPY --from=frontend /fe/dist /app/static
-# Datenverzeichnis (Schlüssel für Zugangsdaten) – als Volume einbinden
-RUN mkdir -p /app/data /app/backups
+# Eigener Nutzer ohne Rechte; Datenverzeichnisse (Schlüssel für Zugangsdaten,
+# Sicherungen) als Volumes einbinden. Der Code selbst gehört root und ist für
+# die Anwendung nur lesbar – sie kann sich nicht selbst verändern.
+RUN groupadd --gid 1000 minepower \
+    && useradd --uid 1000 --gid 1000 --no-create-home --home-dir /tmp --shell /usr/sbin/nologin minepower \
+    && mkdir -p /app/data /app/backups \
+    && chown minepower:minepower /app/data /app/backups \
+    && chmod 0755 /app/docker-entrypoint.sh
+ENV HOME=/tmp
 
 EXPOSE 8000
 
+# Auch ohne Compose (z. B. Unraid): Docker erkennt eine hängende Anwendung.
+HEALTHCHECK --interval=15s --timeout=10s --start-period=30s --retries=5 \
+    CMD ["python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/system/health',timeout=5).status==200 else 1)"]
+
+# Startet als root, übergibt die Datenordner und wechselt dann auf den
+# unprivilegierten Nutzer (siehe docker-entrypoint.sh).
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -501,7 +501,55 @@ class WallboxSettings:
     @classmethod
     def from_dict(cls, d: dict) -> "WallboxSettings":
         known = {f: d[f] for f in cls.__dataclass_fields__ if f in d and d[f] is not None}
-        return cls(**known)
+        s = cls(**known)
+        s.normalize()
+        return s
+
+    def normalize(self) -> None:
+        """Werte in sichere Grenzen bringen – unabhängig davon, wie sie
+        gespeichert wurden (Import, alte Version, direkte API). Der Regler
+        rechnet nie mit einem Strom außerhalb dessen, was eine Ladestation
+        nach IEC 61851 führen kann, und nie mit Text statt Zahl."""
+        defaults = type(self)()
+        self.min_current = _bounded(self.min_current, WALLBOX_MIN_A, WALLBOX_MAX_A, defaults.min_current)
+        self.max_current = _bounded(self.max_current, WALLBOX_MIN_A, WALLBOX_MAX_A, defaults.max_current)
+        if self.max_current < self.min_current:
+            self.max_current = self.min_current
+        self.min_pv_current = _bounded(self.min_pv_current, self.min_current, self.max_current, self.min_current)
+        self.start_threshold_w = _bounded(self.start_threshold_w, 0.0, 50000.0, defaults.start_threshold_w)
+        self.stop_threshold_w = _bounded(self.stop_threshold_w, 0.0, 50000.0, defaults.stop_threshold_w)
+        self.target_soc = _bounded(self.target_soc, 10.0, 100.0, defaults.target_soc)
+        self.current_step = _bounded(self.current_step, 0.0, 16.0, defaults.current_step)
+        self.ramp_up_step_a = _bounded(self.ramp_up_step_a, 0.5, WALLBOX_MAX_A, defaults.ramp_up_step_a)
+        for name in ("start_delay_s", "stop_delay_s", "phase_switch_delay_s", "phase_switch_lock_s",
+                     "min_pause_s", "measure_settle_s", "idle_retry_s", "forecast_hold_max_s"):
+            setattr(self, name, _bounded(getattr(self, name), 0.0, 86400.0, getattr(defaults, name)))
+        self.idle_confirm_ticks = int(_bounded(self.idle_confirm_ticks, 1, 1000, defaults.idle_confirm_ticks))
+        if self.phases_mode not in ("fixed1", "fixed3", "auto"):
+            self.phases_mode = defaults.phases_mode
+        if self.current_rounding not in ("down", "nearest"):
+            self.current_rounding = defaults.current_rounding
+        self.mode = str(self.mode)
+
+
+#: Stromgrenzen einer Ladestation (A). 1 A statt 6 A als Untergrenze, weil
+#: manche Fahrzeuge (über den Fahrzeugtreiber) weniger annehmen; nach oben
+#: 63 A (43 kW AC). Der Treiber begrenzt zusätzlich auf sein Gerät.
+WALLBOX_MIN_A = 1.0
+WALLBOX_MAX_A = 63.0
+#: Höchste Heizstableistung, mit der gerechnet wird (W)
+HEATER_MAX_W = 50000.0
+
+
+def _bounded(value, low: float, high: float, default: float) -> float:
+    """Zahl in [low, high]; Unlesbares und NaN/Unendlich werden zum Standard."""
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return float(default)
+    if not math.isfinite(v):
+        return float(default)
+    return min(high, max(low, v))
 
 
 #: Plausible Spanne für 'Leistung je Ampere': einphasig ≈ 230 W, dreiphasig
@@ -1215,13 +1263,24 @@ class WaterHeaterSettings:
     def normalize(self) -> None:
         """Werte in sichere Grenzen bringen – auch für Bestandsdaten, die
         vor der Validierung gespeichert wurden."""
+        defaults = type(self)()
         if self.boost_end_mode not in BOOST_END_MODES:
             self.boost_end_mode = "both"
-        self.boost_temp_c = min(BOOST_TEMP_MAX_C, max(BOOST_TEMP_MIN_C, float(self.boost_temp_c)))
-        self.boost_max_min = min(BOOST_MAX_MIN, max(5.0, float(self.boost_max_min)))
-        self.boost_duration_min = min(self.boost_max_min, max(5.0, float(self.boost_duration_min)))
+        self.boost_temp_c = _bounded(self.boost_temp_c, BOOST_TEMP_MIN_C, BOOST_TEMP_MAX_C, defaults.boost_temp_c)
+        self.boost_max_min = _bounded(self.boost_max_min, 5.0, BOOST_MAX_MIN, defaults.boost_max_min)
+        self.boost_duration_min = _bounded(self.boost_duration_min, 5.0, self.boost_max_min,
+                                           min(defaults.boost_duration_min, self.boost_max_min))
         if self.surplus_temp_c:
-            self.surplus_temp_c = min(BOOST_TEMP_MAX_C, max(BOOST_TEMP_MIN_C, float(self.surplus_temp_c)))
+            self.surplus_temp_c = _bounded(self.surplus_temp_c, BOOST_TEMP_MIN_C, BOOST_TEMP_MAX_C, 0.0) or None
+        # Leistung und Zieltemperatur: nie außerhalb dessen, was ein
+        # Heizstab im Haushalt führt bzw. ein Speicher verträgt.
+        self.max_power_w = _bounded(self.max_power_w, 0.0, HEATER_MAX_W, defaults.max_power_w)
+        self.min_power_w = _bounded(self.min_power_w, 0.0, self.max_power_w, min(defaults.min_power_w, self.max_power_w))
+        self.start_threshold_w = _bounded(self.start_threshold_w, 0.0, HEATER_MAX_W, defaults.start_threshold_w)
+        self.target_temp_c = _bounded(self.target_temp_c, TARGET_TEMP_MIN_C, TARGET_TEMP_MAX_C, defaults.target_temp_c)
+        for name in ("start_delay_s", "stop_delay_s", "forecast_hold_max_s"):
+            setattr(self, name, _bounded(getattr(self, name), 0.0, 86400.0, getattr(defaults, name)))
+        self.mode = str(self.mode)
 
 
 #: Erlaubte Abschaltmodi des Boosts
@@ -1233,6 +1292,9 @@ BOOST_TEMP_MIN_C = 30.0
 BOOST_TEMP_MAX_C = 80.0
 #: Längster Boost überhaupt (Minuten).
 BOOST_MAX_MIN = 360.0
+#: Grenzen der Zieltemperatur im Normalbetrieb (wie in der Eingabeprüfung).
+TARGET_TEMP_MIN_C = 20.0
+TARGET_TEMP_MAX_C = 85.0
 #: Plausibler Messbereich des Speicherfühlers. Werte außerhalb gelten als
 #: Sensorfehler – dann entscheidet das Zeitlimit.
 _TEMP_VALID_RANGE = (-10.0, 110.0)

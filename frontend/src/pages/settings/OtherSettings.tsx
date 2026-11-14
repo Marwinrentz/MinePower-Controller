@@ -137,6 +137,54 @@ export function UsersSettings() {
   );
 }
 
+/** Eigenes Konto: Passwort ändern. Danach gilt nur noch die Anmeldung
+ *  dieses Geräts; alle anderen enden (der Server entwertet ältere Tokens). */
+export function AccountSettings() {
+  const { t } = useI18n();
+  const me = useAuth((s) => s.user);
+  const login = useAuth((s) => s.login);
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [repeat, setRepeat] = useState("");
+  const mismatch = repeat.length > 0 && next !== repeat;
+  const ready = current.length > 0 && next.length >= 8 && next === repeat;
+
+  const change = async () => {
+    try {
+      const body = await post<{ token: string; user: User }>("/api/auth/me/password",
+        { current_password: current, new_password: next });
+      login(body.token, body.user);
+      setCurrent(""); setNext(""); setRepeat("");
+      toast.ok(t("set.account.changed"));
+    } catch (e) {
+      toast.err(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  return (
+    <Card>
+      <CardHead title={t("set.account.password")} sub={me ? t("set.account.signedInAs", { email: me.email }) : undefined} />
+      <div className="form-grid">
+        <Field label={t("set.account.current")}>
+          <input className="input" type="password" autoComplete="current-password" value={current}
+                 onChange={(e) => setCurrent(e.target.value)} />
+        </Field>
+        <Field label={t("set.account.next")} hint="min. 8">
+          <input className="input" type="password" autoComplete="new-password" value={next}
+                 onChange={(e) => setNext(e.target.value)} />
+        </Field>
+        <Field label={t("set.account.repeat")} error={mismatch ? t("set.account.mismatch") : null}>
+          <input className="input" type="password" autoComplete="new-password" value={repeat}
+                 aria-invalid={mismatch || undefined} onChange={(e) => setRepeat(e.target.value)} />
+        </Field>
+      </div>
+      <div className="form-actions">
+        <ActionButton variant="primary" disabled={!ready} onClick={change}>{t("set.account.password")}</ActionButton>
+      </div>
+    </Card>
+  );
+}
+
 export function AppearanceSettings() {
   const { t, lang, setLang } = useI18n();
   const { mode, setMode } = useTheme();

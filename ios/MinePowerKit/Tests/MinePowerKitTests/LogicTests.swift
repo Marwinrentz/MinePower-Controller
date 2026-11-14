@@ -77,7 +77,12 @@ struct ServerAddressTests {
     }
 
     @Test func websocketURL() {
-        let url = LiveSocket.socketURL(base: URL(string: "https://e.example.de/mp")!, token: "abc")
+        let base = URL(string: "https://e.example.de/mp")!
+        // Ab Server 3.3.0: Token als erste Nachricht, nicht in der Adresse.
+        #expect(LiveSocket.socketURL(base: base)?.absoluteString == "wss://e.example.de/mp/api/ws")
+        #expect(LiveSocket.authMessage(token: "a\"b").contains("\"token\":\"a\\\"b\""))
+        // Ältere Server: Token in der Adresse.
+        let url = LiveSocket.socketURL(base: base, legacyToken: "abc")
         #expect(url?.absoluteString == "wss://e.example.de/mp/api/ws?token=abc")
     }
 }

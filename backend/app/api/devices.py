@@ -73,6 +73,10 @@ async def create_device(body: DeviceCreate, db: AsyncSession = Depends(get_db), 
     errors = validate_config(meta, body.config or {})
     if errors:
         raise HTTPException(422, config_error(errors))
+    # Auch beim Anlegen: Bisher wurden Einstellungen nur beim Ändern geprüft,
+    # ein neues Gerät konnte also mit beliebigen Strom- und Leistungswerten
+    # in den Regelkreis kommen.
+    validate_device_settings(body.category, body.settings)
     duplicate = await _find_duplicate(db, body.driver_id, body.config or {})
     if duplicate is not None:
         # Im Diagnosebericht stand derselbe Sungrow SH zweimal (angelegt im
@@ -99,10 +103,8 @@ async def update_device(device_id: int, body: DeviceUpdate, db: AsyncSession = D
     device = await db.get(Device, device_id)
     if device is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Gerät nicht gefunden")
-    if body.settings is not None and device.category == "water_heater":
-        _validate_boost(body.settings)
     if body.settings is not None:
-        _validate_common(body.settings)
+        validate_device_settings(device.category, body.settings)
     if body.enabled and not device.enabled and device.category in CATEGORY_LIMITS \
             and await active_count(db, device.category, exclude_id=device.id) >= CATEGORY_LIMITS[device.category]:
         raise HTTPException(status.HTTP_409_CONFLICT, limit_error(device.category))
@@ -281,6 +283,25 @@ async def device_action(
     await log_event(f"Override: {action} → {dev.name}", category="control", user_id=user.id,
                     data={"value": body.value})
     return {"ok": True}
+
+
+def validate_device_settings(category: str, settings: dict | None) -> None:
+    """Regelungs-Einstellungen eines Geräts prüfen (422 mit Ursache).
+    Gilt für Anlegen, Ändern und Import."""
+    if settings is None:
+        return
+    if not isinstance(settings, dict):
+        raise HTTPException(422, "Einstellungen müssen ein Objekt sein.")
+    _validate_common(settings)
+    mode = settings.get("mode")
+    if category == "water_heater":
+        _validate_boost(settings)
+        if mode is not None:
+            _check_mode(mode, WATER_MODES)
+    elif category == "wallbox" and mode is not None:
+        # 'fast' und 'schedule' stammen aus älteren Versionen und werden vom
+        # Regler weiter verstanden.
+        _check_mode(mode, WALLBOX_MODES + ("fast", "schedule"))
 
 
 def _validate_common(settings: dict) -> None:

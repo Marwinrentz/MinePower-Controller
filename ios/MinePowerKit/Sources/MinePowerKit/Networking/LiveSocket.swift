@@ -15,7 +15,12 @@ public enum LiveEvent: Sendable {
     case authExpired
 }
 
-/// Live-Snapshots über WebSocket (`/api/ws?token=…`).
+/// Live-Snapshots über WebSocket (`/api/ws`).
+///
+/// Anmeldung: Das Token geht als erste Nachricht über die offene Verbindung
+/// (`{"type":"auth","token":…}`), nicht in der Adresse – dort stand es in
+/// jedem Zugriffsprotokoll des Servers. Server vor 3.3.0 kennen das nicht und
+/// schließen mit 4401; dann wird einmal mit `?token=…` neu verbunden.
 ///
 /// Eine offene Verbindung ist keine Zusage, dass auch etwas ankommt. Ein
 /// schlafendes Handy, ein Router-Neustart oder ein abgelaufenes Token
@@ -38,6 +43,8 @@ public actor LiveSocket {
     private var backoff: Duration = .seconds(1)
     private var lastMessage: ContinuousClock.Instant = .now
     private var wantsConnection = false
+    /// Server vor 3.3.0: Token in der Adresse statt als erste Nachricht.
+    private var legacyAuth = false
 
     private let session: URLSession
     private let decoder = JSONDecoder.minePower()
@@ -55,6 +62,7 @@ public actor LiveSocket {
     public func connect(baseURL: URL, token: String) {
         self.baseURL = baseURL
         self.token = token
+        legacyAuth = false
         wantsConnection = true
         backoff = .seconds(1)
         teardown()
@@ -78,12 +86,11 @@ public actor LiveSocket {
         openSocket()
     }
 
-    /// `http(s)://host/pfad` → `ws(s)://host/pfad/api/ws?token=…`
+    /// `http(s)://host/pfad` → `ws(s)://host/pfad/api/ws`
     ///
-    /// Das Token steht im Query-Parameter, weil `URLSessionWebSocketTask` beim
-    /// Handshake keine eigenen Header setzt und das Backend deshalb `?token=`
-    /// auswertet. Außerhalb des Heimnetzes daher nur über TLS verbinden.
-    public static func socketURL(base: URL, token: String) -> URL? {
+    /// `legacyToken` hängt das Token als `?token=…` an – nur für Server vor
+    /// 3.3.0, die die Anmeldung per erster Nachricht nicht kennen.
+    public static func socketURL(base: URL, legacyToken: String? = nil) -> URL? {
         guard var comps = URLComponents(url: base, resolvingAgainstBaseURL: false) else { return nil }
         switch comps.scheme {
         case "https": comps.scheme = "wss"
@@ -92,8 +99,20 @@ public actor LiveSocket {
         }
         let root = comps.path.hasSuffix("/") ? String(comps.path.dropLast()) : comps.path
         comps.path = root + "/api/ws"
-        comps.queryItems = [URLQueryItem(name: "token", value: token)]
+        if let legacyToken {
+            comps.queryItems = [URLQueryItem(name: "token", value: legacyToken)]
+        }
         return comps.url
+    }
+
+    /// Erste Nachricht nach dem Verbinden: Anmeldung mit dem Token.
+    public static func authMessage(token: String) -> String {
+        struct Auth: Encodable {
+            var type = "auth"
+            var token: String
+        }
+        let data = (try? JSONEncoder().encode(Auth(token: token))) ?? Data()
+        return String(decoding: data, as: UTF8.self)
     }
 
     /// Nachricht dekodieren (öffentlich für Tests).
@@ -108,13 +127,22 @@ public actor LiveSocket {
 
     private func openSocket() {
         guard wantsConnection, let baseURL, let token,
-              let url = Self.socketURL(base: baseURL, token: token) else { return }
+              let url = Self.socketURL(base: baseURL, legacyToken: legacyAuth ? token : nil) else { return }
         let task = session.webSocketTask(with: url)
         self.task = task
         lastMessage = .now
         task.resume()
-        receiveLoop = Task { [weak self] in await self?.receiveMessages(on: task) }
+        let auth = legacyAuth ? nil : Self.authMessage(token: token)
+        receiveLoop = Task { [weak self] in await self?.run(task, auth: auth) }
         watchdog = Task { [weak self] in await self?.runWatchdog() }
+    }
+
+    private func run(_ task: URLSessionWebSocketTask, auth: String?) async {
+        if let auth {
+            // Schlägt das Senden fehl, meldet es der Empfang gleich danach.
+            try? await task.send(.string(auth))
+        }
+        await receiveMessages(on: task)
     }
 
     private func receiveMessages(on task: URLSessionWebSocketTask) async {
@@ -127,6 +155,16 @@ public actor LiveSocket {
             } catch {
                 guard self.task === task else { return }  // längst ersetzt
                 if task.closeCode.rawValue == 4401 {
+                    if !legacyAuth {
+                        // Älterer Server: einmal mit dem Token in der Adresse.
+                        legacyAuth = true
+                        watchdog?.cancel()
+                        watchdog = nil
+                        receiveLoop = nil
+                        self.task = nil
+                        openSocket()
+                        return
+                    }
                     continuation?.yield(.authExpired)
                     wantsConnection = false
                     teardown()

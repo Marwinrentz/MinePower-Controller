@@ -62,9 +62,31 @@ services:
       # Volume app_data. Geht beides verloren, müssen Tokens und Passwörter
       # neu eingegeben werden.
       MINEPOWER_SECRET_KEY: ${MINEPOWER_SECRET_KEY:-}
+      # Nutzer, unter dem die Anwendung läuft (Standard 1000:1000)
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      # Browser-Zugriff von fremden Ursprüngen (leer = keiner) und die
+      # API-Dokumentation unter /docs (aus) – siehe docs/SECURITY.md.
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      API_DOCS: ${API_DOCS:-false}
     volumes:
       - backup_data:/app/backups
       - app_data:/app/data
+    # Härtung: Die Anwendung läuft ohne root (der Start übergibt nur die
+    # Datenordner und gibt dann alle Rechte ab, siehe docker-entrypoint.sh).
+    # Das Dateisystem des Containers ist nur lesbar – geschrieben wird
+    # ausschließlich in die beiden Volumes und nach /tmp.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN      # Datenordner übergeben
+      - SETUID     # auf den unprivilegierten Nutzer wechseln
+      - SETGID
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/system/health',timeout=5).status==200 else 1)"]
       interval: 15s

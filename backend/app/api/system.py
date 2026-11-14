@@ -18,7 +18,8 @@ from ..security import get_current_user, hash_password, require_role
 from ..services.audit import log_event
 
 log = logging.getLogger(__name__)
-from ..core.secrets import protect_config, protect_settings, readable, strip_config, strip_settings
+from ..core.secrets import (SETTINGS_SECRETS, device_secret_keys, protect_config, protect_settings, readable,
+                            strip_config, strip_settings)
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
@@ -125,7 +126,10 @@ async def import_config(data: dict[str, Any], user: User = Depends(require_role(
     """Konfiguration aus Export-JSON wiederherstellen (ersetzt Geräte & Einstellungen)."""
     if data.get("version") != EXPORT_VERSION:
         raise HTTPException(422, "Unbekannte Export-Version")
-    await apply_config_import(data)
+    try:
+        await apply_config_import(data)
+    except ConfigImportError as exc:
+        raise HTTPException(422, str(exc)) from exc
     await log_event("Konfiguration importiert", category="config", user_id=user.id)
     try:
         runtime.get_loop().request_reload()
@@ -134,53 +138,141 @@ async def import_config(data: dict[str, Any], user: User = Depends(require_role(
     return {"ok": True}
 
 
+class ConfigImportError(ValueError):
+    """Die Importdatei passt nicht (Aufbau, Treiber, Werte)."""
+
+
+#: Obergrenzen einer Importdatei – eine Anlage hat eine Handvoll Geräte.
+_IMPORT_MAX = {"devices": 200, "schedules": 500, "vehicles": 100}
+
+
+def _check_import(data: dict[str, Any]) -> None:
+    """Aufbau und Werte prüfen, bevor irgendetwas geändert wird."""
+    from .devices import validate_device_settings
+
+    for key, limit in _IMPORT_MAX.items():
+        items = data.get(key, [])
+        if not isinstance(items, list) or len(items) > limit or not all(isinstance(i, dict) for i in items):
+            raise ConfigImportError(f"'{key}' muss eine Liste mit höchstens {limit} Einträgen sein")
+    if not isinstance(data.get("settings") or {}, dict):
+        raise ConfigImportError("'settings' muss ein Objekt sein")
+    for dev in data.get("devices", []):
+        name = str(dev.get("name") or "").strip()
+        if not name or len(name) > 120:
+            raise ConfigImportError("Gerät ohne gültigen Namen")
+        try:
+            meta = registry.get_driver_class(str(dev.get("driver_id"))).meta
+        except KeyError:
+            raise ConfigImportError(f"{name}: unbekannter Treiber '{dev.get('driver_id')}'") from None
+        if meta.category.value != dev.get("category"):
+            raise ConfigImportError(f"{name}: Kategorie passt nicht zum Treiber")
+        if not isinstance(dev.get("config", {}), dict):
+            raise ConfigImportError(f"{name}: 'config' muss ein Objekt sein")
+        try:
+            validate_device_settings(meta.category.value, dev.get("settings", {}))
+        except HTTPException as exc:
+            raise ConfigImportError(f"{name}: {exc.detail}") from exc
+    for sch in data.get("schedules", []):
+        for key in ("device_id", "start_time", "end_time"):
+            if key not in sch:
+                raise ConfigImportError(f"Zeitplan ohne '{key}'")
+    for veh in data.get("vehicles", []):
+        if not str(veh.get("name") or "").strip():
+            raise ConfigImportError("Fahrzeug ohne Namen")
+
+
 async def apply_config_import(data: dict[str, Any], create_admin_if_missing: bool = False) -> None:
-    """Import-Kern – auch vom Headless-Start (startup.py) genutzt."""
+    """Import-Kern – auch vom Headless-Start (startup.py) genutzt.
+
+    Bestehende Geräte werden **an Ort und Stelle** aktualisiert, wenn die
+    Datei sie wiedererkennt (gleiche ID und gleicher Treiber). Früher wurden
+    alle Geräte gelöscht und neu angelegt – damit verschwanden die
+    Ladevorgänge (Fremdschlüssel mit Löschweitergabe) und alle gespeicherten
+    Zugangsdaten, weil der Export sie nicht enthält. Jetzt bleiben beide
+    erhalten; gelöscht wird nur, was in der Datei nicht mehr vorkommt."""
+    _check_import(data)
     async with async_session() as session:
-        # Geräte ersetzen; Mapping alter → neuer IDs für Priorität/Zeitpläne
-        old_devices = (await session.scalars(select(Device))).all()
-        for d in old_devices:
-            await session.delete(d)
+        existing = {d.id: d for d in (await session.scalars(select(Device))).all()}
         old_schedules = (await session.scalars(select(Schedule))).all()
         for s in old_schedules:
             await session.delete(s)
-        await session.flush()
 
+        # Mapping alter → neuer IDs für Priorität/Zeitpläne
         id_map: dict[int, int] = {}
+        kept: set[int] = set()
         for dev in data.get("devices", []):
-            row = Device(
-                name=dev["name"], category=dev["category"], driver_id=dev["driver_id"],
-                config=protect_config(dev["driver_id"], dev.get("config", {})), settings=dev.get("settings", {}),
-                enabled=dev.get("enabled", True),
-            )
-            session.add(row)
-            await session.flush()
-            if "_id" in dev:
-                id_map[int(dev["_id"])] = row.id
+            driver_id = dev["driver_id"]
+            config = dev.get("config", {}) or {}
+            old_id = int(dev["_id"]) if str(dev.get("_id", "")).lstrip("-").isdigit() else None
+            row = existing.get(old_id) if old_id is not None else None
+            if row is not None and row.driver_id == driver_id and row.id not in kept:
+                # Leere Zugangsdaten in der Datei = gespeicherten Wert behalten
+                secrets = device_secret_keys(driver_id)
+                merged = {k: v for k, v in config.items() if not (k in secrets and v in (None, ""))}
+                row.name = dev["name"]
+                row.category = dev["category"]
+                row.config = protect_config(driver_id, merged, row.config or {})
+                row.settings = dev.get("settings", {}) or {}
+                row.enabled = bool(dev.get("enabled", True))
+            else:
+                row = Device(
+                    name=dev["name"], category=dev["category"], driver_id=driver_id,
+                    config=protect_config(driver_id, config), settings=dev.get("settings", {}) or {},
+                    enabled=bool(dev.get("enabled", True)),
+                )
+                session.add(row)
+                await session.flush()
+            kept.add(row.id)
+            if old_id is not None:
+                id_map[old_id] = row.id
+        for device_id, row in existing.items():
+            if device_id not in kept:
+                await session.delete(row)
+        await session.flush()
 
         for key, value in (data.get("settings") or {}).items():
             if key in ("system", "runtime", "schema"):
                 continue  # instanzeigen, siehe export_config
-            if key == "priority" and id_map:
-                value = {"order": [id_map.get(i, i) for i in value.get("order", [])]}
-            if isinstance(value, dict):
-                value = protect_settings(key, value)
+            if not isinstance(value, dict):
+                continue
+            if key == "priority":
+                order = value.get("order", [])
+                value = {"order": [id_map.get(i, i) for i in order if isinstance(i, int) and id_map.get(i, i) in kept]}
             row = await session.get(Setting, key)
+            old_value = row.value if row is not None and isinstance(row.value, dict) else None
+            # Wie bei den Geräten: leere Zugangsdaten überschreiben nichts.
+            secret_keys = SETTINGS_SECRETS.get(key, set())
+            value = {k: v for k, v in value.items() if not (k in secret_keys and v in (None, "") and old_value)}
+            value = protect_settings(key, value, old_value)
             if row is None:
                 session.add(Setting(key=key, value=value))
             else:
                 row.value = value
 
         for sch in data.get("schedules", []):
-            device_id = id_map.get(int(sch["device_id"]), sch["device_id"])
+            try:
+                device_id = id_map.get(int(sch["device_id"]), int(sch["device_id"]))
+            except (TypeError, ValueError):
+                continue
+            if device_id not in kept:
+                continue  # Zeitplan eines Geräts, das es nicht (mehr) gibt
             session.add(Schedule(device_id=device_id, days_mask=sch.get("days_mask", 127),
-                                 start_time=sch["start_time"], end_time=sch["end_time"],
+                                 start_time=str(sch["start_time"])[:5], end_time=str(sch["end_time"])[:5],
                                  enabled=sch.get("enabled", True)))
 
+        # Fahrzeuge über den Namen zuordnen: Ein zweiter Import legte sie
+        # sonst jedes Mal doppelt an.
+        vehicles = {v.name: v for v in (await session.scalars(select(Vehicle))).all()}
         for veh in data.get("vehicles", []):
-            session.add(Vehicle(name=veh["name"], capacity_kwh=veh.get("capacity_kwh", 60),
-                                soc_source=veh.get("soc_source", "none"),
-                                default_target_soc=veh.get("default_target_soc", 80)))
+            name = str(veh["name"]).strip()[:120]
+            row = vehicles.get(name)
+            if row is None:
+                row = Vehicle(name=name)
+                session.add(row)
+                vehicles[name] = row
+            row.capacity_kwh = float(veh.get("capacity_kwh", 60) or 60)
+            row.soc_source = str(veh.get("soc_source", "none"))[:20]
+            row.default_target_soc = int(veh.get("default_target_soc", 80) or 80)
 
         if create_admin_if_missing:
             users = await session.scalar(select(func.count(User.id)))

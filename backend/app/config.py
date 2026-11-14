@@ -31,7 +31,14 @@ class AppSettings(BaseSettings):
     demo_mode: bool = False
     headless_config: str = ""  # Pfad zu gemounteter JSON-Config (optional)
 
-    cors_origins: str = "*"
+    #: Zusätzliche Ursprünge für Browser-Zugriffe von fremden Seiten
+    #: (kommagetrennt, ``*`` = alle). Leer = keine: Die mitgelieferte
+    #: Oberfläche läuft auf demselben Ursprung und braucht kein CORS, die
+    #: Apps und KI-Konnektoren ebenso wenig.
+    cors_origins: str = ""
+    #: Interaktive API-Dokumentation (/docs, /redoc, /openapi.json).
+    #: Standardmäßig aus – sie beschreibt jede Schnittstelle ohne Anmeldung.
+    api_docs: bool = False
 
     # Optionale MQTT-Integration (mqtt://host:port oder leer = deaktiviert)
     mqtt_url: str = ""

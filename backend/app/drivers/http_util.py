@@ -19,6 +19,7 @@ from typing import Any
 
 import aiohttp
 
+from .netguard import blocked_reason
 from .validation import ConnectionProblem, DeviceRejected
 
 log = logging.getLogger(__name__)
@@ -49,7 +50,8 @@ class HttpDevice:
         if self._session is None or self._session.closed:
             connector = aiohttp.TCPConnector(ssl=None if self.verify_ssl else False, limit=4)
             self._session = aiohttp.ClientSession(
-                timeout=self._timeout, connector=connector, headers=self.headers
+                timeout=self._timeout, connector=connector, headers=self.headers,
+                trace_configs=[_redirect_guard()],
             )
         return self._session
 
@@ -89,6 +91,9 @@ class HttpDevice:
         url = path if path.startswith("http") else f"{self.base}{path}"
         if not self.base and not path.startswith("http"):
             raise ConnectionProblem(f"{self.name}: keine Adresse konfiguriert")
+        blocked = blocked_reason(url)
+        if blocked:
+            raise ConnectionProblem(f"{self.name}: {blocked} – wird nicht abgerufen")
         session = self._ensure_session()
         try:
             async with session.request(
@@ -144,6 +149,19 @@ class HttpDevice:
         if resp.status == 408:
             raise TimeoutError(f"{self.name}: Gerät meldet Zeitüberschreitung (HTTP 408)")
         raise DeviceRejected(f"{self.name}: HTTP {resp.status} von {url}{f' – {body}' if body else ''}")
+
+
+def _redirect_guard() -> aiohttp.TraceConfig:
+    """Weiterleitungen prüfen: Ein Gerät (oder wer sich dafür ausgibt) darf
+    den Server nicht auf eine gesperrte Adresse umlenken."""
+    async def on_redirect(session, ctx, params) -> None:  # noqa: ARG001
+        target = params.response.headers.get("Location", "")
+        if "://" in target and blocked_reason(target):
+            raise aiohttp.ClientError(f"Weiterleitung auf gesperrte Adresse ({blocked_reason(target)})")
+
+    trace = aiohttp.TraceConfig()
+    trace.on_request_redirect.append(on_redirect)
+    return trace
 
 
 def _stringify(params: dict | None) -> dict[str, str] | None:

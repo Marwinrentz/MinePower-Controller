@@ -19,7 +19,6 @@ import hashlib
 import io
 import json
 import logging
-import re
 import secrets
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -33,6 +32,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .. import __version__
+from ..core.logsafe import RedactFilter
 from ..db import async_session, get_db
 from ..models import ApiToken, User
 from ..security import create_token, get_current_user
@@ -41,20 +41,9 @@ from ..services.audit import log_event
 log = logging.getLogger(__name__)
 
 
-class RedactKeyFilter(logging.Filter):
-    """Schlüssel in Adressen (/mcp/k/<Schlüssel>) nie ins Zugriffsprotokoll schreiben."""
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        if isinstance(record.args, tuple):
-            record.args = tuple(re.sub(r"/mcp/k/[^/?\s\"]+", "/mcp/k/***", a) if isinstance(a, str) else a
-                                for a in record.args)
-        if isinstance(record.msg, str) and "/mcp/k/" in record.msg:
-            record.msg = re.sub(r"/mcp/k/[^/?\s\"]+", "/mcp/k/***", record.msg)
-        return True
-
-
-for _name in ("uvicorn.access", "uvicorn.error"):
-    logging.getLogger(_name).addFilter(RedactKeyFilter())
+#: Schlüssel in Adressen (/mcp/k/<Schlüssel>) nie ins Zugriffsprotokoll
+#: schreiben – der Filter liegt zentral in core/logsafe.py.
+RedactKeyFilter = RedactFilter
 
 router = APIRouter(tags=["mcp"])
 

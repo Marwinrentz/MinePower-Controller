@@ -123,8 +123,12 @@ function openSocket(set: (s: Partial<LiveState>) => void) {
     retryTimer = null;
   }
   const proto = location.protocol === "https:" ? "wss" : "ws";
-  ws = new WebSocket(`${proto}://${location.host}/api/ws?token=${encodeURIComponent(token)}`);
+  // Das Token steht nicht in der Adresse (dort landete es im Zugriffsprotokoll
+  // des Servers), sondern geht als erste Nachricht über die offene Verbindung.
+  const socket = new WebSocket(`${proto}://${location.host}/api/ws`);
+  ws = socket;
   ws.onopen = () => {
+    socket.send(JSON.stringify({ type: "auth", token }));
     retryDelay = 1000;
     lastMessageAt = Date.now();
     set({ connected: true, stale: false });

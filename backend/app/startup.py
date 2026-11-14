@@ -79,7 +79,8 @@ DEFAULT_SETTINGS: dict[str, dict] = {
         "auto_limit_tolerance_ct": 0,
     },
     "forecast": {"provider": "none"},
-    "notifications": {"ntfy_url": "", "telegram_token": "", "telegram_chat_id": "", "email": ""},
+    "notifications": {"ntfy_url": "", "telegram_token": "", "telegram_chat_id": "", "email": "",
+                      "webhook_url": ""},
     "ui": {"default_language": "de"},
 }
 
@@ -158,7 +159,11 @@ async def init_db() -> None:
 
 #: Spalten, die nach dem ersten Release dazukamen: (Tabelle, Spalte, SQL-Typ).
 #: create_all legt nur fehlende Tabellen an, keine fehlenden Spalten.
-ADDED_COLUMNS = [("users", "last_seen_version", "VARCHAR(20)")]
+ADDED_COLUMNS = [
+    ("users", "last_seen_version", "VARCHAR(20)"),
+    ("users", "password_changed_at", "TIMESTAMP WITH TIME ZONE"),
+    ("users", "prefs", "JSON"),
+]
 
 
 def _add_missing_columns(sync_conn) -> None:
@@ -304,10 +309,16 @@ async def import_headless_config() -> None:
         if device_count:
             log.info("Headless-Config übersprungen: Geräte bereits konfiguriert")
             return
-    data = json.loads(path.read_text(encoding="utf-8"))
-    from .api.system import apply_config_import  # zirkulären Import vermeiden
+    from .api.system import ConfigImportError, apply_config_import  # zirkulären Import vermeiden
 
-    await apply_config_import(data, create_admin_if_missing=True)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        await apply_config_import(data, create_admin_if_missing=True)
+    except (ValueError, ConfigImportError) as exc:
+        # Nicht abstürzen: Die Anlage bleibt erreichbar und lässt sich über
+        # die Oberfläche einrichten; die Ursache steht im Protokoll.
+        log.error("Headless-Konfiguration %s nicht importiert: %s", path, exc)
+        return
     log.info("Headless-Konfiguration importiert: %s", path)
 
 

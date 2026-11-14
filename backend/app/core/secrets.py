@@ -34,7 +34,7 @@ MASK = "•••"
 #: Geheime Felder in Einstellungsabschnitten
 SETTINGS_SECRETS: dict[str, set[str]] = {
     "tariff": {"tibber_token"},
-    "notifications": {"telegram_token", "ntfy_url", "smtp_password", "email_password"},
+    "notifications": {"telegram_token", "ntfy_url", "webhook_url", "smtp_password", "email_password"},
 }
 
 
