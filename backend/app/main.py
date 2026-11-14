@@ -49,6 +49,7 @@ async def lifespan(app: FastAPI):
     registry.discover()
     log.info("Treiber registriert: %s", ", ".join(sorted(m.id for m in registry.all_metas())))
 
+    await startup.wait_for_db()
     await startup.init_db()
     # Vor allem anderen: Eine leere DB nach einem Stromausfall bekommt hier
     # ihre letzte lokale Sicherung zurück (siehe services/backup.py), bevor

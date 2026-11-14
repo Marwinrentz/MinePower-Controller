@@ -461,6 +461,7 @@ strong { color: var(--text-strong); }
 @media (min-width: 640px) { .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .form-grid > .field + .field { margin-top: 0; }
 .form-actions { display: flex; flex-wrap: wrap; gap: var(--s2); justify-content: flex-end; margin-top: var(--s5); }
+.form-actions.start { justify-content: flex-start; margin-top: var(--s3); }
 .example { background: var(--surface-2); border-radius: var(--r-md); color: var(--text-strong); font-weight: 600; margin-top: var(--s3); padding: var(--s3) var(--s4); }
 
 /* Schalter */

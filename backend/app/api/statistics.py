@@ -22,31 +22,59 @@ CO2_G_PER_KWH_GRID = 380.0  # dt. Strommix (näherungsweise, konfigurierbar via 
 DEFAULT_PRICE_CT = 32.0
 
 
-async def _energy_sums(db: AsyncSession, since: datetime) -> dict[str, float]:
-    """Energie-Integrale (kWh) aus den site-Leistungsreihen."""
-    rows = await db.execute(
-        text(
-            """
-            WITH dt AS (
-                SELECT field,
-                       extract(epoch FROM (max(time) - min(time))) / NULLIF(count(*) - 1, 0) AS avg_dt
-                FROM measurements
-                WHERE source = 'site' AND time >= :since
-                GROUP BY field
-            )
-            SELECT m.field,
-                   sum(CASE WHEN m.value > 0 THEN m.value ELSE 0 END) * max(dt.avg_dt) / 3600000.0 AS pos_kwh,
-                   sum(CASE WHEN m.value < 0 THEN -m.value ELSE 0 END) * max(dt.avg_dt) / 3600000.0 AS neg_kwh
-            FROM measurements m
-            JOIN dt ON dt.field = m.field
-            WHERE m.source = 'site' AND m.time >= :since
-              AND m.field IN ('pv_power', 'grid_power', 'house_power', 'wallbox_power',
-                              'water_power', 'waste_power')
-            GROUP BY m.field
-            """
-        ),
-        {"since": since},
+#: Größter Abstand zweier Messwerte, der noch als durchgehende Messung
+#: zählt (s). Dahinter liegt eine Lücke (Anwendung aus, Datenbank weg), über
+#: die nicht hinwegintegriert wird.
+MAX_SAMPLE_GAP_S = 300.0
+#: Ab diesem Zeitraum (Tage) kommen die Energien aus den Stundenwerten:
+#: Rohdaten reichen nur ``RAW_RETENTION_DAYS`` zurück.
+HOURLY_FROM_DAYS = 31
+
+_ENERGY_FIELDS = "('pv_power', 'grid_power', 'house_power', 'wallbox_power', 'water_power', 'waste_power')"
+
+#: Energie aus Rohdaten: jeder Messwert gilt bis zum nächsten, höchstens aber
+#: MAX_SAMPLE_GAP_S. Früher wurde die Summe aller Werte mit dem mittleren
+#: Abstand über den ganzen Zeitraum multipliziert – nach einem Ausfall zählte
+#: die Lücke damit als Zeit mit Durchschnittsleistung.
+_RAW_ENERGY_SQL = f"""
+    WITH s AS (
+        SELECT field, value,
+               extract(epoch FROM (lead(time) OVER (PARTITION BY field ORDER BY time) - time)) AS dt
+        FROM measurements
+        WHERE source = 'site' AND time >= :since AND field IN {_ENERGY_FIELDS}
     )
+    SELECT field,
+           sum(GREATEST(value, 0) * LEAST(COALESCE(dt, 0), :gap)) / 3600000.0 AS pos_kwh,
+           sum(GREATEST(-value, 0) * LEAST(COALESCE(dt, 0), :gap)) / 3600000.0 AS neg_kwh
+    FROM s GROUP BY field
+"""
+
+#: Energie aus Stundenwerten: Mittel der Stunde mal der Zeit, die in dieser
+#: Stunde tatsächlich gemessen wurde.
+_HOURLY_ENERGY_SQL = f"""
+    SELECT field,
+           sum(avg_pos * dur) / 3600000.0 AS pos_kwh,
+           sum(-avg_neg * dur) / 3600000.0 AS neg_kwh
+    FROM (
+        SELECT field, avg_pos, avg_neg,
+               LEAST(3600.0, CASE WHEN samples > 1
+                    THEN extract(epoch FROM (last_time - first_time)) * samples / (samples - 1)
+                    ELSE 0 END) AS dur
+        FROM measurements_hourly
+        WHERE source = 'site' AND bucket >= :since AND field IN {_ENERGY_FIELDS}
+    ) h
+    GROUP BY field
+"""
+
+
+async def _energy_sums(db: AsyncSession, since: datetime, days: int = 30) -> dict[str, float]:
+    """Energie-Integrale (kWh) aus den site-Leistungsreihen."""
+    from .. import startup
+
+    if days >= HOURLY_FROM_DAYS and startup.HOURLY_VIEW:
+        rows = await db.execute(text(_HOURLY_ENERGY_SQL), {"since": since})
+    else:
+        rows = await db.execute(text(_RAW_ENERGY_SQL), {"since": since, "gap": MAX_SAMPLE_GAP_S})
     out: dict[str, float] = {}
     for r in rows:
         out[r.field] = float(r.pos_kwh or 0)
@@ -63,7 +91,7 @@ async def statistics(
 ):
     days = RANGES.get(range, 30)
     since = datetime.now(timezone.utc) - timedelta(days=days)
-    sums = await _energy_sums(db, since)
+    sums = await _energy_sums(db, since, days)
 
     pv = sums.get("pv_power", 0.0)
     grid_import = sums.get("grid_power", 0.0)

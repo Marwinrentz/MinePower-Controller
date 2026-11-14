@@ -84,6 +84,88 @@ async def backup_status(_: User = Depends(require_role("admin"))):
     return backup.status()
 
 
+@router.get("/backups")
+async def list_backups(_: User = Depends(require_role("admin"))):
+    """Sicherungsdateien (Konfiguration, Verlauf), Speicherplatz und der
+    Zustand des Messwert-Puffers."""
+    from ..services import backup
+
+    out: dict[str, Any] = {"backups": backup.list_backups(), "status": backup.status(),
+                           "storage": await backup.storage_status()}
+    try:
+        out["measurements"] = runtime.get_loop().buffer.status()
+    except RuntimeError:
+        out["measurements"] = None
+    return out
+
+
+@router.post("/backups")
+async def create_backup(user: User = Depends(require_role("admin"))):
+    """Jetzt sichern: Konfiguration und Verlauf."""
+    from ..services import backup
+
+    config_path = await backup.run_once()
+    data_path = await backup.run_data_dump()
+    await log_event("Sicherung manuell erstellt", category="config", user_id=user.id)
+    return {"ok": True, "config": config_path.name, "data": data_path.name}
+
+
+@router.post("/backups/{name}/restore")
+async def restore_backup(name: str, user: User = Depends(require_role("admin"))):
+    """Eine Sicherung einspielen.
+
+    * Konfiguration: Geräte, Einstellungen, Zeitpläne und Fahrzeuge kommen
+      auf den Stand der Sicherung. Konten bleiben unverändert.
+    * Verlauf: füllt nur auf, was fehlt (Stundenwerte, Ladevorgänge)."""
+    from ..services import backup
+
+    try:
+        path = backup.resolve(name)
+    except FileNotFoundError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Sicherung nicht gefunden")
+    if name.startswith("pre-migration-"):
+        raise HTTPException(422, "Sicherungen von vor einer Schema-Migration lassen sich nur von Hand einspielen")
+    try:
+        if name.endswith(".jsonl.gz"):
+            counts = await backup.restore_data(path)
+            result: dict[str, Any] = {"ok": True, "kind": "data", **counts}
+        else:
+            data = backup.read_config(path)
+            # Vorher den jetzigen Stand sichern – das Einspielen ist sonst
+            # nicht rückgängig zu machen.
+            await backup.run_once()
+            devices = await backup.restore_config(path, data)
+            result = {"ok": True, "kind": "config", "devices": devices}
+    except ConfigImportError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except (ValueError, KeyError, OSError) as exc:
+        raise HTTPException(422, f"Sicherung nicht lesbar: {exc}") from exc
+    await log_event(f"Sicherung eingespielt: {name}", category="config", user_id=user.id)
+    try:
+        runtime.get_loop().request_reload()
+    except RuntimeError:
+        pass
+    return result
+
+
+@router.get("/backups/{name}/download")
+async def download_backup(name: str, _: User = Depends(require_role("admin"))):
+    """Verlaufssicherung herunterladen (Stundenwerte, Ladevorgänge,
+    Ereignisse – keine Zugangsdaten). Die Konfiguration gibt es als Export
+    ohne Zugangsdaten unter /api/system/export."""
+    from fastapi.responses import FileResponse
+
+    from ..services import backup
+
+    if not name.endswith(".jsonl.gz"):
+        raise HTTPException(422, "Nur Verlaufssicherungen lassen sich herunterladen")
+    try:
+        path = backup.resolve(name)
+    except FileNotFoundError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Sicherung nicht gefunden")
+    return FileResponse(path, media_type="application/gzip", filename=name)
+
+
 @router.get("/export")
 async def export_config(db: AsyncSession = Depends(get_db), _: User = Depends(require_role("admin"))):
     """Komplette Konfiguration als JSON (Backup / Übertragung auf andere Instanz).

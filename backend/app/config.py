@@ -53,6 +53,12 @@ class AppSettings(BaseSettings):
     data_dir: str = "/app/data"
     backup_interval_h: float = 6.0
     backup_keep: int = 30
+    #: Datensicherung (Stundenwerte, Ladevorgänge, Ereignisse): Abstand und
+    #: Anzahl aufbewahrter Dateien.
+    backup_data_interval_h: float = 24.0
+    backup_data_keep: int = 7
+    #: Aufbewahrung der Rohmesswerte in Tagen. Stundenwerte bleiben länger.
+    raw_retention_days: int = 90
 
     class Config:
         env_file = ".env"

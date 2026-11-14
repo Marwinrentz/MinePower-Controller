@@ -209,25 +209,35 @@ export function AppearanceSettings() {
   );
 }
 
+type BackupFile = { name: string; kind: "config" | "data" | "pre-migration"; bytes: number; time: string };
+type BackupOverview = {
+  backups: BackupFile[];
+  status: { count: number; latest: string | null; data_count: number; data_latest: string | null };
+  storage: { volumes: { name: string; free_bytes: number; total_bytes: number }[]; database_bytes: number | null; warning: string | null };
+  measurements: { spool_bytes: number; backlog_rows: number; failures: number } | null;
+};
+
+function fmtBytes(bytes: number): string {
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} kB`;
+}
+
 export function BackupSettings() {
   const { t } = useI18n();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [status, setStatus] = useState<{ count: number; latest: string | null } | null>(null);
+  const [overview, setOverview] = useState<BackupOverview | null>(null);
+  const [busy, setBusy] = useState(false);
   const reloadSettings = useSettings((s) => s.load);
-  useEffect(() => { get<{ count: number; latest: string | null }>("/api/system/backup-status").then(setStatus).catch(() => {}); }, []);
+  const load = () => { get<BackupOverview>("/api/system/backups").then(setOverview).catch(() => {}); };
+  useEffect(load, []);
+  const fail = (e: unknown) => toast.err(e instanceof Error ? e.message : String(e));
 
   const exportConfig = async () => {
     try {
       const data = await get<unknown>("/api/system/export");
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = "minepower-config.json";
-      a.click();
-      URL.revokeObjectURL(a.href);
-    } catch (e) {
-      toast.err(e instanceof Error ? e.message : String(e));
-    }
+      saveBlob(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }), "minepower-config.json");
+    } catch (e) { fail(e); }
   };
   const importConfig = async (file: File) => {
     if (!confirm(t("set.backup.importWarn"))) return;
@@ -235,10 +245,45 @@ export function BackupSettings() {
       await post("/api/system/import", JSON.parse(await file.text()));
       toast.ok(t("common.saved"));
       void reloadSettings();
-    } catch (e) {
-      toast.err(e instanceof Error ? e.message : String(e));
-    }
+    } catch (e) { fail(e); }
   };
+  const backupNow = async () => {
+    setBusy(true);
+    try {
+      await post("/api/system/backups");
+      toast.ok(t("set.backup.created"));
+      load();
+    } catch (e) { fail(e); } finally { setBusy(false); }
+  };
+  const restore = async (file: BackupFile) => {
+    const warn = file.kind === "data" ? "set.backup.restoreDataWarn" : "set.backup.restoreConfigWarn";
+    if (!confirm(t(warn, { time: fmtTime(file.time) }))) return;
+    setBusy(true);
+    try {
+      const r = await post<{ kind: string; devices?: number; measurements?: number; sessions?: number }>(
+        `/api/system/backups/${encodeURIComponent(file.name)}/restore`);
+      toast.ok(r.kind === "data"
+        ? t("set.backup.restoredData", { m: r.measurements ?? 0, s: r.sessions ?? 0 })
+        : t("set.backup.restoredConfig", { n: r.devices ?? 0 }));
+      void reloadSettings();
+      load();
+    } catch (e) { fail(e); } finally { setBusy(false); }
+  };
+  const download = async (file: BackupFile) => {
+    try {
+      // Mit Anmeldung laden (ein einfacher Link trüge kein Token)
+      const token = useAuth.getState().token;
+      const resp = await fetch(`/api/system/backups/${encodeURIComponent(file.name)}/download`,
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      saveBlob(await resp.blob(), file.name);
+    } catch (e) { fail(e); }
+  };
+
+  const kindLabel = (kind: BackupFile["kind"]) =>
+    kind === "data" ? t("set.backup.kindData") : kind === "config" ? t("set.backup.kindConfig") : t("set.backup.kindMigration");
+  const volume = overview?.storage.volumes[0];
+  const spool = overview?.measurements?.spool_bytes ?? 0;
 
   return (
     <Card>
@@ -249,15 +294,63 @@ export function BackupSettings() {
         <input ref={fileRef} type="file" accept=".json,application/json" hidden
                onChange={(e) => e.target.files?.[0] && void importConfig(e.target.files[0])} />
       </div>
+
       <h3 className="group-title">{t("set.backup.auto")}</h3>
       <p className="field-help">{t("set.backup.autoHelp")}</p>
-      {status && (
+      {overview && (
         <p className="field-help strong">
-          {status.latest ? t("set.backup.last", { time: fmtTime(status.latest) }) : "–"} · {t("set.backup.count", { n: status.count })}
+          {overview.status.latest ? t("set.backup.last", { time: fmtTime(overview.status.latest) }) : t("set.backup.empty")}
         </p>
+      )}
+      <div className="form-actions start">
+        <ActionButton disabled={busy} onClick={backupNow}>{t("set.backup.now")}</ActionButton>
+      </div>
+
+      {overview && overview.backups.length > 0 && (
+        <>
+          <h3 className="group-title">{t("set.backup.list")}</h3>
+          <ul className="user-list">
+            {overview.backups.slice(0, 12).map((file) => (
+              <li key={file.name} className="user-row">
+                <Icon name="download" size={18} />
+                <div className="user-text">
+                  <span className="user-name">{fmtTime(file.time)}</span>
+                  <span className="user-state">{kindLabel(file.kind)} · {fmtBytes(file.bytes)}</span>
+                </div>
+                <div className="row tight">
+                  {file.kind === "data" && <Button size="sm" onClick={() => download(file)}>{t("set.backup.download")}</Button>}
+                  {file.kind !== "pre-migration" && (
+                    <ActionButton size="sm" disabled={busy} onClick={() => restore(file)}>{t("set.backup.restore")}</ActionButton>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {overview && (volume || overview.storage.database_bytes !== null) && (
+        <>
+          <h3 className="group-title">{t("set.backup.storage")}</h3>
+          {overview.storage.warning && <p className="field-help strong" role="alert">{overview.storage.warning}</p>}
+          <p className="field-help">
+            {volume && t("set.backup.free", { free: fmtBytes(volume.free_bytes), total: fmtBytes(volume.total_bytes) })}
+            {volume && overview.storage.database_bytes !== null && " · "}
+            {overview.storage.database_bytes !== null && t("set.backup.database", { size: fmtBytes(overview.storage.database_bytes) })}
+          </p>
+          {spool > 0 && <p className="field-help strong">{t("set.backup.spool", { size: fmtBytes(spool) })}</p>}
+        </>
       )}
     </Card>
   );
+}
+
+function saveBlob(blob: Blob, name: string) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 export function InfoSettings() {

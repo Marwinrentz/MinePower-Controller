@@ -148,7 +148,10 @@ async def test_maybe_restore_from_backup_noop_without_backup(tmp_path, monkeypat
 
 def test_status_reports_no_backup_yet(tmp_path, monkeypatch):
     monkeypatch.setattr(get_settings(), "backup_dir", str(tmp_path))
-    assert backup.status() == {"count": 0, "latest": None, "dir": str(tmp_path)}
+    status = backup.status()
+    assert (status["count"], status["latest"], status["dir"]) == (0, None, str(tmp_path))
+    # Seit 3.3.0 zusätzlich die Datensicherung (Stundenwerte, Ladevorgänge)
+    assert (status["data_count"], status["data_latest"]) == (0, None)
 
 
 async def test_status_reports_latest_after_backup(tmp_path, monkeypatch):

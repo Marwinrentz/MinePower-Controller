@@ -71,3 +71,120 @@ Einzelheiten und Schweregrade: [SECURITY.md](SECURITY.md).
 
 **Offen:** siehe SECURITY.md, Abschnitt „Offen“ (TLS, MQTT-Broker ohne
 Anmeldung, OCPP ohne Anmeldung, Zwei-Faktor).
+
+## Phase 2 – Datenbank-Robustheit
+
+Ziel: Nach Stromausfall, hartem Abbruch oder verlorener Datenbank gehen
+weder Konfiguration noch Verlauf verloren, und niemand muss neu einrichten.
+
+**Gefunden:**
+
+- Messwerte, die die Datenbank nicht annahm, wurden verworfen. Jeder
+  Neustart der Datenbank hinterließ eine Lücke im Verlauf; beim Beenden
+  fehlten bis zu 15 s.
+- Das Schreiben lief im Takt des Regelkreises, ohne Zeitlimit. Eine
+  Datenbank, die annimmt, aber nicht antwortet, hätte die Regelung angehalten.
+- Auf PostgreSQL ohne TimescaleDB startete die Anwendung nicht: Der
+  fehlgeschlagene Versuch, die Erweiterung zu laden, rollte das frisch
+  angelegte Schema mit zurück. Bestätigt am bisherigen Image
+  (`relation "settings" does not exist`).
+- Schema-Änderungen liefen über `create_all` und eine Spaltenliste; Alembic
+  lag im Repository, wurde aber nie ausgeführt. Keine Sicherung vor einer
+  Änderung.
+- Rohdaten wurden nach 90 Tagen gelöscht, ohne dass etwas Gröberes blieb –
+  die Jahresansicht zeigte ein Quartal. Keine Kompression.
+- Die Sicherung enthielt nur die Konfiguration. Verlauf, Ladevorgänge und
+  Ereignisse waren nach dem Verlust der Datenbank weg. Wiederherstellen ging
+  nur automatisch bei leerer Datenbank, nicht aus der Oberfläche.
+- Die Energie-Auswertung multiplizierte die Summe aller Messwerte mit dem
+  mittleren Abstand. Nach einem Ausfall zählte die Lücke als Zeit mit
+  Durchschnittsleistung; bei Bezug und Einspeisung wurde der Abstand nur aus
+  den Werten einer Richtung bestimmt.
+- Eine Konfigurationsänderung, die genau in einen Datenbank-Aussetzer fiel,
+  wurde nie geladen; der Takt fiel aus.
+- Zwei Sicherungen in derselben Sekunde überschrieben einander (im Test für
+  das Wiederherstellen gefunden).
+- Starteten Anwendung und Datenbank gleichzeitig, brach der Start ab, solange
+  PostgreSQL sein WAL zurückspielte.
+
+**Geändert:**
+
+- `services/measurements.py`: Fehlgeschlagene Pakete gehen in eine
+  Spool-Datei im Datenvolume (mit `fsync`) und werden nachgeschrieben, sobald
+  die Datenbank wieder da ist. `ON CONFLICT DO NOTHING` auf dem
+  Primärschlüssel macht das wiederholbar. Schreiben im Hintergrund mit
+  Zeitlimit; beim Beenden ein letzter Versuch.
+- `services/audit.py`: Ereignisse aus einem Ausfall werden nachgetragen.
+- `db.py`: Zeitlimits für Verbindungsaufbau (10 s) und Anfragen (60 s).
+- `startup.py`: wartet auf die Datenbank; Alembic hebt das Schema beim Start
+  (`alembic_version`), vorher Rohsicherung der Konfigurationstabellen;
+  TimescaleDB-Schritte einzeln in Savepoints; Kompression der Rohdaten nach
+  7 Tagen; Stundenaggregat `measurements_hourly` (Mittel, Minimum, Maximum,
+  Anteile für Bezug und Einspeisung), das über die Aufbewahrung der Rohdaten
+  hinaus bleibt.
+- `api/history.py`, `api/statistics.py`: lange Zeiträume aus den
+  Stundenwerten; Energie als Summe aus Wert mal Zeit bis zum nächsten Wert,
+  höchstens 5 min.
+- `services/backup.py`: tägliche Datensicherung (Stundenwerte, Ladevorgänge,
+  Ereignisse; gzip, zeilenweise geschrieben) mit eigener Rotation;
+  Wiederherstellen von Konfiguration und Verlauf; `fsync` auch auf das
+  Verzeichnis; Warnung bei knappem Speicherplatz (unter 1 GB oder 5 %).
+- `api/system.py`: `GET/POST /api/system/backups`,
+  `POST …/{name}/restore`, `GET …/{name}/download`.
+- Oberfläche: Einstellungen → Sicherung zeigt die Dateien, spielt sie ein,
+  lädt den Verlauf herunter und nennt Speicherplatz und Datenbankgröße.
+- `core/loop.py`: Laden der Konfiguration wird nach einem Fehler wiederholt,
+  der Takt läuft mit dem bisherigen Stand weiter.
+- `docker-compose.yml`: `fsync`, `synchronous_commit`, `full_page_writes`
+  ausdrücklich an; 60 s für das saubere Stoppen der Datenbank.
+- Neue Variablen: `BACKUP_DATA_INTERVAL_H` (24), `BACKUP_DATA_KEEP` (7),
+  `RAW_RETENTION_DAYS` (90).
+
+Migrationen ergänzen nur (neue Spalten, alle optional). Eine ältere
+Programmversion läuft deshalb mit dem neueren Schema weiter; ist die
+Datenbank neuer als das Programm, meldet der Start das und arbeitet weiter.
+
+### Stromausfall-Versuche
+
+Am Test-Stack (TimescaleDB pg16, Demo-Anlage, Takt 10 s), jeweils mit
+`docker kill -s KILL`, also ohne Gelegenheit zum Aufräumen.
+
+| Versuch | Ergebnis |
+|---|---|
+| Datenbank abgeschossen, 55 s später gestartet | Anwendung regelte weiter. 78 Messwerte lagen in der Spool-Datei und wurden 12 s nach dem Start nachgeschrieben. Abstand der Messwerte über den Ausfall hinweg: 10,00 s, keine Lücke, kein Duplikat. PostgreSQL: `redo done`. |
+| Anwendung abgeschossen und neu gestartet | 5 Geräte, 1 Konto, 8 Einstellungsabschnitte unverändert. |
+| Beide gleichzeitig abgeschossen (Stromausfall) | PostgreSQL: `database system was interrupted … redo done … ready`. Anwendung wartete und startete ohne Neustart-Schleife. Konfiguration vollständig, Schema-Stand 0005, größter Abstand im Verlauf 11 s, kein Duplikat. |
+| Datenbank-Volume gelöscht | Beim Start automatisch eingespielt: 5 Geräte, Konto, Einstellungen, dazu 52 Stundenwerte und 11 Ereignisse aus der Datensicherung. Die Anmeldung mit dem bisherigen Token blieb gültig. |
+| Reines PostgreSQL 16 ohne TimescaleDB | Startet, legt das Schema an, schreibt Messwerte. Das bisherige Image bricht hier ab. |
+| Bestehende Datenbank ohne Alembic-Stand | Sicherung `pre-migration-base-to-0005-…json` geschrieben, Revisionen 0001–0005 gelaufen, Hypertable, Kompression und Stundenwerte eingerichtet. |
+
+**Grenzen (nicht behebbar oder bewusst):**
+
+- Was beim harten Abbruch der Anwendung noch im Speicher lag, ist weg –
+  höchstens ein Schreibintervall (15 s). Bei einem Stromausfall misst in
+  dieser Zeit ohnehin niemand.
+- Die Zusage von PostgreSQL gilt nur, wenn der Datenträger `fsync` ehrlich
+  beantwortet. USB-Sticks und manche SSDs ohne Stützkondensator tun das
+  nicht; für diesen Fall gibt es die Sicherungen auf dem eigenen Volume.
+- Nach dem Verlust der Datenbank kommt der Verlauf in Stundenauflösung
+  zurück, nicht in Rohauflösung. Höchstens ein Tag fehlt (Abstand der
+  Datensicherung, einstellbar).
+- Die Spool-Datei fasst rund zehn Tage (256 MB). Danach werden neue Werte
+  verworfen und gezählt.
+
+**Geprüft:** 2447 Backend-Tests grün, davon 23 neu
+(`tests/test_durability.py`): Ausfall mit Neustart der Anwendung
+dazwischen, abgebrochenes Nachschreiben, abgeschnittene Spool- und
+Sicherungsdateien, Rundlauf Sicherung → leere Datenbank → Wiederherstellung
+mit neu vergebenen Geräte-IDs, Migration einer Datenbank im alten Stand.
+
+**Offen:**
+
+- Das Compose-Image der Datenbank ist `timescale/timescaledb:latest-pg16`.
+  Auf eine feste Version zu pinnen wäre sauberer, kann aber bestehende
+  Installationen brechen, deren Datenbank schon eine neuere
+  Erweiterungsversion trägt. Empfehlung: bei Neuinstallationen pinnen.
+- Eine Sicherung außer Haus (anderer Rechner, Cloud) gibt es nicht. Die
+  Dateien im Volume `backup_data` lassen sich mit jedem Werkzeug abholen.
+- Der Diagnosebereich zeigt den Zustand des Messwert-Puffers noch nicht
+  (kommt in Phase 4).

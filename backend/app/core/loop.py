@@ -445,6 +445,7 @@ class ControlLoop:
         #: ein Fahrzeug sie nur während des Ladens meldet.
         self._phases_saved: dict[int, int] = {}
         self.buffer = MeasurementBuffer()
+        self._reload_failures = 0
         # Vollständig vorbelegt: Das Frontend bekommt beim allerersten Abruf
         # (vor dem ersten Tick) dieselbe Struktur wie später – sonst müsste es
         # überall gegen fehlende Felder absichern.
@@ -490,6 +491,9 @@ class ControlLoop:
         for dev in self.devices.values():
             if dev.wake_task is not None and not dev.wake_task.done():
                 dev.wake_task.cancel()
+        # Gesammelte Messwerte noch schreiben – sonst fehlen bei jedem
+        # Neustart und Update die letzten Sekunden im Verlauf.
+        await self.buffer.close()
         # Fail-safe: Keinen Speicher in einem Zwangsmodus zurücklassen – weder
         # gesperrt (das Haus zöge bis zum nächsten Start alles aus dem Netz)
         # noch im Zwangsladen/-entladen. Gilt für Preisfenster UND manuelle
@@ -529,7 +533,22 @@ class ControlLoop:
             self._wake.clear()
             try:
                 if self._reload_requested:
-                    await self._reload()
+                    try:
+                        await self._reload()
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as exc:  # noqa: BLE001
+                        # Datenbank gerade nicht erreichbar: mit dem bisherigen
+                        # Stand weiterregeln und beim nächsten Takt erneut
+                        # laden. Früher ging die Anforderung verloren, und der
+                        # Takt fiel aus.
+                        self._reload_requested = True
+                        self._reload_failures += 1
+                        if self._reload_failures == 1 or self._reload_failures % 30 == 0:
+                            log.error("Konfiguration nicht geladen (Versuch %d), regle mit dem bisherigen Stand: %s",
+                                      self._reload_failures, exc)
+                    else:
+                        self._reload_failures = 0
                 await self._step()
             except asyncio.CancelledError:
                 raise
@@ -2478,7 +2497,9 @@ class ControlLoop:
                 if dev.data.temperature_c is not None:
                     b.add(f"device:{dev.id}", "water_temp", dev.data.temperature_c)
         if b.due():
-            await b.flush()
+            # Im Hintergrund: Eine langsame oder ausgefallene Datenbank darf
+            # den Takt nicht aufhalten (siehe services/measurements.py).
+            b.flush_soon()
 
         await self._track_waste(waste_w, waste_reason)
         await ws_manager.broadcast({"type": "snapshot", "data": self.snapshot})
