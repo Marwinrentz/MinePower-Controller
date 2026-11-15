@@ -208,7 +208,8 @@ async def test_every_api_route_needs_login():
     """Kein Endpunkt außer den bewusst offenen antwortet ohne Anmeldung."""
     from app.main import app
 
-    public = {"/api/system/health", "/api/system/setup-state", "/api/auth/login", "/api/auth/setup"}
+    public = {"/api/system/health", "/api/system/ready", "/api/system/setup-state", "/api/auth/login",
+              "/api/auth/setup"}
     checked = 0
     for path, operations in app.openapi()["paths"].items():
         if not path.startswith("/api/") or path in public:

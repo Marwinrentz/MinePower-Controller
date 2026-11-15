@@ -18,8 +18,30 @@ router = APIRouter(prefix="/api/statistics", tags=["statistics"])
 
 RANGES = {"24h": 1, "7d": 7, "30d": 30, "365d": 365}
 
-CO2_G_PER_KWH_GRID = 380.0  # dt. Strommix (näherungsweise, konfigurierbar via settings.ui)
+#: Vorgaben für die Bewertung, einstellbar im Abschnitt 'statistics' der
+#: Einstellungen: Strompreis und Einspeisevergütung in ct/kWh, CO₂ des
+#: Netzstroms in g/kWh (deutscher Strommix, näherungsweise).
+CO2_G_PER_KWH_GRID = 380.0
 DEFAULT_PRICE_CT = 32.0
+DEFAULT_FEED_IN_CT = 0.0
+
+
+async def _valuation(db: AsyncSession) -> tuple[float, float, float]:
+    """(Strompreis ct/kWh, Einspeisevergütung ct/kWh, CO₂ g/kWh)."""
+    from ..models import Setting
+
+    row = await db.get(Setting, "statistics")
+    value = row.value if row is not None and isinstance(row.value, dict) else {}
+
+    def num(key: str, default: float, lo: float, hi: float) -> float:
+        try:
+            v = float(value.get(key, default))
+        except (TypeError, ValueError):
+            return default
+        return v if lo <= v <= hi else default
+
+    return (num("price_ct", DEFAULT_PRICE_CT, 0.0, 200.0), num("feed_in_ct", DEFAULT_FEED_IN_CT, 0.0, 100.0),
+            num("co2_g_per_kwh", CO2_G_PER_KWH_GRID, 0.0, 2000.0))
 
 
 #: Größter Abstand zweier Messwerte, der noch als durchgehende Messung
@@ -56,9 +78,12 @@ _HOURLY_ENERGY_SQL = f"""
            sum(avg_pos * dur) / 3600000.0 AS pos_kwh,
            sum(-avg_neg * dur) / 3600000.0 AS neg_kwh
     FROM (
-        SELECT field, avg_pos, avg_neg,
-               LEAST(3600.0, CASE WHEN samples > 1
-                    THEN extract(epoch FROM (last_time - first_time)) * samples / (samples - 1)
+        SELECT bucket, field, avg_pos, avg_neg,
+               LEAST(3600.0, CASE
+                    WHEN samples > 1 THEN extract(epoch FROM (last_time - first_time)) * samples / (samples - 1)
+                    -- ein einzelner Wert genau zur vollen Stunde ist ein aus der
+                    -- Sicherung eingespielter Stundenwert und gilt für die ganze Stunde
+                    WHEN first_time = bucket THEN 3600.0
                     ELSE 0 END) AS dur
         FROM measurements_hourly
         WHERE source = 'site' AND bucket >= :since AND field IN {_ENERGY_FIELDS}
@@ -106,8 +131,11 @@ async def statistics(
     charged = sum(s.energy_kwh for s in sessions)
     charged_solar = sum(s.solar_kwh for s in sessions)
 
-    savings_eur = self_consumed * DEFAULT_PRICE_CT / 100.0
-    co2_saved_kg = self_consumed * CO2_G_PER_KWH_GRID / 1000.0
+    # Ersparnis: Jede selbst verbrauchte kWh spart den Bezugspreis, kostet
+    # aber die Vergütung, die es fürs Einspeisen gegeben hätte.
+    price_ct, feed_in_ct, co2_g = await _valuation(db)
+    savings_eur = self_consumed * max(0.0, price_ct - feed_in_ct) / 100.0
+    co2_saved_kg = self_consumed * co2_g / 1000.0
 
     # Verschenkter Solarstrom: Einspeisung über dem Netz-Sollwert, die keine
     # steuerbare Last aufgenommen hat. Wird vom Regelkreis je Tick gemessen
@@ -133,7 +161,11 @@ async def statistics(
         "wasted_pct": round(100.0 * wasted / pv, 1) if pv > 0 else 0.0,
         # Was der Überschuss wert gewesen wäre, hätte ihn eine Last aufgenommen
         # (Ersparnis gegenüber Netzbezug, nicht die Einspeisevergütung).
-        "wasted_value_eur": round(wasted * DEFAULT_PRICE_CT / 100.0, 2),
+        "wasted_value_eur": round(wasted * max(0.0, price_ct - feed_in_ct) / 100.0, 2),
+        # Womit gerechnet wurde (Einstellungen → Benachrichtigungen & Auswertung)
+        "price_ct": price_ct,
+        "feed_in_ct": feed_in_ct,
+        "co2_g_per_kwh": co2_g,
     }
 
 

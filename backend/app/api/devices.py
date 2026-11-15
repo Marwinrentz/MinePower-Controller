@@ -187,6 +187,29 @@ async def test_connection(body: TestConnectionRequest, db: AsyncSession = Depend
             pass
 
 
+@router.post("/{device_id}/test", response_model=TestResult)
+async def test_saved_device(device_id: int, db: AsyncSession = Depends(get_db),
+                            _: User = Depends(require_role("admin"))):
+    """Verbindungstest eines eingerichteten Geräts mit seinen gespeicherten
+    Einstellungen (nur lesend) – für die Diagnose."""
+    device = await db.get(Device, device_id)
+    if device is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Gerät nicht gefunden")
+    try:
+        driver = registry.create_driver(device.driver_id, reveal_config(device.driver_id, device.config or {}))
+    except KeyError:
+        raise HTTPException(422, f"Unbekannter Treiber: {device.driver_id}")
+    try:
+        return await asyncio.wait_for(driver.test_connection(include_write=False), timeout=20)
+    except asyncio.TimeoutError:
+        return TestResult(ok=False, message="Zeitüberschreitung – das Gerät antwortet nicht.")
+    finally:
+        try:
+            await driver.disconnect()
+        except Exception:  # noqa: BLE001 – Aufräumen darf den Test nicht kippen
+            pass
+
+
 WALLBOX_MODES = ("pv_only", "min_pv", "pv_price", "price", "target")
 WATER_MODES = ("off", "pv_only", "pv_price", "price", "schedule")
 

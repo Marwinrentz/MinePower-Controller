@@ -241,3 +241,69 @@ wo sie vorher falsch waren (Sungrow SG-Zähler, Huawei-Speicher, SMA mit
 Speicher, Fronius-Ladestand, OCPP dreiphasig). go-e schaltet beim Start
 jetzt ausdrücklich ein. Wer eine Sungrow-Wallbox eingerichtet hat, prüft
 die Unit-ID (Standard jetzt 248) mit „Verbindung testen“.
+
+## Phase 4 – Funktionen, Diagnose, Features
+
+Bewertung der Funktionen mit Aufwand und Nutzen: [FEATURES.md](FEATURES.md).
+
+**Gefunden:**
+
+- Neustart während einer Ladung: Der laufende Ladevorgang blieb für immer
+  offen, für dieselbe Ladung begann ein zweiter bei null. Jede Änderung an
+  einem Gerät hatte denselben Effekt.
+- Der Zwischenstand eines Ladevorgangs ging in jedem Takt an die Datenbank;
+  bei ausgefallener Datenbank stand in jedem Takt ein Fehler im Protokoll.
+- Ein Zeitplan mit unlesbarer Uhrzeit (aus einem Import) hielt den ganzen
+  Regeltakt an – für alle Geräte.
+- Der Healthcheck meldete „ok“, auch wenn der Regelkreis nicht lief.
+- Die Ersparnis rechnete fest mit 32 ct/kWh und ohne Einspeisevergütung.
+- Benachrichtigungen ließen sich nicht testen.
+- Stundenwerte aus einer eingespielten Sicherung zählten in der
+  Jahresauswertung mit null Energie (ein Wert je Stunde galt als Lücke).
+- Im Protokoll der Diagnose gab es nur Ereignisse; für alles andere
+  brauchte es `docker logs`.
+
+Durchgesehen ohne Befund: Zeitfenster über Mitternacht (Wochentag des
+Beginns zählt), Sicherheitsstopp bei fehlender oder ausgefallener
+Netzmessung, Rückfall der Batterie beim Beenden, Wiederholung fehlgeschlagener
+Geräteabfragen mit wachsendem Abstand, Begrenzung der hochgerechneten
+Energie bei ausgefallenen Takten. Der Regler selbst (Überschuss,
+Lückenfüller, Prognose, Batterie-Vorrang) ist durch rund 1900 vorhandene
+Tests abgedeckt und wurde nicht Zeile für Zeile neu geprüft.
+
+**Geändert:**
+
+- `core/loop.py`: Offene Ladevorgänge werden nach einem Neustart
+  fortgesetzt (bis 24 h alt) oder abgeschlossen; Zwischenstand einmal je
+  Minute; Antwortzeit und Zähler je Gerät; Zeitpunkt des letzten Takts.
+- `core/schedules.py`: unlesbare Uhrzeit = Fenster geschlossen.
+- `core/plausibility.py` (neu): meldet nach einigen Minuten, wenn die
+  Energiebilanz nicht aufgeht, der Zähler ohne Erzeugung einspeist oder
+  nachts PV-Leistung anliegt.
+- `core/logbuffer.py` (neu): die letzten 2000 Protokollzeilen im Speicher.
+- `services/anonymize.py` (neu): ersetzt Adressen, E-Mail-Adressen,
+  Fahrgestellnummern und Gerätenamen durch feste Platzhalter.
+- `api/system.py`: `/api/system/ready` (503 bei stehendem Regelkreis;
+  `/health` bleibt für Oberfläche und Apps bei 200), `/logs`,
+  `/notify-test`, `/diagnostic-export` (ZIP).
+- `api/devices.py`: Verbindungstest eines eingerichteten Geräts.
+- `api/history.py`: Verlauf als CSV. `api/statistics.py`: Preis,
+  Vergütung und CO₂ aus den Einstellungen.
+- Oberfläche: Diagnose mit Antwortzeiten, Verbindungstest, Protokoll und
+  Export; Einstellungen mit Webhook, Testnachricht und Auswertung;
+  Statistik mit CSV-Download des Verlaufs.
+- Docker-Healthcheck nutzt `/api/system/ready`.
+
+**Geprüft:** 2489 Backend-Tests grün, davon 13 neu
+(`tests/test_operations.py`). Am Test-Stack mit TimescaleDB: Statistik über
+Rohdaten und Stundenwerte, Tagesbilanz, CSV, Protokoll, ZIP-Export (keine
+Klarnamen, keine Adressen), Healthcheck.
+
+**Offen:**
+
+- Steuern über MQTT, E-Mail in der Oberfläche, Phasenbilanz am
+  Hausanschluss: siehe FEATURES.md.
+- Die Plausibilitätsprüfung „PV nachts“ nimmt 0–3 Uhr Ortszeit als dunkel
+  an; nördlich des Polarkreises stimmt das im Sommer nicht.
+- Eine offene WebSocket-Verbindung wird nach einem Passwortwechsel nicht
+  getrennt (SECURITY.md).

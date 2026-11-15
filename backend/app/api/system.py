@@ -26,19 +26,53 @@ router = APIRouter(prefix="/api/system", tags=["system"])
 EXPORT_VERSION = 1
 
 
-@router.get("/health")
-async def health():
-    """Ungeschützter Healthcheck für Docker/Monitoring."""
-    loop_ok = False
+#: Der Regelkreis gilt als stehend, wenn so lange kein Takt begonnen hat (s).
+#: Großzügig: Ein Takt darf auf langsame Geräte warten.
+LOOP_STALL_S = 180.0
+
+
+def loop_health() -> dict[str, Any]:
+    """Zustand des Regelkreises: läuft die Aufgabe, und kommen noch Takte?"""
+    import time as _time
+
     try:
         loop = runtime.get_loop()
-        loop_ok = loop._task is not None and not loop._task.done()
     except RuntimeError:
-        pass
+        return {"control_loop": "stopped", "healthy": False, "last_step_age_s": None}
+    running = loop._task is not None and not loop._task.done()
+    last = getattr(loop, "last_step_at", None)
+    age = None if last is None else round(_time.monotonic() - last, 1)
+    stalled = running and age is not None and age > max(LOOP_STALL_S, 6 * loop.cfg.interval_s)
+    state = "stalled" if stalled else ("running" if running else "stopped")
+    return {"control_loop": state, "healthy": running and not stalled, "last_step_age_s": age}
+
+
+def _health_body() -> tuple[dict[str, Any], bool]:
     from .. import __version__
 
-    return {"status": "ok", "control_loop": "running" if loop_ok else "stopped",
-            "version": __version__, "time": datetime.now(timezone.utc).isoformat()}
+    state = loop_health()
+    return ({"status": "ok" if state["healthy"] else "degraded", "control_loop": state["control_loop"],
+             "last_step_age_s": state["last_step_age_s"], "version": __version__,
+             "time": datetime.now(timezone.utc).isoformat()}, state["healthy"])
+
+
+@router.get("/health")
+async def health():
+    """Ungeschützte Auskunft für Oberfläche und Apps: Version und Zustand.
+    Antwortet immer mit 200 – auch eine Anlage mit stehendem Regelkreis muss
+    sich noch öffnen lassen, um nachzusehen. `status` nennt den Zustand."""
+    return _health_body()[0]
+
+
+@router.get("/ready")
+async def ready():
+    """Healthcheck für Docker und Monitoring: 503, wenn der Regelkreis nicht
+    läuft oder steht. Ohne ihn regelt nichts mehr, auch wenn die Oberfläche
+    noch antwortet; Docker markiert den Container dann als 'unhealthy'."""
+    from fastapi.responses import JSONResponse
+
+    body, healthy = _health_body()
+    return JSONResponse(body, status_code=200 if healthy else 503)
 
 
 @router.get("/changelog")
@@ -556,6 +590,9 @@ async def diagnostics(_: User = Depends(get_current_user)):
         "regulation_config": vars(loop.cfg),
         "priority": loop.priority,
         "paused": loop.paused,
+        # Regelkreis (läuft/steht) und Messwert-Puffer (wartet etwas auf die Datenbank?)
+        "health": loop_health(),
+        "measurements": loop.buffer.status(),
         "grid_smoothed": loop.grid_smoother.value,
         # Regelgüte auf einen Blick: Wie ruhig ist das Wetter, wie eng wird
         # dadurch geregelt, und wie viel Überschuss geht gerade verloren?
@@ -590,6 +627,11 @@ async def diagnostics(_: User = Depends(get_current_user)):
                 "online": d.online, "failures": d.failures, "last_error": d.last_error,
                 "command_error": d.command_error,
                 "last_seen": d.last_seen.isoformat() if d.last_seen else None,
+                # Antwortzeit (letzte, gleitendes Mittel) und Zähler seit dem Start
+                "read_ms": None if d.read_ms is None else round(d.read_ms, 1),
+                "read_ms_avg": None if d.read_ms_avg is None else round(d.read_ms_avg, 1),
+                "reads_ok": d.reads_ok, "reads_failed": d.reads_failed,
+                "last_error_at": d.last_error_at.isoformat() if d.last_error_at else None,
                 "raw_data": d.data.model_dump() if d.data is not None else None,
                 "decision": d.decision,
                 "sent": {k: v for k, v in d.sent.items()},
@@ -597,6 +639,131 @@ async def diagnostics(_: User = Depends(get_current_user)):
             for d in loop.devices.values()
         ],
     }
+
+
+# ---------------------------------------------------------------- Protokoll, Export
+
+@router.get("/logs")
+async def logs(
+    level: str = Query("info"),
+    q: str = Query("", max_length=200),
+    limit: int = Query(200, ge=1, le=2000),
+    after_id: int = Query(0, ge=0),
+    _: User = Depends(require_role("admin")),
+):
+    """Die jüngsten Protokollzeilen der Anwendung (im Speicher, seit dem
+    Start), gefiltert nach Mindeststufe und Suchtext. Zugangsdaten sind
+    geschwärzt. `after_id` liefert nur neuere Zeilen (für das Mitlesen)."""
+    from ..core import logbuffer
+
+    return {"entries": logbuffer.entries(level=level, query=q, limit=limit, after_id=after_id)}
+
+
+@router.post("/notify-test")
+async def notify_test(user: User = Depends(require_role("admin"))):
+    """Testnachricht an alle eingerichteten Kanäle; Ergebnis je Kanal."""
+    loop = runtime.get_loop()
+    if loop.notifier is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Benachrichtigungen sind nicht verfügbar")
+    await loop.notifier.refresh_config()
+    result = await loop.notifier.deliver("Testnachricht – die Benachrichtigung funktioniert.")
+    if not result:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Kein Kanal eingerichtet")
+    return {"ok": all(v is None for v in result.values()),
+            "channels": [{"channel": k, "ok": v is None, "error": v} for k, v in result.items()]}
+
+
+async def _or_error(fn) -> Any:
+    """Einen Teil des Exports beschaffen; ein Fehler dabei wird als Text
+    eingetragen, statt den ganzen Export zu verhindern."""
+    import inspect
+
+    try:
+        result = fn()
+        return await result if inspect.isawaitable(result) else result
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"{type(exc).__name__}: {str(exc)[:200]}"}
+
+
+@router.get("/diagnostic-export")
+async def diagnostic_export(
+    range: str = Query("24h"),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin")),
+):
+    """Diagnose als ZIP für den Support: Bericht, Protokoll und Systemangaben.
+
+    **Anonymisiert:** Zugangsdaten fehlen (wie im Diagnosebericht), dazu
+    werden Netzwerkadressen, E-Mail-Adressen, Fahrgestellnummern und die
+    Namen der Geräte durch Platzhalter ersetzt – gleiche Werte bekommen
+    denselben Platzhalter, damit sich die Dateien weiter aufeinander
+    beziehen lassen."""
+    import io
+    import json
+    import platform
+    import zipfile
+
+    from fastapi.responses import Response
+
+    from .. import __version__
+    from ..core import logbuffer
+    from ..services import backup
+    from ..services.anonymize import Anonymizer
+
+    devices = (await db.scalars(select(Device))).all()
+    db.expunge_all()
+    try:
+        report: dict[str, Any] = await diagnostic_report(range=range, db=db, user=user)
+    except Exception as exc:  # noqa: BLE001
+        # Gerade wenn etwas klemmt (Datenbank, Auswertung), wird der Export
+        # gebraucht: dann ohne Verlauf, mit dem, was der Regelkreis weiß.
+        await db.rollback()
+        loop = runtime.get_loop()
+        from ..services.diagnostics import findings
+
+        report = {
+            "report_error": f"{type(exc).__name__}: {str(exc).splitlines()[0][:300]}",
+            "findings": findings(loop, list(loop.devices.values()), {}),
+            "live": loop.snapshot,
+            "devices": [{"id": d.id, "name": d.name, "category": d.category, "driver_id": d.driver_id,
+                         "enabled": d.enabled, "config": _redact_config(d.driver_id, d.config or {}),
+                         "settings": d.settings or {}} for d in devices],
+        }
+    anon = Anonymizer(device_names=[d.name for d in devices])
+    try:
+        from .. import startup
+
+        current, head = await startup._schema_revisions()
+    except Exception:  # noqa: BLE001
+        current = head = None
+    system = {
+        "version": __version__, "python": platform.python_version(), "platform": platform.platform(),
+        "generated_at": datetime.now(timezone.utc).isoformat(), "health": loop_health(),
+        "schema": {"database": current, "program": head},
+        "storage": await _or_error(backup.storage_status), "backups": await _or_error(backup.status),
+        "measurements": runtime.get_loop().buffer.status(),
+        "drivers": sorted({d.driver_id for d in devices}),
+    }
+    lines = [f"{e['time']} {e['level'].upper():7s} {e['logger']}: {e['message']}"
+             for e in logbuffer.entries(level="info", limit=logbuffer.CAPACITY)]
+    readme = (
+        "MinePower Diagnose-Export\n\n"
+        "report.json  Befunde, Regelung, Verlauf und Ereignisse des Zeitraums\n"
+        "system.json  Version, Zustand des Regelkreises, Speicherplatz, Sicherungen\n"
+        "log.txt      Protokoll seit dem Start der Anwendung\n\n"
+        "Anonymisiert: keine Zugangsdaten; Adressen, E-Mail-Adressen, Fahrgestellnummern und\n"
+        "Gerätenamen sind durch Platzhalter ersetzt.\n"
+    )
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("LIESMICH.txt", readme)
+        zf.writestr("report.json", json.dumps(anon.scrub(report), ensure_ascii=False, indent=1, default=str))
+        zf.writestr("system.json", json.dumps(anon.scrub(system), ensure_ascii=False, indent=1, default=str))
+        zf.writestr("log.txt", anon.text("\n".join(lines)) + "\n")
+    await log_event("Diagnose-Export erstellt", category="system", user_id=user.id)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M")
+    return Response(buf.getvalue(), media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="minepower-diagnose-{stamp}.zip"'})
 
 
 # ---------------------------------------------------------------- Demo-Szenarien

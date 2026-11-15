@@ -105,6 +105,35 @@ def _state_findings(loop, devices: list, settings: dict[str, Any]) -> list[dict[
     cfg = loop.cfg
     managed = {d.id: d for d in loop.devices.values()}
 
+    # --- Messwerte, die nicht zusammenpassen ------------------------------
+    tracker = getattr(loop, "plausibility", None)
+    if tracker is not None:
+        import time as _time
+
+        for item in tracker.findings(_time.monotonic()):
+            out.append(_finding(
+                "error", item["title"],
+                f"{item['detail']} Seit {max(1, item['since_s'] // 60)} min.", item["hint"],
+            ))
+
+    # --- Messwerte, die auf die Datenbank warten --------------------------
+    buffer = getattr(loop, "buffer", None)
+    status = buffer.status() if buffer is not None and hasattr(buffer, "status") else None
+    if status and status["failures"]:
+        waiting = status["spool_bytes"] // 1024
+        out.append(_finding(
+            "warning", "Datenbank nimmt keine Messwerte an",
+            f"{status['failures']} Schreibversuche in Folge fehlgeschlagen ({status['last_error']}). "
+            f"{waiting} kB warten in der Spool-Datei und werden nachgeschrieben.",
+            "Datenbank-Container und Speicherplatz prüfen. Die Regelung läuft weiter.",
+        ))
+    if status and status["dropped"]:
+        out.append(_finding(
+            "error", "Messwerte verworfen",
+            f"{status['dropped']} Messwerte gingen verloren, weil die Datenbank zu lange fehlte.",
+            "Datenbank wieder in Betrieb nehmen; im Verlauf bleibt eine Lücke.",
+        ))
+
     # --- doppelt angelegte Geräte ---------------------------------------
     seen: dict[tuple, str] = {}
     for row in devices:

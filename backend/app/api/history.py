@@ -103,8 +103,11 @@ _DAILY_HOURLY_SQL = """
            sum(-avg_neg * dur) / 3600000.0 AS neg_kwh
     FROM (
         SELECT bucket, field, avg_pos, avg_neg,
-               LEAST(3600.0, CASE WHEN samples > 1
-                    THEN extract(epoch FROM (last_time - first_time)) * samples / (samples - 1)
+               LEAST(3600.0, CASE
+                    WHEN samples > 1 THEN extract(epoch FROM (last_time - first_time)) * samples / (samples - 1)
+                    -- ein einzelner Wert genau zur vollen Stunde ist ein aus der
+                    -- Sicherung eingespielter Stundenwert und gilt für die ganze Stunde
+                    WHEN first_time = bucket THEN 3600.0
                     ELSE 0 END) AS dur
         FROM measurements_hourly
         WHERE source = 'site' AND bucket >= :since AND field IN ('pv_power', 'house_power', 'grid_power')
@@ -142,3 +145,38 @@ async def energy_balance(
         else:
             day[r.field] = round(r.pos_kwh or 0.0, 2)
     return out
+
+
+@router.get("/export.csv")
+async def export_history_csv(
+    fields: str = Query("pv_power,grid_power,house_power,wallbox_power,water_power,battery_power,battery_soc"),
+    range: str = Query("24h"),
+    source: str = Query("site"),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Verlauf als CSV (Semikolon, Dezimalkomma – öffnet in Excel direkt).
+    Eine Zeile je Zeitpunkt, eine Spalte je Größe; fehlende Werte bleiben leer."""
+    import csv
+    import io
+
+    from fastapi.responses import Response
+
+    data = await get_history(fields=fields, range=range, source=source, db=db, _=user)
+    names = list(data)
+    by_time: dict[str, dict[str, float]] = {}
+    for name, points in data.items():
+        for point in points:
+            by_time.setdefault(point["time"], {})[name] = point["value"]
+    buf = io.StringIO()
+    writer = csv.writer(buf, delimiter=";")
+    writer.writerow(["Zeit (UTC)", *names])
+    for when in sorted(by_time):
+        row = by_time[when]
+        writer.writerow([when, *("" if row.get(n) is None else f"{row[n]:.1f}".replace(".", ",") for n in names)])
+    safe_range = range if range in RANGES else "24h"
+    return Response(
+        "\ufeff" + buf.getvalue(),  # BOM: Excel erkennt UTF-8
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="minepower_verlauf_{safe_range}.csv"'},
+    )

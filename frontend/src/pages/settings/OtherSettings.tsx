@@ -6,7 +6,7 @@ import { Icon } from "../../components/icons";
 import { ActionButton, Badge, Button, Card, CardHead, Field, Segment } from "../../components/ui";
 import { APP_VERSION, useServerVersion } from "../../lib/useVersion";
 import { useI18n } from "../../i18n";
-import { del, get, post, put } from "../../lib/api";
+import { ApiError, del, get, post, put } from "../../lib/api";
 import { fmtTime } from "../../lib/format";
 import type { User } from "../../lib/types";
 import { useDevices } from "../../lib/useDevices";
@@ -64,6 +64,72 @@ export function NotificationSettings() {
         <Field label={t("set.notifications.telegramChat")}>
           <input className="input" value={n.str("telegram_chat_id", "")} onChange={(e) => n.set("telegram_chat_id", e.target.value)} />
         </Field>
+      </div>
+      <Field label={t("set.notifications.webhook")} help={t("set.notifications.webhookHelp")}>
+        <input className="input" inputMode="url" value={n.str("webhook_url", "")} placeholder="https://…"
+               onChange={(e) => n.set("webhook_url", e.target.value)} />
+      </Field>
+      <NotifyTest />
+    </Card>
+  );
+}
+
+/** Testnachricht an die gespeicherten Kanäle; zeigt je Kanal, ob sie ankam. */
+function NotifyTest() {
+  const { t } = useI18n();
+  const isAdmin = useAuth((s) => s.user?.role === "admin");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ channel: string; ok: boolean; error: string | null }[] | null>(null);
+  if (!isAdmin) return null;
+  const send = async () => {
+    setBusy(true);
+    setResult(null);
+    try {
+      const r = await post<{ channels: { channel: string; ok: boolean; error: string | null }[] }>("/api/system/notify-test");
+      setResult(r.channels);
+    } catch (e) {
+      const status = e instanceof ApiError ? e.status : 0;
+      toast.err(status === 409 ? t("set.notifications.testNone") : e instanceof Error ? e.message : String(e));
+    } finally { setBusy(false); }
+  };
+  return (
+    <>
+      <div className="form-actions start">
+        <ActionButton disabled={busy} onClick={send}>{t("set.notifications.test")}</ActionButton>
+      </div>
+      <p className="field-help">{t("set.notifications.testHelp")}</p>
+      {result && (
+        <ul className="field-help" role="status">
+          {result.map((c) => (
+            <li key={c.channel} className={c.ok ? undefined : "err-text"}>
+              {c.ok ? t("set.notifications.testOk", { channel: c.channel })
+                : t("set.notifications.testFail", { channel: c.channel, error: c.error ?? "" })}
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+/** Bewertung in der Statistik: Strompreis, Einspeisevergütung, CO₂. */
+export function StatisticsSettings() {
+  const { t } = useI18n();
+  const s = useSection("statistics");
+  const field = (key: string, fallback: number, label: string, help: string, max: number) => (
+    <Field label={t(label)} help={t(help)}>
+      <input className="input num" type="number" inputMode="decimal" min={0} max={max} step="0.1"
+             value={s.str(key, String(fallback))}
+             onChange={(e) => s.set(key, e.target.value === "" ? "" : Number(e.target.value))} />
+    </Field>
+  );
+  return (
+    <Card>
+      <CardHead title={t("set.sec.statistics")} sub={t("set.statistics.help")} />
+      <div className="form-grid">
+        {field("price_ct", 32, "set.statistics.price", "set.statistics.priceHelp", 200)}
+        {field("feed_in_ct", 0, "set.statistics.feedIn", "set.statistics.feedInHelp", 100)}
+        {field("co2_g_per_kwh", 380, "set.statistics.co2", "set.statistics.co2Help", 2000)}
       </div>
     </Card>
   );

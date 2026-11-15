@@ -52,7 +52,7 @@ EXPOSE 8000
 
 # Auch ohne Compose (z. B. Unraid): Docker erkennt eine hängende Anwendung.
 HEALTHCHECK --interval=15s --timeout=10s --start-period=30s --retries=5 \
-    CMD ["python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/system/health',timeout=5).status==200 else 1)"]
+    CMD ["python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/system/ready',timeout=5).status==200 else 1)"]
 
 # Startet als root, übergibt die Datenordner und wechselt dann auf den
 # unprivilegierten Nutzer (siehe docker-entrypoint.sh).

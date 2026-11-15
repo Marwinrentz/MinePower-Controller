@@ -82,6 +82,9 @@ DEFAULT_SETTINGS: dict[str, dict] = {
     "notifications": {"ntfy_url": "", "telegram_token": "", "telegram_chat_id": "", "email": "",
                       "webhook_url": ""},
     "ui": {"default_language": "de"},
+    # Bewertung in der Statistik: Strompreis und Einspeisevergütung (ct/kWh),
+    # CO₂ des Netzstroms (g/kWh).
+    "statistics": {"price_ct": 32, "feed_in_ct": 0, "co2_g_per_kwh": 380},
 }
 
 

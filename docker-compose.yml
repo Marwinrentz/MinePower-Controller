@@ -103,7 +103,7 @@ services:
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/system/health',timeout=5).status==200 else 1)"]
+      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/system/ready',timeout=5).status==200 else 1)"]
       interval: 15s
       timeout: 10s
       retries: 5

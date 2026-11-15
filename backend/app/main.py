@@ -25,7 +25,7 @@ from .api import (
     vehicles,
 )
 from .config import get_settings
-from .core import logsafe, runtime
+from .core import logbuffer, logsafe, runtime
 from .core.loop import ControlLoop
 from .drivers import registry
 from .services.backup import BackupService
@@ -46,6 +46,7 @@ async def lifespan(app: FastAPI):
     )
     # Zugangsdaten in Adressen und Fehlermeldungen schwärzen (core/logsafe.py)
     logsafe.install()
+    logbuffer.install()
     registry.discover()
     log.info("Treiber registriert: %s", ", ".join(sorted(m.id for m in registry.all_metas())))
 
