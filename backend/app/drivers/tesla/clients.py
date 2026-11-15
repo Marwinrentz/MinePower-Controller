@@ -68,9 +68,13 @@ class TeslaHttpClient:
     guttun.
     """
 
-    def __init__(self, base_url: str, vehicle_tag: str, auth_header: str = "") -> None:
+    def __init__(self, base_url: str, vehicle_tag: str, auth_header: str = "",
+                 wake_as_command: bool = False) -> None:
         self.base = base_url.rstrip("/")
         self.tag = vehicle_tag  # VIN (Proxy) oder Fahrzeug-ID (Fleet)
+        #: Der BLE-Proxy kennt das Wecken nur als Befehl (…/command/wake_up),
+        #: die Fleet-API als eigenen Pfad (…/wake_up).
+        self.wake_as_command = wake_as_command
         self.headers = {"Authorization": auth_header} if auth_header else {}
         self._session: aiohttp.ClientSession | None = None
 
@@ -139,10 +143,24 @@ class TeslaHttpClient:
         return result
 
     async def wake_up(self) -> None:
+        """Fahrzeug wecken.
+
+        Bis 3.2.0 ging der Aufruf immer an ``…/wake_up``. Diesen Pfad gibt es
+        nur bei der Fleet-API; der TeslaBleHttpProxy antwortet darauf mit
+        404, das Wecken über den Proxy schlug also immer fehl."""
         self._check_config()
+        if self.wake_as_command:
+            await self.command("wake_up")
+            return
         url = f"{self.base}/api/1/vehicles/{self.tag}/wake_up"
-        async with self._http().post(url) as resp:
-            resp.raise_for_status()
+        try:
+            async with self._http().post(url) as resp:
+                if resp.status in (401, 403):
+                    raise TeslaCommandRejected("unauthorized")
+                resp.raise_for_status()
+        except aiohttp.ClientConnectorError as exc:
+            await self.close()
+            raise ConnectionError(f"Tesla-Endpunkt {self.base} nicht erreichbar ({exc})") from exc
 
 
 FLEET_BASE_URLS = {
@@ -162,7 +180,7 @@ def make_client(config: dict) -> TeslaHttpClient:
     # einen expliziten Port, hat dieser Vorrang; sonst wird proxy_port angehängt.
     base = _apply_proxy_port(str(config.get("proxy_url", "")), config.get("proxy_port"))
     return TeslaHttpClient(base, str(config.get("vin", "")),
-                           auth_header=str(config.get("proxy_auth", "")))
+                           auth_header=str(config.get("proxy_auth", "")), wake_as_command=True)
 
 
 def _apply_proxy_port(url: str, port) -> str:

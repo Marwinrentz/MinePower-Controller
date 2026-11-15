@@ -188,3 +188,56 @@ mit neu vergebenen Geräte-IDs, Migration einer Datenbank im alten Stand.
   Dateien im Volume `backup_data` lassen sich mit jedem Werkzeug abholen.
 - Der Diagnosebereich zeigt den Zustand des Messwert-Puffers noch nicht
   (kommt in Phase 4).
+
+## Phase 3 – Treiber
+
+Einzelheiten, Quellen und Stand je Treiber: [DRIVERS.md](DRIVERS.md).
+
+Vorgehen: Register, Datentypen, Skalierung, Vorzeichen und Befehle aus dem
+Code gezogen und gegen Online-Quellen gehalten – Herstellerdokumente
+(my-PV), Referenzimplementierungen (evcc), gepflegte Registerkarten
+(Sungrow: mkaiser, SunGather) und die Quelltexte der Gegenstelle
+(TeslaBleHttpProxy). Für die 20 Modbus-Wallbox-Profile lief ein
+automatischer Abgleich der Registeradressen gegen die evcc-Quellen.
+
+**Gefunden** (17 Fehler in 10 Treibern), die wichtigsten:
+
+- Sungrow SH/Batterie: Batterieleistung seit Firmware Herbst 2024 mit
+  Vorzeichen; vorzeichenlos gelesen wurden aus 3 kW Entladen 62 kW.
+- Sungrow Zähler an der SG-Serie: Bezug und Einspeisung vertauscht.
+- Sungrow Wallbox: Registerlayout nicht belegbar, Start und Stopp vertauscht.
+- my-PV: Status 9 als Fehler angezeigt; Leistung des AC•THOR über HTTP
+  nicht gelesen; AC ELWA-E über Modbus nicht lesbar.
+- go-e: Freigabe nur „neutral“ statt „ein“; Phasenzahl aus der Vorgabe
+  statt aus der Messung.
+- Fronius: Batterie-Ladestand aus einem Feld gelesen, das es nicht gibt.
+- Huawei: Speicherleistung aus dem Register des Ladestands gelesen.
+- SMA: Batterieentladung erschien als Sonnenstrom.
+- Tesla über BLE-Proxy: Wecken ging an einen Pfad, den der Proxy nicht hat.
+- OCPP: Phasenleistungen überschrieben einander; Profil ohne Startzeit;
+  jede Kennung durfte sich verbinden.
+
+**Geändert:** alle Funde behoben (Liste in DRIVERS.md). Sungrow-Wallbox neu
+geschrieben. OCPP nimmt nur eingerichtete Kennungen an und kennt ein
+optionales Passwort.
+
+**Geprüft:** 2476 Backend-Tests grün, davon 29 neu
+(`tests/test_driver_protocols.py`): je Treiber nachgestellte
+Geräteantworten für Adresse, Datentyp, Skalierung und Vorzeichen; OCPP mit
+echter WebSocket-Verbindung auf localhost.
+
+**Nicht verifiziert:**
+
+- Nichts wurde an Hardware geprüft. Die Korrekturen stützen sich auf
+  Dokumentation und Referenzimplementierungen.
+- Modbus-Wallboxen: nur Registeradressen abgeglichen.
+- HTTP-, MQTT- und Cloud-Wallboxen, SG-Ready, generische Treiber: nicht
+  gegen Dokumentation geprüft.
+- Zwei Annahmen sind als solche markiert: Summe der Leistungen beim
+  AC•THOR 9s, Zwangsleistung der Sungrow-Batterie in Watt.
+
+**Hinweis für bestehende Anlagen:** Die Korrekturen ändern Messwerte dort,
+wo sie vorher falsch waren (Sungrow SG-Zähler, Huawei-Speicher, SMA mit
+Speicher, Fronius-Ladestand, OCPP dreiphasig). go-e schaltet beim Start
+jetzt ausdrücklich ein. Wer eine Sungrow-Wallbox eingerichtet hat, prüft
+die Unit-ID (Standard jetzt 248) mit „Verbindung testen“.

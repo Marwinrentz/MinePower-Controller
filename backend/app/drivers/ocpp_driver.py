@@ -16,7 +16,7 @@ import json
 import logging
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 
 from .base import (
@@ -128,6 +128,10 @@ class OcppCentralServer:
 
     def __init__(self) -> None:
         self.sessions: dict[str, ChargePointSession] = {}
+        #: Eingerichtete Kennungen → Passwort (None = ohne Anmeldung). Nur
+        #: diese dürfen sich verbinden; vorher legte jede beliebige Adresse
+        #: eine Sitzung an.
+        self.expected: dict[str, str | None] = {}
         self._server = None
         self._port: int | None = None
 
@@ -136,6 +140,41 @@ class OcppCentralServer:
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance
+
+    def expect(self, cp_id: str, password: str | None = None) -> None:
+        """Eine Wallbox ankündigen: Kennung und (optional) ihr Passwort."""
+        self.expected[cp_id] = password or None
+
+    def check_handshake(self, path: str, headers) -> tuple[int, str] | None:
+        """Verbindungsaufbau prüfen. None = annehmen, sonst (Status, Grund).
+
+        * Unbekannte Kennung → 404. Die Kennung ist der letzte Teil der Adresse.
+        * Ist ein Passwort hinterlegt, muss die Box es per HTTP Basic senden
+          (OCPP-Sicherheitsprofil 1: Nutzer = Kennung, Passwort =
+          AuthorizationKey). Ohne Passwort gilt Profil 0 – jeder im Netz, der
+          die Kennung kennt, könnte sich dann als diese Box ausgeben."""
+        cp_id = (path or "/").split("?", 1)[0].strip("/").split("/")[-1]
+        if cp_id not in self.expected:
+            return 404, f"Unbekannte Charge-Point-ID '{cp_id[:40]}'"
+        password = self.expected[cp_id]
+        if password is None:
+            return None
+        import base64
+        import hmac
+
+        header = ""
+        try:
+            header = headers.get("Authorization", "") or ""
+        except Exception:  # noqa: BLE001
+            header = ""
+        if header.lower().startswith("basic "):
+            try:
+                user, _, given = base64.b64decode(header[6:].strip()).decode("utf-8", "replace").partition(":")
+            except Exception:  # noqa: BLE001
+                user, given = "", ""
+            if user == cp_id and hmac.compare_digest(given.encode(), password.encode()):
+                return None
+        return 401, "Anmeldung fehlt oder falsch"
 
     def session(self, cp_id: str) -> ChargePointSession:
         if cp_id not in self.sessions:
@@ -149,8 +188,18 @@ class OcppCentralServer:
             return
         import websockets
 
+        async def process_request(path, headers):
+            verdict = self.check_handshake(path, headers)
+            if verdict is None:
+                return None
+            status, reason = verdict
+            log.warning("OCPP: Verbindung abgelehnt (%s): %s", status, reason)
+            extra = [("WWW-Authenticate", 'Basic realm="OCPP"')] if status == 401 else []
+            return status, extra, (reason + "\n").encode()
+
         self._server = await websockets.serve(
-            self._handle, "0.0.0.0", port, subprotocols=["ocpp1.6"]
+            self._handle, "0.0.0.0", port, subprotocols=["ocpp1.6"], process_request=process_request,
+            max_size=256 * 1024,
         )
         self._port = port
         log.info("OCPP-Zentrale lauscht auf Port %d", port)
@@ -223,7 +272,15 @@ class OcppCentralServer:
         return {}
 
     def _parse_meter_values(self, s: ChargePointSession, p: dict) -> None:
+        """Messwerte übernehmen (OCPP 1.6, Abschnitt 7.31 und 7.32).
+
+        Leistung und Zählerstand kommen entweder als Gesamtwert oder je Phase
+        (``phase``: L1, L2, L3 bzw. L1-N …). Phasenwerte werden summiert –
+        früher überschrieb jede Phase die vorige, und eine dreiphasige Ladung
+        erschien mit einem Drittel ihrer Leistung."""
         for mv in p.get("meterValue", []):
+            power_total: float | None = None
+            power_phases: dict[str, float] = {}
             for sample in mv.get("sampledValue", []):
                 measurand = sample.get("measurand", "Energy.Active.Import.Register")
                 try:
@@ -231,12 +288,21 @@ class OcppCentralServer:
                 except (TypeError, ValueError):
                     continue
                 unit = sample.get("unit", "")
+                phase = str(sample.get("phase") or "")
                 if measurand == "Power.Active.Import":
-                    s.power = value * 1000.0 if unit == "kW" else value
-                elif measurand == "Energy.Active.Import.Register":
+                    watts = value * 1000.0 if unit == "kW" else value
+                    if phase:
+                        power_phases[phase[:2]] = watts  # 'L1-N' und 'L1' sind dieselbe Phase
+                    else:
+                        power_total = watts
+                elif measurand == "Energy.Active.Import.Register" and not phase:
                     s.energy_kwh = value / 1000.0 if unit in ("Wh", "") else value
                 elif measurand == "Current.Offered":
                     s.current_offered = value
+            if power_total is not None:
+                s.power = power_total
+            elif power_phases:
+                s.power = sum(v for k, v in power_phases.items() if k in ("L1", "L2", "L3"))
 
 
 @register
@@ -271,6 +337,9 @@ class OcppWallbox(WallboxDriver):
             ConfigField(key="id_tag", label="ID-Tag für Fernstart", default="minepower", required=False,
                         help="Kennung, mit der MinePower Ladevorgänge startet. Manche Boxen "
                              "akzeptieren nur in ihrer Whitelist hinterlegte Tags."),
+            ConfigField(key="password", label="Passwort der Wallbox", type=FieldType.PASSWORD, required=False,
+                        help="Optional. Wenn gesetzt, muss sich die Wallbox damit anmelden (HTTP Basic, "
+                             "in der Box oft 'AuthorizationKey'). Leer = ohne Anmeldung."),
             ConfigField(key="max_silence_s", label="Heartbeat-Timeout (s)", type=FieldType.NUMBER,
                         default=900, required=False,
                         help="Nach dieser Stille ohne Heartbeat gilt die Wallbox als getrennt. "
@@ -289,6 +358,7 @@ class OcppWallbox(WallboxDriver):
         # Heartbeat-Intervall wird der Box im BootNotification vorgegeben (300 s);
         # nach dem Dreifachen gilt sie als tot.
         self.max_silence_s = float(config.get("max_silence_s") or 900)
+        OcppCentralServer.instance().expect(self.cp_id, str(config.get("password") or "") or None)
 
     async def connect(self) -> None:
         server = OcppCentralServer.instance()
@@ -333,6 +403,10 @@ class OcppWallbox(WallboxDriver):
                 "chargingProfilePurpose": "TxDefaultProfile",
                 "chargingProfileKind": "Absolute",
                 "chargingSchedule": {
+                    # Ein absolutes Profil braucht einen Startzeitpunkt; ohne
+                    # ihn lehnen manche Boxen das Profil ab oder wenden es
+                    # erst beim nächsten Ladevorgang an.
+                    "startSchedule": (datetime.now(timezone.utc) - timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
                     "chargingRateUnit": "A",
                     "chargingSchedulePeriod": [{"startPeriod": 0, "limit": limit}],
                 },

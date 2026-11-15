@@ -26,7 +26,13 @@ from .registry import register
 from .validation import CommandNotApplied, DriverError, checked, sanitized
 
 # car: 1 = frei, 2 = lädt, 3 = wartet auf Fahrzeug, 4 = beendet
-CAR_STATES = {1: WallboxState.IDLE, 2: WallboxState.CHARGING, 3: WallboxState.CONNECTED, 4: WallboxState.COMPLETE}
+#: car: 0 unbekannt/Fehler, 1 frei, 2 lädt, 3 wartet auf Fahrzeug, 4 fertig, 5 Fehler
+CAR_STATES = {1: WallboxState.IDLE, 2: WallboxState.CHARGING, 3: WallboxState.CONNECTED, 4: WallboxState.COMPLETE,
+              5: WallboxState.ERROR}
+#: frc (forceState): 0 = neutral (die Box entscheidet nach ihrer eigenen
+#: Logik), 1 = aus, 2 = ein.
+FRC_OFF = 1
+FRC_ON = 2
 
 # err: 0/1 = ok, sonst Fehlerzustand der Box
 ERROR_CODES = {
@@ -95,12 +101,12 @@ class GoeCharger(WallboxDriver):
 
         nrg = s.get("nrg") or []
         power = float(nrg[11]) if len(nrg) > 11 else 0.0  # Gesamtleistung in W
-        psm = int(s.get("psm") or 1)  # 1 = 1-phasig, 2 = 3-phasig
+        phases = _phases(nrg, power, s.get("psm"))
         return WallboxData(
             state=CAR_STATES.get(int(s.get("car") or 1), WallboxState.IDLE),
             power=checked("wallbox_power", power, source="go-e nrg[11]"),
             current_set=sanitized("wallbox_current", _f(s.get("amp"))),
-            phases_active=3 if psm == 2 else 1,
+            phases_active=phases,
             energy_session_kwh=sanitized("energy_kwh", _f(s.get("wh")) / 1000.0),
             rfid_tag=str(s["trx"]) if s.get("trx") else None,
             extra={"Freigabe": "ja" if s.get("alw") else "nein"},
@@ -116,12 +122,16 @@ class GoeCharger(WallboxDriver):
                                 "go-e-App auf 'Standard/Neutral' stellen).")
 
     async def start_charging(self) -> None:
-        await self._set(frc=0)  # 0 = neutral (laden erlaubt)
-        await self._verify("frc", 0, hint="Ladefreigabe wurde nicht übernommen.")
+        # 2 = ein. Bis 3.2.0 wurde 0 (neutral) geschrieben; dann entscheidet
+        # die Box nach ihrer eigenen Logik und lädt im Eco- oder Zeitplanmodus
+        # trotz Freigabe nicht. Ein externer Regler muss ausdrücklich
+        # einschalten (so auch die Referenzimplementierung in evcc).
+        await self._set(frc=FRC_ON)
+        await self._verify("frc", FRC_ON, hint="Ladefreigabe wurde nicht übernommen.")
 
     async def stop_charging(self) -> None:
-        await self._set(frc=1)  # 1 = aus
-        await self._verify("frc", 1, hint="Stopp-Befehl wurde nicht übernommen.")
+        await self._set(frc=FRC_OFF)
+        await self._verify("frc", FRC_OFF, hint="Stopp-Befehl wurde nicht übernommen.")
 
     async def set_phases(self, phases: int) -> None:
         target = 2 if phases >= 2 else 1
@@ -147,3 +157,23 @@ def _f(value) -> float:
         return float(value or 0)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _phases(nrg: list, power: float, psm) -> int | None:
+    """Tatsächlich genutzte Phasen. ``psm`` ist nur die Vorgabe (0 = Auto,
+    1 = einphasig, 2 = dreiphasig); ein einphasiges Fahrzeug lädt auch bei
+    'dreiphasig' auf einer Phase. Unter Last zählen deshalb die gemessenen
+    Phasenströme (nrg[4..6]); ohne Last gilt die Vorgabe, bei 'Auto' ist die
+    Phasenzahl unbekannt."""
+    if power > 500 and len(nrg) > 6:
+        try:
+            active = sum(1 for amps in nrg[4:7] if float(amps) > 1.0)
+        except (TypeError, ValueError):
+            active = 0
+        if active:
+            return 3 if active >= 2 else 1
+    try:
+        mode = int(psm)
+    except (TypeError, ValueError):
+        return None
+    return {1: 1, 2: 3}.get(mode)

@@ -113,7 +113,7 @@ KI-Assistenten sind nur als SHA-256-Hash gespeichert.
 |---|---|---|
 | Kein TLS im Image. Im Heimnetz läuft alles über HTTP. | mittel | Für Zugriff von außen einen Reverse-Proxy mit TLS oder ein VPN davorsetzen. Die App verlangt für entfernte Server bereits HTTPS. |
 | Optionaler MQTT-Broker (`--profile mqtt`) nimmt jeden ohne Anmeldung an und veröffentlicht Port 1883. | mittel | Nur im vertrauenswürdigen Netz nutzen oder in `deploy/mosquitto.conf` Benutzer und Passwort einrichten. Nicht geändert, weil bestehende Home-Assistant-Anbindungen sonst brechen. |
-| OCPP: Die Wallbox verbindet sich ohne Anmeldung (Sicherheitsprofil 0). Ein Gerät im Netz, das die Kennung kennt, kann sich als Wallbox ausgeben und falsche Messwerte liefern. | mittel | Siehe `docs/DRIVERS.md`. |
+| OCPP ohne Passwort (Sicherheitsprofil 0): Ein Gerät im Netz, das die Kennung kennt, kann sich als Wallbox ausgeben und falsche Messwerte liefern. Seit 3.3.0 verbinden sich nur noch eingerichtete Kennungen, und ein Passwort lässt sich hinterlegen (HTTP Basic, Profil 1). | niedrig | Im Gerät „Passwort der Wallbox“ setzen, wenn die Box das unterstützt. TLS (Profil 2) nur über einen vorgeschalteten Proxy. |
 | Eine offene WebSocket-Verbindung bleibt nach Passwortwechsel oder Sperrung bis zum nächsten Verbindungsaufbau bestehen (nur lesend). | niedrig | Bei Bedarf Anwendung neu starten. |
 | Zwei-Faktor-Anmeldung gibt es nicht. | niedrig | Für den Zugriff von außen ein VPN verwenden. |
 | GitHub-Actions sind per Versions-Tag eingebunden, nicht per Commit-Hash. Die Workflows sind derzeit abgeschaltet. | niedrig | Vor dem Wiedereinschalten auf Hashes umstellen. |

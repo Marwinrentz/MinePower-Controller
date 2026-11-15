@@ -11,8 +11,14 @@ Registerkarte (Holding-Register, Unit-ID meist 1):
   32114  Tagesertrag kWh (u32, Faktor 0,01)
   32106  Gesamtertrag kWh (u32, Faktor 0,01)
   37113  Zählerleistung W (s32) – Huawei: > 0 = Einspeisung, < 0 = Bezug
-  37760  Speicher Lade-/Entladeleistung W (s32) – > 0 laden, < 0 entladen
-  37004  Speicher-Ladestand % (u16, Faktor 0,1)
+  37765  Speicher Lade-/Entladeleistung W (s32, alle Einheiten) – > 0 laden, < 0 entladen
+  37760  Speicher-Ladestand % (u16, Faktor 0,1, alle Einheiten)
+  37004  Ladestand der ersten Speichereinheit % (u16, Faktor 0,1) – Rückfall
+
+Bis 3.2.0 wurde die Speicherleistung aus 37760 gelesen. Dort steht der
+Ladestand; die Leistung liegt in 37765 (Huawei 'Modbus Interface
+Definitions', evcc-Vorlage huawei-sun2000-hybrid). Gelesen kam so ein Wert
+heraus, der mit der Leistung nichts zu tun hatte.
 
 Wichtige Betriebshinweise:
 * Huawei erlaubt nur **eine** Modbus-Verbindung gleichzeitig. Deshalb teilen
@@ -40,15 +46,16 @@ from .base import (
 )
 from .modbus_util import ModbusConnection, acquire_connection, release_connection, s32, u16, u32
 from .registry import register
-from .validation import checked, sanitized
+from .validation import DriverError, checked, sanitized
 
 REG_DC_POWER = 32064
 REG_AC_POWER = 32080
 REG_TOTAL_YIELD = 32106
 REG_DAILY_YIELD = 32114
 REG_METER_POWER = 37113
-REG_BATTERY_POWER = 37760
-REG_BATTERY_SOC = 37004
+REG_BATTERY_POWER = 37765
+REG_BATTERY_SOC = 37760
+REG_BATTERY_SOC_UNIT1 = 37004
 
 HUAWEI_FIELDS = [
     ConfigField(key="host", label="IP-Adresse", placeholder="192.0.2.35",
@@ -116,10 +123,14 @@ class HuaweiSun2000(_HuaweiBase, InverterDriver):
         total = await self._optional_u32(REG_TOTAL_YIELD, 0.01)
         battery_power = await self._optional_s32(REG_BATTERY_POWER)
         soc = None
-        try:
-            soc = float(u16(await self.conn.read_holding(REG_BATTERY_SOC, 1))) * 0.1
-        except Exception:  # noqa: BLE001 – ohne LUNA2000 existiert das Register nicht
-            soc = None
+        for soc_register in (REG_BATTERY_SOC, REG_BATTERY_SOC_UNIT1):
+            try:
+                soc = float(u16(await self.conn.read_holding(soc_register, 1))) * 0.1
+                break
+            except DriverError:  # ohne LUNA2000 existiert das Register nicht
+                soc = None
+        if battery_power is None:
+            soc = None  # ohne Speicher keinen Ladestand melden
         return InverterData(
             pv_power=max(0.0, pv),
             daily_yield_kwh=sanitized("energy_kwh", daily),

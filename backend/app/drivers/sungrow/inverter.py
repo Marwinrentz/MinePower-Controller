@@ -12,8 +12,15 @@ Registernummern nach offizieller Sungrow-Kommunikationsspezifikation
   SH (Hybrid) zusätzlich (Input):
     13001     Running-State (Bit 1 = Batterie lädt, Bit 2 = Batterie entlädt)
     13010     Export-Leistung W (s32, + = Einspeisung)  → grid_power = −Export
-    13022     Batterie-Leistung W (u16, Richtung über Running-State)
+    13002     Tagesertrag PV 0,1 kWh (u16)
+    13003-04  Gesamtertrag PV 0,1 kWh (u32)
+    13022     Batterie-Leistung W (je nach Firmware mit oder ohne Vorzeichen,
+              siehe common.battery_power_w)
     13023     Batterie-SoC 0,1 %
+
+Beim SH zählen 5003/5004 PV **und** Batterieentladung zusammen und tragen
+0,1 kWh je Schritt (beim SG 1 kWh). Der SH-Treiber liest deshalb die reinen
+PV-Erträge aus 13002/13003.
 
 Der SH-Treiber liefert SoC und Batterieleistung gleich mit: Für Monitoring
 und Budgetrechnung braucht es **kein separates Batteriegerät**. Der
@@ -25,8 +32,8 @@ from __future__ import annotations
 from ..base import DeviceCategory, DriverMeta, InverterData, InverterDriver, Maturity
 from ..modbus_util import s16, s32, u16, u32
 from ..registry import register
-from ..validation import checked, sanitized
-from .common import SUNGROW_COMMON_FIELDS, SungrowDriverMixin, make_connection
+from ..validation import DeviceRejected, checked, sanitized
+from .common import SUNGROW_COMMON_FIELDS, SungrowDriverMixin, battery_power_w, make_connection
 
 # Registernummern (1-basiert, wie in der Sungrow-Doku) → beim Lesen −1
 REG_DEVICE_TYPE = 5001
@@ -38,9 +45,10 @@ REG_SH_RUNNING_STATE = 13001
 REG_SH_EXPORT_POWER = 13010
 REG_SH_BATTERY_POWER = 13022
 REG_SH_BATTERY_SOC = 13023
-
-BIT_BAT_CHARGING = 0x0002
-BIT_BAT_DISCHARGING = 0x0004
+REG_SH_DAILY_PV = 13002
+REG_SH_TOTAL_PV = 13003
+#: Kennung 'Zähler nicht verbunden / kein Wert' bei 32-Bit-Registern
+S32_NO_VALUE = 0x7FFFFFFF
 
 
 class _SungrowInverterBase(SungrowDriverMixin, InverterDriver):
@@ -110,17 +118,22 @@ class SungrowSHInverter(_SungrowInverterBase):
     async def read_data(self) -> InverterData:
         common = await self._read_common()
         export_regs = await self.conn.read_input(REG_SH_EXPORT_POWER - 1, 2)
+        if u32(export_regs) == S32_NO_VALUE:
+            raise DeviceRejected(
+                "Sungrow meldet keine Netzleistung (Register 13010 ohne Wert). Ist der "
+                "Energiezähler am Wechselrichter angeschlossen und eingerichtet?")
         export = checked(
             "grid_power", float(s32(export_regs)),
             source="Sungrow Export-Leistung (Register 13010)",
         )
-        state = u16(await self.conn.read_input(REG_SH_RUNNING_STATE - 1, 1))
+        # Running-State und PV-Erträge in einem Block (13001–13004)
+        head = await self.conn.read_input(REG_SH_RUNNING_STATE - 1, 4)
+        state = u16(head, 0)
+        common["daily_yield_kwh"] = sanitized("energy_kwh", u16(head, REG_SH_DAILY_PV - REG_SH_RUNNING_STATE) * 0.1)
+        common["total_yield_kwh"] = sanitized(
+            "energy_kwh", u32(head, REG_SH_TOTAL_PV - REG_SH_RUNNING_STATE) * 0.1)
         bat_regs = await self.conn.read_input(REG_SH_BATTERY_POWER - 1, 2)
-        power = float(u16(bat_regs, 0))
-        if state & BIT_BAT_DISCHARGING:
-            power = -power
-        elif not (state & BIT_BAT_CHARGING):
-            power = 0.0
+        power = battery_power_w(bat_regs[0], state)
         soc = sanitized("battery_soc", u16(bat_regs, 1) * 0.1)
         return InverterData(
             grid_power=-export,  # Export positiv → Netzkonvention: − = Einspeisung
