@@ -84,6 +84,9 @@ services:
       # API-Dokumentation unter /docs (aus) – siehe docs/SECURITY.md.
       CORS_ORIGINS: ${CORS_ORIGINS:-}
       API_DOCS: ${API_DOCS:-false}
+      # Hinter einem Reverse-Proxy (Nginx Proxy Manager, SWAG, Traefik):
+      # dessen Adresse/Netz, damit die Login-Sperre die echte Client-IP sieht.
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
     volumes:
       - backup_data:/app/backups
       - app_data:/app/data

@@ -39,6 +39,12 @@ class AppSettings(BaseSettings):
     #: Interaktive API-Dokumentation (/docs, /redoc, /openapi.json).
     #: Standardmäßig aus – sie beschreibt jede Schnittstelle ohne Anmeldung.
     api_docs: bool = False
+    #: Reverse-Proxys, deren X-Forwarded-For geglaubt wird (kommagetrennte
+    #: IPs oder Netze, z. B. 172.17.0.0/16 für Nginx Proxy Manager).
+    #: Leer = keinem. Ohne diese Angabe sehen hinter einem Proxy alle
+    #: Anmeldungen dieselbe Adresse – 30 Fehlversuche von irgendwem sperrten
+    #: dann die Anmeldung für alle.
+    trusted_proxies: str = ""
 
     # Optionale MQTT-Integration (mqtt://host:port oder leer = deaktiviert)
     mqtt_url: str = ""

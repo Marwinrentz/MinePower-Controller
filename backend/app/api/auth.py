@@ -30,6 +30,7 @@ from ..security import (
     verify_password,
     verify_password_or_dummy,
 )
+from ..core.netutil import client_ip
 from ..services.audit import log_event
 from ..services.ws import ws_manager
 
@@ -42,7 +43,7 @@ _setup_lock = asyncio.Lock()
 
 
 def _client_ip(request: Request) -> str:
-    return request.client.host if request.client else "?"
+    return client_ip(request)
 
 
 @router.post("/login", response_model=TokenResponse)
