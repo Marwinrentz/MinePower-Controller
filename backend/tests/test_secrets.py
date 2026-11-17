@@ -114,3 +114,60 @@ def test_unreadable_secret_is_shown_as_empty(tmp_path, monkeypatch):
     finally:
         monkeypatch.delenv("MINEPOWER_SECRET_KEY")
         secrets.reset_cache()
+
+
+def _key_env(tmp_path, monkeypatch):
+    data, backup = tmp_path / "data", tmp_path / "backup"
+    monkeypatch.delenv("MINEPOWER_SECRET_KEY", raising=False)
+    monkeypatch.setenv("DATA_DIR", str(data))
+    monkeypatch.setenv("BACKUP_DIR", str(backup))
+    from app.config import get_settings
+    get_settings.cache_clear()
+    secrets.reset_cache()
+    return data, backup
+
+
+def test_empty_key_file_falls_back_to_intact_copy(tmp_path, monkeypatch):
+    """Stromausfall nach dem ersten Start: leere Datei im Datenordner darf die
+    intakte Kopie im Sicherungsordner nicht verdrängen (vorher: Start-Abbruch)."""
+    data, backup = _key_env(tmp_path, monkeypatch)
+    from app.config import get_settings
+    try:
+        token = secrets.encrypt("geheim")
+        (data / "secret.key").write_bytes(b"")
+        secrets.reset_cache()
+        assert secrets.decrypt(token) == "geheim"
+        # repariert
+        assert (data / "secret.key").read_bytes().strip() == (backup / "secret.key").read_bytes().strip()
+        assert list(data.glob("secret.key.broken-*"))
+    finally:
+        get_settings.cache_clear()
+        secrets.reset_cache()
+
+
+def test_all_key_files_broken_still_starts(tmp_path, monkeypatch):
+    data, backup = _key_env(tmp_path, monkeypatch)
+    from app.config import get_settings
+    try:
+        data.mkdir(parents=True)
+        backup.mkdir(parents=True)
+        (data / "secret.key").write_bytes(b"kaputt")
+        (backup / "secret.key").write_bytes(b"")
+        token = secrets.encrypt("neu")  # kein ValueError, kein Crash-Loop
+        secrets.reset_cache()
+        assert secrets.decrypt(token) == "neu"
+    finally:
+        get_settings.cache_clear()
+        secrets.reset_cache()
+
+
+def test_key_file_written_atomically(tmp_path, monkeypatch):
+    data, backup = _key_env(tmp_path, monkeypatch)
+    from app.config import get_settings
+    try:
+        secrets.encrypt("x")
+        assert not list(data.glob("*.tmp")) and not list(backup.glob("*.tmp"))
+        assert ((data / "secret.key").stat().st_mode & 0o777) == 0o600
+    finally:
+        get_settings.cache_clear()
+        secrets.reset_cache()
