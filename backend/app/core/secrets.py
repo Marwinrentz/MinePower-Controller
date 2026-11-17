@@ -233,6 +233,43 @@ def protect_config(driver_id: str, new: dict, old: dict | None = None) -> dict:
     return _protect(device_secret_keys(driver_id), new, old)
 
 
+#: Felder, die bestimmen, WOHIN ein Treiber seine Zugangsdaten schickt.
+_TARGET_KEYS = {"host", "port", "scheme", "region", "verify_ssl", "modbus_port",
+                "proxy_port", "broker", "server", "ip"}
+
+
+def _is_target_key(key: str) -> bool:
+    return key in _TARGET_KEYS or key.endswith(("url", "_host"))
+
+
+def secret_reused_for_new_target(driver_id: str, new: dict, old: dict | None) -> bool:
+    """Würde ein gespeichertes Geheimnis (••• oder weggelassen) an eine
+    GEÄNDERTE Adresse gehen?
+
+    Sonst konnte ein Admin den Host auf einen eigenen Rechner umstellen, •••
+    stehen lassen und auf "Verbindung testen" drücken – der Server schickte
+    ihm das gespeicherte Gerätepasswort, obwohl die API es nie ausliefert."""
+    old = old or {}
+    new = new or {}
+    keys = device_secret_keys(driver_id)
+    kept = [k for k in keys if old.get(k) and (k not in new or new.get(k) == MASK)]
+    if not kept:
+        return False
+    for k in set(new) | set(old):
+        if k in keys or not _is_target_key(k):
+            continue
+        if k in new and str(new.get(k) if new.get(k) is not None else "").strip() != \
+                str(old.get(k) if old.get(k) is not None else "").strip():
+            return True
+    return False
+
+
+SECRET_TARGET_CHANGED = (
+    "Die Adresse wurde geändert – bitte das Passwort bzw. den Schlüssel neu eingeben. "
+    "Gespeicherte Zugangsdaten werden nicht an eine neue Adresse geschickt."
+)
+
+
 def reveal_config(driver_id: str, config: dict) -> dict:
     """Für den Treiber: entschlüsselt."""
     return _reveal(device_secret_keys(driver_id), config)

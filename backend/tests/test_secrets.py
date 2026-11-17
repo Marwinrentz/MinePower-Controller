@@ -171,3 +171,41 @@ def test_key_file_written_atomically(tmp_path, monkeypatch):
     finally:
         get_settings.cache_clear()
         secrets.reset_cache()
+
+
+async def test_stored_password_not_sent_to_changed_host():
+    """Admin stellt Host auf eigenen Rechner um und lässt ••• stehen: Der
+    Server darf das gespeicherte Gerätepasswort nicht dorthin schicken."""
+    from fastapi import HTTPException
+
+    from app.api.devices import test_connection
+    from app.schemas import TestConnectionRequest
+
+    body = DeviceCreate(name="Heizstab", category="water_heater", driver_id="tasmota_relay_heater",
+                        config={"host": "192.0.2.12", "user": "admin", "password": "geheim", "relay": 1})
+    async with async_session() as db:
+        out = await create_device(body, db=db, user=_Admin())
+    evil = {**out.config, "host": "203.0.113.66"}
+    assert evil["password"] == "•••"
+    async with async_session() as db:
+        res = await test_connection(TestConnectionRequest(driver_id="tasmota_relay_heater", config=evil,
+                                                          device_id=out.id), db=db, _=_Admin())
+        assert res.ok is False and "neu eingeben" in res.message
+        with pytest.raises(HTTPException) as exc:
+            await update_device(out.id, DeviceUpdate(config=evil), db=db, user=_Admin())
+        assert exc.value.status_code == 422
+        # Neue Adresse MIT neu eingegebenem Passwort geht
+        await update_device(out.id, DeviceUpdate(config={**evil, "password": "neu"}), db=db, user=_Admin())
+        # Gleiche Adresse mit ••• geht weiterhin
+        await update_device(out.id, DeviceUpdate(config={**out.config, "host": "203.0.113.66", "relay": 2}),
+                            db=db, user=_Admin())
+
+
+def test_secret_target_rule():
+    old = {"host": "a", "port": 80, "password": "enc:v1:x"}
+    f = secrets.secret_reused_for_new_target
+    assert f("tasmota_relay_heater", {"host": "b", "password": "•••"}, old)
+    assert f("tasmota_relay_heater", {"host": "b"}, old)  # weggelassen = behalten
+    assert not f("tasmota_relay_heater", {"host": "a", "port": "80", "password": "•••"}, old)
+    assert not f("tasmota_relay_heater", {"host": "b", "password": "neu"}, old)
+    assert not f("tasmota_relay_heater", {"host": "b", "password": "•••"}, {"host": "a"})  # nichts gespeichert

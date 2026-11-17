@@ -24,7 +24,9 @@ from ..security import get_current_user, require_role
 from ..services.audit import log_event
 
 from ..core.limits import CATEGORY_LIMITS, active_count, limit_error
-from ..core.secrets import mask_config, protect_config, reveal_config
+from ..core.secrets import (
+    SECRET_TARGET_CHANGED, mask_config, protect_config, reveal_config, secret_reused_for_new_target,
+)
 from ..drivers.config_validation import config_error, validate_config
 
 router = APIRouter(prefix="/api/devices", tags=["devices"])
@@ -109,6 +111,8 @@ async def update_device(device_id: int, body: DeviceUpdate, db: AsyncSession = D
             and await active_count(db, device.category, exclude_id=device.id) >= CATEGORY_LIMITS[device.category]:
         raise HTTPException(status.HTTP_409_CONFLICT, limit_error(device.category))
     if body.config is not None:
+        if secret_reused_for_new_target(device.driver_id, body.config, device.config or {}):
+            raise HTTPException(422, SECRET_TARGET_CHANGED)
         meta = registry.get_driver_class(device.driver_id).meta
         errors = validate_config(meta, protect_config(device.driver_id, body.config, device.config or {}),
                                  masked_ok=True)
@@ -153,6 +157,8 @@ async def test_connection(body: TestConnectionRequest, db: AsyncSession = Depend
         # Bestehendes Gerät: '•••" heißt 'gespeicherten Wert verwenden".
         stored = await db.get(Device, body.device_id)
         if stored is not None and stored.driver_id == body.driver_id:
+            if secret_reused_for_new_target(body.driver_id, config, stored.config or {}):
+                return TestResult(ok=False, message=SECRET_TARGET_CHANGED)
             config = protect_config(body.driver_id, config, stored.config or {})
     config = reveal_config(body.driver_id, config)
     try:
