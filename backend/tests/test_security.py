@@ -364,3 +364,60 @@ async def test_notifier_does_not_block_and_reports_errors(monkeypatch):
     assert result["ntfy"] is None
     assert "geheim" not in result["telegram"] and "***" in result["telegram"]
     await n.close()
+
+
+# --------------------------------------------------- Live-Verbindungen je Konto
+class _FakeWS:
+    def __init__(self, slow: bool = False):
+        self.closed: int | None = None
+        self.sent: list[str] = []
+        self.slow = slow
+
+    async def send_text(self, text: str) -> None:
+        if self.slow:
+            import asyncio
+            await asyncio.sleep(60)
+        self.sent.append(text)
+
+    async def close(self, code: int = 1000) -> None:
+        self.closed = code
+
+
+async def test_close_user_ends_only_that_accounts_sockets():
+    from app.services.ws import WebSocketManager
+
+    m = WebSocketManager()
+    a1, a2, b = _FakeWS(), _FakeWS(), _FakeWS()
+    await m.add(a1, user_id=1)
+    await m.add(a2, user_id=1)
+    await m.add(b, user_id=2)
+    assert await m.close_user(1) == 2
+    assert a1.closed == 4401 and a2.closed == 4401 and b.closed is None
+    assert m.count == 1
+    await m.broadcast({"x": 1})
+    assert b.sent and not a1.sent
+
+
+async def test_broadcast_slow_clients_do_not_add_up(monkeypatch):
+    """Mehrere hängende Clients verzögern den Takt nur einmal um das Zeitlimit."""
+    import asyncio
+    import time
+
+    from app.services import ws as wsmod
+
+    real_wait_for = asyncio.wait_for
+
+    async def short_wait_for(coro, timeout):
+        return await real_wait_for(coro, timeout=0.2)
+
+    monkeypatch.setattr(wsmod.asyncio, "wait_for", short_wait_for)
+    m = wsmod.WebSocketManager()
+    fast = _FakeWS()
+    for _ in range(5):
+        await m.add(_FakeWS(slow=True))
+    await m.add(fast)
+    t0 = time.monotonic()
+    await m.broadcast({"x": 1})
+    assert time.monotonic() - t0 < 0.8
+    assert fast.sent
+    assert m.count == 1

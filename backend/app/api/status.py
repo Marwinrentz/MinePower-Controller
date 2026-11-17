@@ -74,7 +74,7 @@ async def websocket_endpoint(ws: WebSocket):
     if user is None:
         await _close(ws, WS_UNAUTHORIZED)
         return
-    if not await ws_manager.add(ws):
+    if not await ws_manager.add(ws, user_id=user.id):
         await _close(ws, WS_TOO_MANY)
         return
     try:

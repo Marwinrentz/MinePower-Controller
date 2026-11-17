@@ -31,6 +31,7 @@ from ..security import (
     verify_password_or_dummy,
 )
 from ..services.audit import log_event
+from ..services.ws import ws_manager
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -129,6 +130,7 @@ async def change_own_password(body: PasswordChange, request: Request, db: AsyncS
     await db.commit()
     await db.refresh(row)
     await log_event(f"Passwort geändert: {row.email}", category="auth", user_id=row.id)
+    await ws_manager.close_user(row.id)
     return TokenResponse(token=create_token(row), user=UserOut.model_validate(row))
 
 
@@ -216,6 +218,8 @@ async def update_user(user_id: int, body: UserUpdate, db: AsyncSession = Depends
         changes.append("password")
     await db.commit()
     await db.refresh(user)
+    if "password" in changes or ("disabled" in changes and user.disabled) or "role" in changes:
+        await ws_manager.close_user(user.id)
     if changes:
         await log_event(f"Benutzer geändert: {user.email} ({', '.join(changes)})", category="auth", user_id=admin.id)
     return user
@@ -230,4 +234,5 @@ async def delete_user(user_id: int, db: AsyncSession = Depends(get_db), admin: U
         email = user.email
         await db.delete(user)
         await db.commit()
+        await ws_manager.close_user(user_id)
         await log_event(f"Benutzer gelöscht: {email}", category="auth", user_id=admin.id)
