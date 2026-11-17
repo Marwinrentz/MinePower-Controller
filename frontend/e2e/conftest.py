@@ -26,8 +26,9 @@ ENGINES = os.environ.get("E2E_ENGINES", "chromium,webkit").split(",")
 
 @pytest.fixture(scope="session")
 def pw():
-    with sync_playwright() as p:
-        yield p
+    p = sync_playwright().start()
+    yield p
+    _close_with_timeout(p.stop)
 
 
 @pytest.fixture(scope="session", params=ENGINES)
@@ -37,7 +38,20 @@ def browser(pw, request):
     else:
         b = pw.chromium.launch(executable_path=CHROME if Path(CHROME).exists() else None)
     yield b
-    b.close()
+    _close_with_timeout(b.close)
+
+
+def _close_with_timeout(fn, seconds: float = 10.0):
+    """Browser schließen, ohne die Testsitzung aufzuhalten.
+
+    In manchen Containern (ohne init-Prozess) beendet sich Chromium nicht
+    sauber, und close() wartet dann ewig, obwohl alle Tests fertig sind.
+    """
+    import threading
+
+    t = threading.Thread(target=fn, daemon=True)
+    t.start()
+    t.join(seconds)
 
 
 class Phone:

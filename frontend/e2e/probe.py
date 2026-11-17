@@ -8,7 +8,7 @@ from playwright.sync_api import sync_playwright
 sys.path.insert(0, str(Path(__file__).parent))
 from mock import Mock  # noqa: E402
 
-UI = os.environ.get("E2E_UI", "http://localhost:5173")
+UI = os.environ.get("MINEPOWER_UI", "http://localhost:5173")
 path = sys.argv[1] if len(sys.argv) > 1 else "/"
 with sync_playwright() as p:
     b = p.chromium.launch(executable_path=os.environ.get("CHROME_PATH", "/usr/bin/chromium"))

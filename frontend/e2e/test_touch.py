@@ -5,6 +5,9 @@ zu machen. Läuft in Chromium (echte Touch-Events) und WebKit.
 from __future__ import annotations
 
 import json
+from urllib.parse import urlparse
+
+from conftest import UI
 
 
 def device_actions(ph, action: str | None = None):
@@ -188,7 +191,7 @@ def test_mock_is_offline_from_real_devices(phone):
     """Sicherheitsnetz: Jeder Schreibzugriff landet im Mock, nichts geht ans Netz."""
     ph = phone()
     page = ph.open("/")
-    assert json.loads(page.evaluate("JSON.stringify(location.host)")) == "localhost:5173"
+    assert json.loads(page.evaluate("JSON.stringify(location.host)")) == urlparse(UI).netloc
 
 
 # ---------------------------------------------------------------- Ursache (Dokumentation)

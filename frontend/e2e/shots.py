@@ -19,7 +19,7 @@ from playwright.sync_api import sync_playwright
 sys.path.insert(0, str(Path(__file__).parent))
 from mock import Mock  # noqa: E402
 
-UI = os.environ.get("E2E_UI", "http://localhost:5173")
+UI = os.environ.get("MINEPOWER_UI", "http://localhost:5173")
 
 #: name: (breite, höhe, dpr, safe oben, rechts, unten, links, insel)
 PHONES = {
