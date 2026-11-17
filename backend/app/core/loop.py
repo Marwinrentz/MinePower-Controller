@@ -175,6 +175,12 @@ BATTERY_SETTLE_S = 20.0
 BATTERY_MISMATCH_TICKS = 2
 #: Wie lange beim Beenden auf die Rücksetzung eines Speichers gewartet wird.
 BATTERY_RELEASE_TIMEOUT_S = 8.0
+#: Obergrenzen beim Beenden. Docker wartet 30 s (stop_grace_period), danach
+#: SIGKILL. Geräte (parallel) + Messwerte + Rest müssen sicher darunter bleiben.
+SHUTDOWN_DEVICES_TIMEOUT_S = 12.0
+SHUTDOWN_FLUSH_TIMEOUT_S = 8.0
+#: Ereignis-Log beim Beenden: lieber verlieren als den Fail-safe aufhalten.
+SHUTDOWN_EVENT_TIMEOUT_S = 2.0
 #: Fahrzeug: Ab wann 'antwortet nicht mehr" ins Protokoll kommt. Für die
 #: Regelung gilt es schon nach 2 min als nicht erreichbar (kein Budget,
 #: keine Befehle) – gemeldet wird erst, wenn es dauert.
@@ -512,23 +518,44 @@ class ControlLoop:
         for dev in self.devices.values():
             if dev.wake_task is not None and not dev.wake_task.done():
                 dev.wake_task.cancel()
-        # Gesammelte Messwerte noch schreiben – sonst fehlen bei jedem
-        # Neustart und Update die letzten Sekunden im Verlauf.
-        await self.buffer.close()
+        # Reihenfolge beim Beenden: ERST die Geräte in einen sicheren Zustand,
+        # DANN die Messwerte schreiben. Docker gibt nur 30 s bis zum harten
+        # Abbruch; hängt die Datenbank (Unraid stoppt sie oft zuerst), durfte
+        # das Wegschreiben vorher bis zu 20 s fressen – und der Speicher blieb
+        # gesperrt oder im Zwangsladen zurück.
+        #
         # Fail-safe: Keinen Speicher in einem Zwangsmodus zurücklassen – weder
         # gesperrt (das Haus zöge bis zum nächsten Start alles aus dem Netz)
         # noch im Zwangsladen/-entladen. Gilt für Preisfenster UND manuelle
-        # Befehle; vorher wurde nur bei offenem Preisfenster zurückgesetzt.
+        # Befehle. Wallbox und Heizstab bekommen ebenfalls einen sicheren
+        # Zustand, sonst liefen sie ohne Regelung unbegrenzt weiter (go-e
+        # steht nach einem Start auf frc=2 = erzwungen an).
         self.battery_manual = None
+        jobs = []
         for dev in list(self.devices.values()):
             if dev.category == DeviceCategory.BATTERY.value:
-                await self._release_battery(dev, "MinePower beendet")
-        self.grid_price_window = False
-        for dev in self.devices.values():
+                jobs.append(self._release_battery(dev, "MinePower beendet"))
+            elif isinstance(dev.driver, (WallboxDriver, WaterHeaterDriver)):
+                jobs.append(self._safe_state_on_exit(dev))
+        if jobs:
             try:
-                await dev.driver.disconnect()
+                await asyncio.wait_for(asyncio.gather(*jobs, return_exceptions=True), timeout=SHUTDOWN_DEVICES_TIMEOUT_S)
+            except asyncio.TimeoutError:
+                log.warning("Sicherer Zustand beim Beenden nicht für alle Geräte bestätigt (Zeitlimit)")
+        # Gesammelte Messwerte noch schreiben – sonst fehlen bei jedem
+        # Neustart und Update die letzten Sekunden im Verlauf. Was nicht
+        # mehr in die Datenbank geht, landet im Spool.
+        try:
+            await asyncio.wait_for(self.buffer.close(), timeout=SHUTDOWN_FLUSH_TIMEOUT_S)
+        except (asyncio.TimeoutError, Exception) as exc:  # noqa: BLE001
+            log.warning("Messwerte beim Beenden nicht vollständig geschrieben: %s", exc)
+        self.grid_price_window = False
+        async def _disc(dev: ManagedDevice) -> None:
+            try:
+                await asyncio.wait_for(dev.driver.disconnect(), timeout=2.0)
             except Exception:  # noqa: BLE001
                 pass
+        await asyncio.gather(*(_disc(d) for d in list(self.devices.values())))
 
     def request_reload(self) -> None:
         """Von der API gerufen, wenn Geräte/Einstellungen geändert wurden."""
@@ -1676,11 +1703,11 @@ class ControlLoop:
         except Exception as exc:  # noqa: BLE001
             log.warning("%s: Rücksetzen auf Eigenverbrauch fehlgeschlagen (%s): %s", dev.name, reason, exc)
             try:
-                await log_event(
+                await asyncio.wait_for(log_event(
                     f"{dev.name}: Rücksetzen auf Eigenverbrauch fehlgeschlagen ({reason}) – {exc}. "
                     f"Bitte den Modus im Wechselrichter prüfen.",
                     level="error", category="control",
-                )
+                ), timeout=SHUTDOWN_EVENT_TIMEOUT_S)
             except Exception:  # noqa: BLE001
                 pass
 
@@ -2244,6 +2271,31 @@ class ControlLoop:
                     level="warning", category="battery",
                     data={"detail": dev.command_error},
                 )
+
+    async def _safe_state_on_exit(self, dev: ManagedDevice) -> None:
+        """Wallbox/Heizstab beim Beenden: nicht ungeregelt weiterlaufen lassen.
+
+        Ohne Regelung zöge eine laufende Überschussladung oder ein Heizstab
+        unbegrenzt Netzstrom. Ausnahme: 'Sofort laden" – das hat der Nutzer
+        ausdrücklich verlangt, das läuft weiter. Nur Geräte, die MinePower
+        eingeschaltet hat, werden angefasst – ein von Hand
+        oder vom Gerät selbst gestarteter Vorgang bleibt unberührt."""
+        if not dev.online:
+            return
+        try:
+            if isinstance(dev.driver, WallboxDriver):
+                ctrl = dev.controller
+                if isinstance(ctrl, WallboxController) and (ctrl.override == "fast" or ctrl.s.mode == "fast"):
+                    return
+                if dev.sent.get("enable") is True:
+                    await asyncio.wait_for(dev.driver.stop_charging(), timeout=READ_TIMEOUT_S)
+                    log.info("%s beim Beenden gestoppt", dev.name)
+            elif isinstance(dev.driver, WaterHeaterDriver):
+                if float(dev.sent.get("power", 0) or 0) > 0:
+                    await asyncio.wait_for(dev.driver.set_power(0.0), timeout=READ_TIMEOUT_S)
+                    log.info("%s beim Beenden ausgeschaltet", dev.name)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("%s: sicherer Zustand beim Beenden fehlgeschlagen: %s", dev.name, exc)
 
     async def _apply_safe_stop(self, dev: ManagedDevice, reason: str) -> None:
         if not dev.online:
