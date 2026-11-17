@@ -242,5 +242,9 @@ if STATIC_DIR.is_dir():
         # Pfadteile, nicht über den Textanfang ('/app/static-x' zählt nicht).
         candidate = (STATIC_DIR / full_path).resolve()
         if candidate.is_file() and candidate.is_relative_to(STATIC_DIR.resolve()):
+            # Service Worker wie index.html: sonst bleibt die installierte
+            # Handy-App bis zu einen Tag auf dem alten Stand.
+            if candidate.name in ("sw.js", "manifest.webmanifest"):
+                return FileResponse(candidate, headers=INDEX_HEADERS)
             return FileResponse(candidate)
         return FileResponse(STATIC_DIR / "index.html", headers=INDEX_HEADERS)
