@@ -11,13 +11,19 @@
  *  Abstände wachsen mit. Das alte Diagramm war ein 680 px breites SVG – am
  *  Handy wurde die Schrift darin winzig.
  */
+import { Suspense, lazy } from "react";
 import { Link } from "react-router-dom";
 import { useI18n } from "../i18n";
 import { fmtPct, fmtTemp, fmtW } from "../lib/format";
 import type { Snapshot } from "../lib/types";
+import { useBetaUi } from "../lib/variant";
 import { Icon, type IconName } from "./icons";
 
-type Key = "pv" | "grid" | "battery" | "car" | "water";
+// Neue Grafik der BETA-Oberfläche – dieselben Knoten, andere Zeichnung.
+const FlowScene = lazy(() => import("../beta/FlowScene"));
+
+export type FlowKey = "pv" | "grid" | "battery" | "car" | "water";
+type Key = FlowKey;
 
 /** Spalte, Zeile im 3×3-Raster (1-basiert). */
 const POS: Record<Key | "house", [number, number]> = {
@@ -28,11 +34,11 @@ const TONE: Record<Key, string> = {
   pv: "pv", grid: "grid", battery: "battery", car: "car", water: "water",
 };
 
-const LINK: Partial<Record<Key, string>> = {
+export const FLOW_LINK: Partial<Record<Key, string>> = {
   car: "/auto", water: "/warmwasser", battery: "/batterie", grid: "/tarif",
 };
 
-const ICON: Record<Key | "house", IconName> = {
+export const FLOW_ICON: Record<Key | "house", IconName> = {
   pv: "sun", grid: "grid", battery: "battery", car: "car", water: "water", house: "house",
 };
 
@@ -42,12 +48,19 @@ const center = (k: Key | "house") => {
 };
 
 /** Animationsdauer aus Leistung: 1 kW ≈ 2,4 s je Durchlauf, 10 kW ≈ 0,7 s. */
-const duration = (w: number) => `${Math.max(0.6, Math.min(3.2, 3.2 - Math.log10(Math.max(w, 50) / 50) * 1.15)).toFixed(2)}s`;
+export const flowDuration = (w: number) => `${Math.max(0.6, Math.min(3.2, 3.2 - Math.log10(Math.max(w, 50) / 50) * 1.15)).toFixed(2)}s`;
 
-type NodeInfo = { key: Key; watts: number; dir: "in" | "out" | "none"; value: string; sub: string; absent?: boolean; alert?: boolean };
+export type FlowNode = {
+  key: Key; watts: number; dir: "in" | "out" | "none"; value: string; sub: string; absent?: boolean; alert?: boolean;
+  /** Füllstand in Prozent, wo es einen gibt (Batterie, Auto) – sonst null */
+  level?: number | null;
+};
 
-export function PowerFlow({ snapshot }: { snapshot: Snapshot }) {
-  const { t } = useI18n();
+type Translate = (key: string, vars?: Record<string, string | number>) => string;
+
+/** Die Knoten um das Haus – Werte, Richtung, Beschriftung. Beide
+ *  Darstellungen (bisherige und BETA) zeichnen aus derselben Liste. */
+export function flowNodes(snapshot: Snapshot, t: Translate): FlowNode[] {
   const grid = snapshot.grid_power ?? 0;
   const bat = snapshot.battery?.power ?? 0;
   const car = snapshot.devices.find((d) => d.category === "wallbox" && d.enabled);
@@ -55,7 +68,7 @@ export function PowerFlow({ snapshot }: { snapshot: Snapshot }) {
   const waterTemp = typeof water?.data?.temperature_c === "number" ? (water.data.temperature_c as number) : null;
   const carSoc = typeof car?.data?.soc === "number" ? (car.data.soc as number) : null;
 
-  const nodes: NodeInfo[] = [
+  return [
     {
       key: "pv", watts: snapshot.pv_power, dir: snapshot.pv_power > 20 ? "in" : "none",
       value: fmtW(snapshot.pv_power), sub: t("flow.pv"),
@@ -72,13 +85,13 @@ export function PowerFlow({ snapshot }: { snapshot: Snapshot }) {
       sub: !snapshot.battery ? t("flow.battery")
         : bat > 20 ? `${t("flow.charging")} · ${fmtW(bat)}`
         : bat < -20 ? `${t("flow.discharging")} · ${fmtW(-bat)}` : t("flow.idle"),
-      absent: !snapshot.battery,
+      absent: !snapshot.battery, level: snapshot.battery ? snapshot.battery.soc : null,
     },
     {
       key: "car", watts: snapshot.wallbox_power, dir: snapshot.wallbox_power > 20 ? "out" : "none",
       value: car ? fmtW(snapshot.wallbox_power) : "–",
       sub: car ? (carSoc != null ? `${t("flow.car")} · ${fmtPct(carSoc)}` : t("flow.car")) : t("flow.car"),
-      absent: !car,
+      absent: !car, level: carSoc,
     },
     {
       key: "water", watts: snapshot.water_power, dir: snapshot.water_power > 20 ? "out" : "none",
@@ -87,7 +100,21 @@ export function PowerFlow({ snapshot }: { snapshot: Snapshot }) {
       absent: !water,
     },
   ];
+}
 
+export function PowerFlow({ snapshot }: { snapshot: Snapshot }) {
+  const beta = useBetaUi();
+  if (!beta) return <ClassicPowerFlow snapshot={snapshot} />;
+  return (
+    <Suspense fallback={<div className="pflow" aria-busy="true" />}>
+      <FlowScene snapshot={snapshot} />
+    </Suspense>
+  );
+}
+
+function ClassicPowerFlow({ snapshot }: { snapshot: Snapshot }) {
+  const { t } = useI18n();
+  const nodes = flowNodes(snapshot, t);
   const hub = center("house");
 
   return (
@@ -99,7 +126,7 @@ export function PowerFlow({ snapshot }: { snapshot: Snapshot }) {
           const d = `M ${c.x} ${c.y} L ${hub.x} ${hub.y}`;
           return (
             <g key={n.key} className={`pflow-wire tone-${TONE[n.key]} ${n.dir !== "none" ? "active" : ""} dir-${n.dir}`}
-               style={{ ["--dur" as string]: duration(n.watts) }}>
+               style={{ ["--dur" as string]: flowDuration(n.watts) }}>
               <path className="pflow-track" d={d} vectorEffect="non-scaling-stroke" />
               {n.dir !== "none" && <path className="pflow-dots" d={d} vectorEffect="non-scaling-stroke" />}
             </g>
@@ -111,14 +138,14 @@ export function PowerFlow({ snapshot }: { snapshot: Snapshot }) {
         const [c, r] = POS[n.key];
         const inner = (
           <>
-            <span className="pflow-icon"><Icon name={ICON[n.key]} size={20} /></span>
+            <span className="pflow-icon"><Icon name={FLOW_ICON[n.key]} size={20} /></span>
             <span className="pflow-value num">{n.value}</span>
             <SubLine text={n.sub} />
           </>
         );
         const cls = `pflow-node tone-${TONE[n.key]} ${n.dir !== "none" ? "active" : ""} ${n.absent ? "absent" : ""} ${n.alert ? "alert" : ""}`;
         const style = { left: `${((c - 0.5) / 3) * 100}%`, top: `${((r - 0.5) / 3) * 100}%` };
-        const to = LINK[n.key];
+        const to = FLOW_LINK[n.key];
         return to && !n.absent
           ? <Link key={n.key} to={to} className={cls} style={style}>{inner}</Link>
           : <div key={n.key} className={cls} style={style}>{inner}</div>;

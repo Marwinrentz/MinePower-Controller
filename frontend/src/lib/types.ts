@@ -268,6 +268,10 @@ export type Statistics = {
   wasted_kwh: number;
   wasted_pct: number;
   wasted_value_eur: number;
+  /** Womit bewertet wurde (Einstellungen → Auswertung) */
+  price_ct?: number;
+  feed_in_ct?: number;
+  co2_g_per_kwh?: number;
 };
 
 export type ChargeSession = {

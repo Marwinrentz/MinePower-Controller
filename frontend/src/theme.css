@@ -1312,3 +1312,7 @@ a.pflow-node:hover { box-shadow: var(--shadow-md); }
 .log-line.level-warning .log-level { color: var(--warn); }
 .log-line.level-error .log-level, .log-line.level-critical .log-level { color: var(--err); }
 .log-text { overflow-wrap: anywhere; white-space: pre-wrap; }
+
+/* ---------- Fehlerzustände ---------- */
+.load-error { border-color: color-mix(in srgb, var(--err) 35%, transparent); }
+.load-error strong { display: block; margin-bottom: var(--s2); }

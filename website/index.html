@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MinePower — Jede Kilowattstunde bleibt im Haus</title>
+<meta name="description" content="PV-Überschussregelung für E-Auto, Warmwasser und Hausspeicher. Selbst gehostet, ohne Abo, Regelung ohne Internet. Sungrow, Fronius, Huawei, SMA, go-e, my-PV, Tesla.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22.5' fill='%2322c55e'/%3E%3Cpolygon points='56.3,45 41,68.3 47.8,68.3 43.7,88 59,62.9 52.3,62.9' fill='%23fff'/%3E%3Ccircle cx='50' cy='33.9' r='10.7' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+/* ==========================================================================
+   MinePower — Produktseite
+   Gestaltung: Messtechnik. Petrol-Tinte als Grund, Solar-Amber als einziger
+   lauter Akzent, Monospace für jeden Messwert. Alles inline, keine CDNs.
+   ========================================================================== */
+
+:root {
+  --ink:        #0D2422;
+  --ink-2:      #22403C;
+  --slate:      #5F7370;
+  --paper:      #F6F8F5;
+  --paper-2:    #ECF1EC;
+  --line:       #D6E0DA;
+
+  --pv:         #16A34A;
+  --solar:      #D98B1F;
+  --flow:       #0E8FA0;
+  --grid:       #3B72C4;
+  --water:      #7C5CD6;
+
+  --hero-grad:  radial-gradient(900px 520px at 78% -8%, #E3F0E6 0%, transparent 62%),
+                radial-gradient(700px 420px at 8% 4%, #F3EADA 0%, transparent 58%);
+
+  --shadow:     0 1px 2px rgba(13,36,34,.05), 0 8px 28px -18px rgba(13,36,34,.4);
+
+  /* Terminal bleibt Terminal — in beiden Themes dunkel. */
+  --code-bg:    #0D2422;
+  --code-fg:    #E7F0EB;
+  --code-line:  #1E3B36;
+
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  --wrap: 1120px;
+  --ease: cubic-bezier(.16,1,.3,1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink:      #EAF2EE;
+    --ink-2:    #B9CCC6;
+    --slate:    #8FA5A0;
+    --paper:    #0A1614;
+    --paper-2:  #11201E;
+    --line:     #223733;
+    --pv:       #3DD37E;
+    --solar:    #E8AC4A;
+    --flow:     #3BC0D2;
+    --grid:     #6FA0EA;
+    --water:    #A98CF0;
+    --hero-grad: radial-gradient(900px 520px at 78% -8%, #102A24 0%, transparent 62%),
+                 radial-gradient(700px 420px at 8% 4%, #241E12 0%, transparent 58%);
+    --shadow:   0 1px 2px rgba(0,0,0,.4), 0 10px 34px -20px rgba(0,0,0,.9);
+  }
+}
+:root[data-theme="dark"] {
+  --ink:      #EAF2EE;  --ink-2: #B9CCC6;  --slate: #8FA5A0;
+  --paper:    #0A1614;  --paper-2: #11201E; --line: #223733;
+  --pv: #3DD37E; --solar: #E8AC4A; --flow: #3BC0D2; --grid: #6FA0EA; --water: #A98CF0;
+  --hero-grad: radial-gradient(900px 520px at 78% -8%, #102A24 0%, transparent 62%),
+               radial-gradient(700px 420px at 8% 4%, #241E12 0%, transparent 58%);
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 34px -20px rgba(0,0,0,.9);
+}
+:root[data-theme="light"] {
+  --ink:      #0D2422;  --ink-2: #22403C;  --slate: #5F7370;
+  --paper:    #F6F8F5;  --paper-2: #ECF1EC; --line: #D6E0DA;
+  --pv: #16A34A; --solar: #D98B1F; --flow: #0E8FA0; --grid: #3B72C4; --water: #7C5CD6;
+  --hero-grad: radial-gradient(900px 520px at 78% -8%, #E3F0E6 0%, transparent 62%),
+               radial-gradient(700px 420px at 8% 4%, #F3EADA 0%, transparent 58%);
+  --shadow: 0 1px 2px rgba(13,36,34,.05), 0 8px 28px -18px rgba(13,36,34,.4);
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+img, svg { max-width: 100%; }
+a { color: inherit; }
+
+/* --- Typografische Skala ------------------------------------------------- */
+h1, h2, h3 { text-wrap: balance; margin: 0; letter-spacing: -.022em; line-height: 1.08; }
+h1 { font-size: clamp(2.6rem, 6.2vw, 4.6rem); font-weight: 760; }
+h2 { font-size: clamp(1.85rem, 3.6vw, 2.7rem); font-weight: 720; }
+h3 { font-size: 1.16rem; font-weight: 680; letter-spacing: -.01em; line-height: 1.3; }
+p  { margin: 0; }
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: .74rem;
+  letter-spacing: .17em;
+  text-transform: uppercase;
+  color: var(--slate);
+  display: flex;
+  align-items: center;
+  gap: .7em;
+}
+.eyebrow::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+.lede { font-size: clamp(1.06rem, 1.7vw, 1.28rem); color: var(--ink-2); max-width: 62ch; }
+.muted { color: var(--slate); }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* --- Gerüst -------------------------------------------------------------- */
+.wrap { width: min(100% - 2.5rem, var(--wrap)); margin-inline: auto; }
+
+section { padding-block: clamp(4rem, 9vw, 7.5rem); border-top: 1px solid var(--line); }
+section:first-of-type { border-top: 0; }
+.stack { display: flex; flex-direction: column; gap: clamp(1.6rem, 3vw, 2.6rem); }
+.stack-tight { display: flex; flex-direction: column; gap: 1rem; }
+
+/* --- Kopfzeile ----------------------------------------------------------- */
+header {
+  position: sticky; top: 0; z-index: 50;
+  backdrop-filter: blur(14px);
+  background: color-mix(in srgb, var(--paper) 86%, transparent);
+  border-bottom: 1px solid var(--line);
+}
+.bar { display: flex; align-items: center; gap: 1.4rem; padding-block: .85rem; }
+.brand { display: flex; align-items: center; gap: .65rem; font-weight: 700; letter-spacing: -.02em; font-size: 1.06rem; text-decoration: none; }
+.brand svg { width: 30px; height: 30px; border-radius: 8px; display: block; }
+.bar nav { margin-left: auto; display: flex; align-items: center; gap: .35rem; flex-wrap: wrap; }
+.bar nav a {
+  text-decoration: none; color: var(--ink-2); font-size: .93rem;
+  padding: .42rem .7rem; border-radius: 7px; transition: background 160ms, color 160ms;
+}
+.bar nav a:hover { background: var(--paper-2); color: var(--ink); }
+.nav-hide { display: none; }
+@media (min-width: 880px) { .nav-hide { display: inline-block; } }
+
+/* --- Schaltflächen ------------------------------------------------------- */
+.btn {
+  display: inline-flex; align-items: center; gap: .55rem;
+  padding: .72rem 1.15rem; border-radius: 9px;
+  font-size: .95rem; font-weight: 600; text-decoration: none;
+  border: 1px solid transparent; cursor: pointer;
+  transition: transform 160ms var(--ease), box-shadow 160ms, background 160ms, border-color 160ms;
+}
+.btn:hover { transform: translateY(-1px); }
+.btn-solid { background: var(--ink); color: var(--paper); box-shadow: var(--shadow); }
+.btn-solid:hover { box-shadow: 0 10px 30px -14px color-mix(in srgb, var(--ink) 70%, transparent); }
+.btn-ghost { border-color: var(--line); color: var(--ink); background: color-mix(in srgb, var(--paper) 60%, transparent); }
+.btn-ghost:hover { border-color: var(--ink-2); background: var(--paper-2); }
+.btn svg { width: 17px; height: 17px; flex: none; }
+.btn-row { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; }
+
+a:focus-visible, button:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--solar); outline-offset: 3px; border-radius: 6px;
+}
+
+/* --- Hero ---------------------------------------------------------------- */
+.hero { background: var(--hero-grad); border-top: 0; padding-block: clamp(3.4rem, 7vw, 6rem) clamp(3rem, 6vw, 5rem); }
+.hero-grid { display: grid; gap: clamp(2.4rem, 5vw, 4rem); align-items: center; }
+@media (min-width: 980px) { .hero-grid { grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr); } }
+
+.badge {
+  display: inline-flex; align-items: center; gap: .5rem;
+  font-family: var(--mono); font-size: .74rem; letter-spacing: .13em; text-transform: uppercase;
+  color: var(--ink-2); background: color-mix(in srgb, var(--paper) 70%, transparent);
+  border: 1px solid var(--line); border-radius: 999px; padding: .34rem .8rem;
+  width: max-content;
+}
+.badge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--pv); }
+
+h1 .accent {
+  background: linear-gradient(96deg, var(--pv), var(--flow) 58%, var(--solar));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+
+/* --- Kennzahlenleiste ---------------------------------------------------- */
+/* Feste Spaltenzahlen: Bei vier Werten hinterlässt ein auto-fit-Umbruch sonst
+   eine leere Zelle, in der der Rasterhintergrund durchschlägt. */
+.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+@media (min-width: 640px) { .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.stat { background: var(--paper); padding: 1rem 1.1rem; display: flex; flex-direction: column; gap: .18rem; }
+.stat b { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 1.5rem; font-weight: 640; letter-spacing: -.03em; }
+.stat b .unit { font-size: .58em; font-style: normal; color: var(--slate); margin-left: .18em; letter-spacing: .06em; }
+.stat span { font-family: var(--mono); font-size: .68rem; letter-spacing: .13em; text-transform: uppercase; color: var(--slate); }
+
+/* --- Flussdiagramm ------------------------------------------------------- */
+.flow-card {
+  background: var(--paper); border: 1px solid var(--line); border-radius: 16px;
+  box-shadow: var(--shadow); padding: 1rem; overflow: hidden;
+}
+.flow-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .35rem .55rem .85rem; }
+.flow-head .t { font-family: var(--mono); font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; color: var(--slate); }
+.flow-head .live { display: inline-flex; align-items: center; gap: .45rem; font-family: var(--mono); font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; color: var(--pv); }
+.flow-head .live i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: blink 2.2s ease-in-out infinite; }
+@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
+
+.wire { fill: none; stroke: var(--line); stroke-width: 2.4; }
+.pulse { fill: none; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 13 190; animation: run 3.4s linear infinite; }
+@keyframes run { from { stroke-dashoffset: 203; } to { stroke-dashoffset: 0; } }
+.p-pv    { stroke: var(--pv); }
+.p-car   { stroke: var(--flow); animation-duration: 2.6s; }
+.p-water { stroke: var(--water); animation-duration: 3.9s; }
+.p-batt  { stroke: var(--solar); animation-duration: 3.2s; }
+.p-house { stroke: var(--slate); animation-duration: 4.4s; }
+.p-grid  { stroke: var(--grid); animation-duration: 5.6s; opacity: .5; }
+
+.node-box { fill: var(--paper); stroke: var(--line); stroke-width: 1.4; }
+.node-label { font-family: var(--mono); font-size: 11.5px; letter-spacing: .06em; fill: var(--ink-2); }
+.node-val { font-family: var(--mono); font-size: 13px; font-weight: 600; fill: var(--ink); }
+.sun-core { fill: var(--solar); animation: glow 4.5s ease-in-out infinite; transform-origin: 92px 96px; }
+@keyframes glow { 0%,100% { opacity: .95; transform: scale(1); } 50% { opacity: 1; transform: scale(1.06); } }
+.sun-ray { stroke: var(--solar); stroke-width: 2.6; stroke-linecap: round; opacity: .75; }
+
+/* --- Karten -------------------------------------------------------------- */
+.cards { display: grid; gap: 1.1rem; grid-template-columns: repeat(auto-fit, minmax(268px, 1fr)); }
+/* Vier Karten brechen sonst zu 3 + 1 um – ein einzelner Rest wirkt wie ein Versehen. */
+@media (min-width: 900px) { .cards-4 { grid-template-columns: repeat(2, 1fr); } }
+.card {
+  background: var(--paper); border: 1px solid var(--line); border-radius: 13px;
+  padding: 1.5rem; display: flex; flex-direction: column; gap: .7rem;
+  transition: border-color 220ms, transform 220ms var(--ease);
+}
+.card:hover { border-color: color-mix(in srgb, var(--ink-2) 45%, var(--line)); transform: translateY(-2px); }
+.card p { font-size: .96rem; color: var(--ink-2); }
+.card .tag { font-family: var(--mono); font-size: .68rem; letter-spacing: .14em; text-transform: uppercase; color: var(--slate); }
+.icon { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; background: var(--paper-2); }
+.icon svg { width: 19px; height: 19px; }
+
+/* --- Vorher/Nachher ------------------------------------------------------ */
+.ba { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 13px; overflow: hidden; }
+@media (min-width: 720px) { .ba { grid-template-columns: 1fr 1fr; } }
+.ba > div { background: var(--paper); padding: 1.6rem; display: flex; flex-direction: column; gap: .9rem; }
+.ba .h { font-family: var(--mono); font-size: .7rem; letter-spacing: .15em; text-transform: uppercase; color: var(--slate); }
+.ba .big { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: clamp(2rem, 5vw, 2.9rem); font-weight: 640; letter-spacing: -.035em; line-height: 1; display: flex; align-items: baseline; gap: .18em; }
+.ba .big .unit { font-size: .42em; font-style: normal; letter-spacing: .1em; color: var(--slate); }
+.ba .bad .big { color: var(--solar); }
+.ba .good .big { color: var(--pv); }
+.bar-track { height: 7px; border-radius: 99px; background: var(--paper-2); overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 99px; width: 0; transition: width 1.3s var(--ease); }
+
+/* --- Geräteliste --------------------------------------------------------- */
+.devs { display: grid; gap: 1.1rem; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.dev { border: 1px solid var(--line); border-radius: 12px; padding: 1.2rem 1.3rem; display: flex; flex-direction: column; gap: .55rem; }
+.dev h3 { font-size: .95rem; display: flex; align-items: center; gap: .5rem; }
+.dev h3::before { content: ""; width: 9px; height: 9px; border-radius: 2px; background: var(--k, var(--slate)); flex: none; }
+.dev ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: .3rem; }
+.dev li { font-family: var(--mono); font-size: .82rem; color: var(--ink-2); }
+
+.pill { font-family: var(--mono); font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; padding: .08rem .38rem; border-radius: 4px; border: 1px solid currentColor; white-space: nowrap; }
+.pill-local { color: var(--pv); }
+.pill-cloud { color: var(--solar); }
+
+/* --- Was nach außen geht ------------------------------------------------- */
+.net { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 13px; overflow: hidden; }
+@media (min-width: 820px) { .net { grid-template-columns: repeat(3, 1fr); } }
+.net > div { background: var(--paper); padding: 1.5rem; display: flex; flex-direction: column; gap: .8rem; }
+.net h3 { display: flex; align-items: center; gap: .55rem; font-size: 1.02rem; }
+.net h3::before { content: ""; width: 10px; height: 10px; border-radius: 3px; background: var(--k); flex: none; }
+.net ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: .38rem; }
+.net li { font-size: .92rem; color: var(--ink-2); padding-left: 1.05rem; position: relative; }
+.net li::before { content: "—"; position: absolute; left: 0; color: var(--slate); }
+.net .foot { font-size: .84rem; color: var(--slate); margin-top: auto; padding-top: .5rem; }
+
+/* --- Code ---------------------------------------------------------------- */
+/* Code bleibt in beiden Themes dunkel — ein Terminal ist dunkel.
+   Eigene Tokens, damit --ink beim Themenwechsel nicht Grund und Schrift
+   gleichzeitig hell macht. */
+.code {
+  background: var(--code-bg); color: var(--code-fg); border-radius: 13px;
+  padding: 1.15rem 1.3rem; overflow-x: auto;
+  font-family: var(--mono); font-size: .855rem; line-height: 1.75;
+  border: 1px solid var(--code-line);
+}
+.code .c { color: #7FA298; }
+.code .k { color: #7FD8A4; }
+.code pre { margin: 0; }
+
+/* --- FAQ ----------------------------------------------------------------- */
+details { border-bottom: 1px solid var(--line); }
+details summary {
+  cursor: pointer; list-style: none; padding: 1.15rem 0;
+  font-weight: 620; font-size: 1.03rem; display: flex; align-items: center; gap: 1rem;
+}
+details summary::-webkit-details-marker { display: none; }
+details summary::after {
+  content: "+"; margin-left: auto; font-family: var(--mono); font-size: 1.35rem;
+  color: var(--slate); transition: transform 260ms var(--ease); line-height: 1;
+}
+details[open] summary::after { transform: rotate(45deg); }
+details .a { padding: 0 0 1.3rem; color: var(--ink-2); font-size: .98rem; max-width: 72ch; }
+
+/* --- Fußzeile ------------------------------------------------------------ */
+footer { border-top: 1px solid var(--line); background: var(--paper-2); padding-block: clamp(3rem, 6vw, 4.5rem); }
+.foot-grid { display: grid; gap: 2.5rem; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+.foot-col { display: flex; flex-direction: column; gap: .6rem; }
+.foot-col h4 { margin: 0 0 .25rem; font-family: var(--mono); font-size: .7rem; letter-spacing: .15em; text-transform: uppercase; color: var(--slate); font-weight: 500; }
+.foot-col a { text-decoration: none; color: var(--ink-2); font-size: .93rem; }
+.foot-col a:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.legal { margin-top: 2.5rem; padding-top: 1.6rem; border-top: 1px solid var(--line); font-size: .85rem; color: var(--slate); display: flex; flex-wrap: wrap; gap: .5rem 1.4rem; }
+
+.notice {
+  border: 1px dashed var(--solar); border-radius: 11px; padding: 1rem 1.2rem;
+  background: color-mix(in srgb, var(--solar) 8%, transparent);
+  font-size: .9rem; color: var(--ink-2);
+}
+.imp { display: grid; gap: 1.6rem; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+.imp .blk { display: flex; flex-direction: column; gap: .3rem; font-size: .94rem; color: var(--ink-2); }
+.imp .blk strong { color: var(--ink); font-size: .78rem; font-family: var(--mono); letter-spacing: .12em; text-transform: uppercase; font-weight: 500; }
+.ph { font-family: var(--mono); font-size: .88rem; color: var(--slate); background: var(--paper-2); padding: .1rem .4rem; border-radius: 5px; }
+
+/* --- Einblenden beim Scrollen -------------------------------------------- */
+.rise { opacity: 0; transform: translateY(18px); transition: opacity .7s var(--ease), transform .7s var(--ease); }
+.rise.in { opacity: 1; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+  .rise { opacity: 1; transform: none; }
+  .pulse { display: none; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap bar">
+    <a class="brand" href="#top">
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <defs><linearGradient id="mpg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#22c55e"/><stop offset="1" stop-color="#0ea5b7"/>
+        </linearGradient></defs>
+        <rect width="100" height="100" rx="22.5" fill="url(#mpg)"/>
+        <g fill="none" stroke="#fff" stroke-width="5.2" stroke-linecap="round">
+          <line x1="57" y1="33.9" x2="69" y2="33.9"/><line x1="54.95" y1="38.85" x2="63.44" y2="47.34"/>
+          <line x1="45.05" y1="38.85" x2="36.56" y2="47.34"/><line x1="43" y1="33.9" x2="31" y2="33.9"/>
+          <line x1="45.05" y1="28.95" x2="36.56" y2="20.46"/><line x1="50" y1="26.9" x2="50" y2="14.9"/>
+          <line x1="54.95" y1="28.95" x2="63.44" y2="20.46"/>
+        </g>
+        <circle cx="50" cy="33.9" r="10.7" fill="#fff"/>
+        <polygon points="56.3,45 41,68.3 47.8,68.3 43.7,88 59,62.9 52.3,62.9" fill="#fff"/>
+      </svg>
+      MinePower
+    </a>
+    <nav>
+      <a class="nav-hide" href="#regelung">Regelung</a>
+      <a class="nav-hide" href="#geraete">Geräte</a>
+      <a class="nav-hide" href="#netz">Datenwege</a>
+      <a class="nav-hide" href="#betreiben">Betreiben</a>
+      <a class="nav-hide" href="#ehrlich">Reifegrad</a>
+      <a class="nav-hide" href="#faq">FAQ</a>
+      <a class="btn btn-ghost" href="https://github.com/Marwinrentz/MinePower-Controller" rel="noopener">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.42 7.42 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        GitHub
+      </a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- ===================== HERO ===================== -->
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div class="stack">
+      <div class="badge"><span class="dot"></span> Version 2.4.0 · selbst gehostet</div>
+      <h1>Jede Kilowattstunde<br>bleibt <span class="accent">im Haus</span>.</h1>
+      <p class="lede">
+        MinePower regelt den Überschuss deiner PV-Anlage sekundengenau auf Auto, Warmwasser
+        und Hausspeicher — am Netzpunkt vorbei. Läuft auf deiner Hardware, ohne Abo und
+        ohne fremde Steuerzentrale. Die Regelung selbst kommt ohne Internet aus.
+      </p>
+      <div class="btn-row">
+        <a class="btn btn-solid" href="#betreiben">
+          <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 11.5 3.5 7l1.06-1.06L7.25 8.6V1h1.5v7.6l2.69-2.66L12.5 7 8 11.5ZM2 13.5h12V15H2v-1.5Z"/></svg>
+          In 3 Minuten starten
+        </a>
+        <a class="btn btn-ghost" href="https://hub.docker.com/r/marwinrentz1/minepower" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13.98 11.08h2.12a.19.19 0 0 0 .19-.19V9.01a.19.19 0 0 0-.19-.19h-2.12a.18.18 0 0 0-.18.19v1.88c0 .1.08.19.18.19m-2.95-5.43h2.12a.19.19 0 0 0 .18-.19V3.58a.19.19 0 0 0-.18-.18h-2.12a.18.18 0 0 0-.19.18v1.88c0 .1.09.19.19.19m0 2.71h2.12a.19.19 0 0 0 .18-.18V6.29a.19.19 0 0 0-.18-.19h-2.12a.18.18 0 0 0-.19.19v1.88c0 .1.09.18.19.18m-2.93 0h2.12a.19.19 0 0 0 .18-.18V6.29a.18.18 0 0 0-.18-.19H8.1a.19.19 0 0 0-.19.19v1.88c0 .1.08.18.19.18m-2.96 0h2.12a.19.19 0 0 0 .19-.18V6.29a.19.19 0 0 0-.19-.19H5.14a.19.19 0 0 0-.19.19v1.88c0 .1.09.18.19.18m2.96 2.72h2.12a.19.19 0 0 0 .18-.19V9.01a.19.19 0 0 0-.18-.19H8.1a.19.19 0 0 0-.19.19v1.88c0 .1.08.19.19.19m-2.96 0h2.12a.19.19 0 0 0 .19-.19V9.01a.19.19 0 0 0-.19-.19H5.14a.19.19 0 0 0-.19.19v1.88c0 .1.09.19.19.19m-2.92 0h2.12a.19.19 0 0 0 .18-.19V9.01a.19.19 0 0 0-.18-.19H2.22a.19.19 0 0 0-.19.19v1.88c0 .1.08.19.19.19m21.16-.71c-.06-.05-.67-.51-1.95-.51-.34 0-.68.03-1.01.09a3.77 3.77 0 0 0-1.72-2.57l-.34-.2-.23.33a4.6 4.6 0 0 0-.6 1.42c-.24.94-.1 1.83.37 2.59a4.3 4.3 0 0 1-1.62.39H.76a.75.75 0 0 0-.75.75 11.4 11.4 0 0 0 .7 4.06 6.03 6.03 0 0 0 2.4 3.1c1.18.69 3.1 1.09 5.27 1.09.98 0 1.96-.09 2.92-.27a12.1 12.1 0 0 0 3.83-1.4 10.5 10.5 0 0 0 2.61-2.13c1.25-1.41 2-2.99 2.55-4.39h.23c1.37 0 2.21-.55 2.68-1 .3-.3.55-.66.7-1.06l.1-.29Z"/></svg>
+          Docker Hub
+        </a>
+      </div>
+      <div class="stats">
+        <div class="stat"><b class="num"><span data-count="25">0</span></b><span>Gerätetreiber</span></div>
+        <div class="stat"><b class="num"><span data-count="15">0</span><em class="unit">s</em></b><span>Regeltakt</span></div>
+        <div class="stat"><b class="num"><span data-count="0">0</span><em class="unit">€</em></b><span>Laufende Kosten</span></div>
+        <div class="stat"><b class="num"><span data-count="2">0</span></b><span>Architekturen</span></div>
+      </div>
+    </div>
+
+    <!-- Energiefluss — das, was das Produkt tatsächlich tut -->
+    <div class="flow-card rise">
+      <div class="flow-head">
+        <span class="t">Energiefluss</span>
+        <span class="live"><i></i> Regelung aktiv</span>
+      </div>
+      <svg viewBox="0 0 620 400" role="img" aria-label="Energiefluss: Sonne über PV in den Regler, von dort an Haus, Batterie, Auto, Warmwasser und Netz">
+        <!-- Sonne -->
+        <g>
+          <circle class="sun-core" cx="92" cy="96" r="21"/>
+          <g class="sun-ray">
+            <line x1="92" y1="58" x2="92" y2="48"/><line x1="92" y1="144" x2="92" y2="154"/>
+            <line x1="54" y1="96" x2="44" y2="96"/><line x1="130" y1="96" x2="140" y2="96"/>
+            <line x1="65" y1="69" x2="58" y2="62"/><line x1="119" y1="123" x2="126" y2="130"/>
+            <line x1="119" y1="69" x2="126" y2="62"/><line x1="65" y1="123" x2="58" y2="130"/>
+          </g>
+        </g>
+
+        <!-- Leitungen -->
+        <path id="w1" class="wire" d="M92 168 L92 232 Q92 250 112 250 L232 250"/>
+        <path id="w2" class="wire" d="M388 250 Q430 250 448 214 T520 60"/>
+        <path id="w3" class="wire" d="M388 250 Q432 250 452 218 T520 148"/>
+        <path id="w4" class="wire" d="M388 250 L520 250"/>
+        <path id="w5" class="wire" d="M388 250 Q432 250 452 282 T520 340"/>
+        <path id="w6" class="wire" d="M92 250 Q92 340 140 340 L232 340" stroke-dasharray="5 7"/>
+
+        <use href="#w1" class="pulse p-pv"/>
+        <use href="#w2" class="pulse p-house"/>
+        <use href="#w3" class="pulse p-batt"/>
+        <use href="#w4" class="pulse p-car"/>
+        <use href="#w5" class="pulse p-water"/>
+        <use href="#w6" class="pulse p-grid"/>
+
+        <!-- PV -->
+        <g><rect class="node-box" x="40" y="150" width="104" height="34" rx="8"/>
+          <text class="node-label" x="92" y="171" text-anchor="middle">PV-ANLAGE</text></g>
+
+        <!-- Regler -->
+        <g>
+          <rect class="node-box" x="232" y="216" width="156" height="68" rx="11" stroke="var(--pv)" stroke-width="2"/>
+          <text class="node-label" x="310" y="243" text-anchor="middle" fill="var(--pv)">MINEPOWER</text>
+          <text class="node-val" x="310" y="266" text-anchor="middle">Netz 0 W</text>
+        </g>
+
+        <!-- Verbraucher -->
+        <g><rect class="node-box" x="520" y="42" width="80" height="34" rx="8"/>
+          <text class="node-label" x="560" y="63" text-anchor="middle">HAUS</text></g>
+        <g><rect class="node-box" x="520" y="130" width="80" height="34" rx="8"/>
+          <text class="node-label" x="560" y="151" text-anchor="middle">SPEICHER</text></g>
+        <g><rect class="node-box" x="520" y="232" width="80" height="34" rx="8" stroke="var(--flow)"/>
+          <text class="node-label" x="560" y="253" text-anchor="middle" fill="var(--flow)">AUTO</text></g>
+        <g><rect class="node-box" x="520" y="322" width="80" height="34" rx="8"/>
+          <text class="node-label" x="560" y="343" text-anchor="middle">WARMWASSER</text></g>
+        <g><rect class="node-box" x="232" y="323" width="80" height="34" rx="8"/>
+          <text class="node-label" x="272" y="344" text-anchor="middle">NETZ</text></g>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== PROBLEM ===================== -->
+<section id="problem">
+  <div class="wrap stack">
+    <p class="eyebrow">Das Problem</p>
+    <h2 class="rise">Der Überschuss ist da.<br>Er kommt nur nicht an.</h2>
+    <p class="lede rise">
+      Eine gängige Wallbox lädt in festen Stufen und merkt nicht, dass gerade eine Wolke
+      vorbeizieht. Ein Heizstab läuft an, wenn es zu spät ist. Der Hausspeicher wird
+      leergezogen, während am Zähler alles ausgeglichen aussieht. Was übrig bleibt,
+      geht für ein paar Cent ins Netz — und kommt abends für ein Vielfaches zurück.
+    </p>
+
+    <div class="ba rise">
+      <div class="bad">
+        <span class="h">Ohne Regelung</span>
+        <span class="big"><span class="num" data-count="43">0</span><em class="unit">%</em></span>
+        <div class="bar-track"><div class="bar-fill" data-w="43" style="background: var(--solar)"></div></div>
+        <p class="muted">des Überschusses gehen ins Netz, weil keine Last ihn abnimmt.</p>
+      </div>
+      <div class="good">
+        <span class="h">Mit MinePower</span>
+        <span class="big"><span class="num" data-count="99">0</span><em class="unit">%</em></span>
+        <div class="bar-track"><div class="bar-fill" data-w="99" style="background: var(--pv)"></div></div>
+        <p class="muted">Autarkie im Tagesbetrieb — der Rest fließt in Auto und Warmwasser.</p>
+      </div>
+    </div>
+    <p class="muted rise" style="font-size:.86rem">
+      Werte aus dem Diagnosebericht einer realen Anlage (Sungrow SH, 10 kWp, Tesla, my-PV AC•THOR).
+      Deine Zahlen hängen von Anlage, Verbrauch und Wetter ab.
+    </p>
+  </div>
+</section>
+
+<!-- ===================== REGELUNG ===================== -->
+<section id="regelung">
+  <div class="wrap stack">
+    <p class="eyebrow">Wie geregelt wird</p>
+    <h2 class="rise">Vier Mechanismen gegen<br>verschenkten Strom.</h2>
+
+    <div class="cards cards-4">
+      <div class="card rise">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="var(--pv)" stroke-width="2" stroke-linecap="round"><path d="M3 17l6-6 4 4 7-7"/><path d="M14 8h6v6"/></svg></div>
+        <span class="tag">Ehrliche Stellgröße</span>
+        <h3>Ampere, die wirklich fließen</h3>
+        <p>
+          Der Sollstrom wird nicht mit dem Nennwert 230 V gerechnet, sondern mit der
+          gemessenen Spannung und der tatsächlichen Phasenzahl — und immer abgerundet.
+          Aufrunden würde bedeuten, mehr anzufordern, als die Sonne hergibt.
+        </p>
+      </div>
+      <div class="card rise">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="var(--water)" stroke-width="2" stroke-linecap="round"><path d="M12 3s6 6.5 6 10.5A6 6 0 0 1 6 13.5C6 9.5 12 3 12 3Z"/></svg></div>
+        <span class="tag">Lückenfüller</span>
+        <h3>Der Rest geht ins Warmwasser</h3>
+        <p>
+          180 W übrig — zu wenig für die 6 A einer Wallbox, genau richtig für einen
+          stufenlos modulierenden Heizstab. Der bekommt sie, unabhängig von seinem Platz
+          in der Prioritätskette. Die Alternative ist nicht „später", sondern „verschenkt".
+        </p>
+      </div>
+      <div class="card rise">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="var(--flow)" stroke-width="2" stroke-linecap="round"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg></div>
+        <span class="tag">Adaptives Totband</span>
+        <h3>Ruhiges Wetter, enge Regelung</h3>
+        <p>
+          Bei stabiler Erzeugung wird jede kleine Abweichung ausgeregelt. Bei
+          Wolkenwechsel wird das Totband weiter, damit sich die Lasten nicht mit
+          Start-Stopp-Zyklen kaputttakten.
+        </p>
+      </div>
+      <div class="card rise">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="var(--solar)" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="16" height="10" rx="2.5"/><path d="M21 10.5v3"/><path d="M5.5 10.5v3"/></svg></div>
+        <span class="tag">Speicher-Vorrang</span>
+        <h3>Der Hausspeicher wird nicht angezapft</h3>
+        <p>
+          Was der Speicher entlädt, ist kein Solarüberschuss und wird abgezogen —
+          sonst füttert er Auto und Warmwasser, während der Zähler auf null steht.
+          Was er lädt, gehört ihm. Eine kleine Entladung regelt nur ab, sie schaltet nicht hart aus.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== GERÄTE ===================== -->
+<section id="geraete">
+  <div class="wrap stack">
+    <p class="eyebrow">Unterstützte Hardware</p>
+    <h2 class="rise">25 Treiber.<br>Bis auf einen alle lokal.</h2>
+    <p class="lede rise">
+      Gesprochen wird Modbus TCP, SunSpec, HTTP und OCPP — direkt im eigenen Netz.
+      Die einzige Ausnahme ist der Tesla, und auch nur, wenn du dort die Fleet-API
+      statt des lokalen BLE-Proxys wählst. Welcher Weg es sein soll, entscheidest du
+      beim Einrichten.
+    </p>
+
+    <div class="devs">
+      <div class="dev rise" style="--k: var(--pv)">
+        <h3>Wechselrichter</h3>
+        <ul><li>Sungrow SH (Hybrid)</li><li>Sungrow SG (String)</li><li>Fronius GEN24 / Symo</li><li>Huawei SUN2000</li><li>SMA Sunny Boy / Tripower</li><li>SunSpec (generisch)</li></ul>
+      </div>
+      <div class="dev rise" style="--k: var(--grid)">
+        <h3>Energiezähler</h3>
+        <ul><li>Sungrow DTSU666</li><li>Fronius Smart Meter</li><li>Huawei DTSU / DDSU</li><li>SMA Energy Meter</li><li>Shelly 3EM</li><li>Modbus (frei belegbar)</li><li>SunSpec-Zähler</li></ul>
+      </div>
+      <div class="dev rise" style="--k: var(--flow)">
+        <h3>Ladepunkte</h3>
+        <ul><li>Tesla — BLE-Proxy <span class="pill pill-local">lokal</span></li><li>Tesla — Fleet-API <span class="pill pill-cloud">Cloud</span></li><li>go-e Charger</li><li>Sungrow AC-Wallbox</li><li>OCPP 1.6J (generisch)</li></ul>
+      </div>
+      <div class="dev rise" style="--k: var(--water)">
+        <h3>Warmwasser &amp; Speicher</h3>
+        <ul><li>my-PV AC•THOR</li><li>my-PV AC ELWA-E / ELWA 2</li><li>Shelly-Relais (Heizstab)</li><li>Sungrow Batterie</li><li>Simulationsgeräte zum Testen</li></ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== NETZGRENZE ===================== -->
+<section id="netz">
+  <div class="wrap stack">
+    <p class="eyebrow">Was nach außen geht</p>
+    <h2 class="rise">Wo die Grenze<br>deines Netzes liegt.</h2>
+    <p class="lede rise">
+      „Ohne Cloud" wäre zu einfach gesagt. Ein paar Funktionen brauchen eine
+      Internetverbindung — die stehen hier, statt im Kleingedruckten. Alle sind
+      abschaltbar und ab Werk aus; die Regelung läuft ohne sie unverändert weiter.
+    </p>
+
+    <div class="net rise">
+      <div style="--k: var(--pv)">
+        <h3>Bleibt im Haus</h3>
+        <ul>
+          <li>Wechselrichter, Zähler, Batterie (Modbus TCP, SunSpec)</li>
+          <li>go-e, Sungrow-Wallbox, OCPP-Ladepunkte</li>
+          <li>my-PV AC•THOR, Shelly</li>
+          <li>Tesla über lokalen BLE-Proxy</li>
+          <li>Messwerte, Ladevorgänge, Einstellungen, Datenbank</li>
+          <li>Oberfläche und API</li>
+        </ul>
+        <p class="foot">Diese Wege verlassen dein Netz zu keinem Zeitpunkt.</p>
+      </div>
+      <div style="--k: var(--solar)">
+        <h3>Optional nach draußen</h3>
+        <ul>
+          <li><strong>Tesla Fleet-API</strong> — Alternative zum BLE-Proxy, braucht ein Tesla-Konto</li>
+          <li><strong>forecast.solar</strong> — Solarprognose für Zielladung und Wolkenerkennung</li>
+          <li><strong>Tibber, aWATTar</strong> — dynamische Börsenstrompreise</li>
+          <li><strong>Telegram, ntfy, E-Mail</strong> — Benachrichtigung bei Störungen</li>
+          <li><strong>MQTT</strong> — nur, wenn du einen externen Broker einträgst</li>
+        </ul>
+        <p class="foot">Standard ist jeweils „aus". Ohne sie regelt MinePower genauso.</p>
+      </div>
+      <div style="--k: var(--flow)">
+        <h3>Gibt es nicht</h3>
+        <ul>
+          <li>Kein Konto bei uns — es gibt keinen Anbieter-Account</li>
+          <li>Keine Telemetrie, keine Nutzungsstatistik</li>
+          <li>Keine Zwangsanmeldung, kein Lizenzserver</li>
+          <li>Keine Funktion, die ohne Internet gesperrt wird</li>
+          <li>Kein Fernzugriff von außen auf deine Anlage</li>
+        </ul>
+        <p class="foot">MinePower selbst sieht deine Daten nie — es läuft nur bei dir.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== BETREIBEN ===================== -->
+<section id="betreiben">
+  <div class="wrap stack">
+    <p class="eyebrow">Selbst betreiben</p>
+    <h2 class="rise">Ein Container. Fertig.</h2>
+    <p class="lede rise">
+      Multi-Arch-Image für <span class="num">amd64</span> und <span class="num">arm64</span> —
+      läuft auf dem Raspberry Pi genauso wie auf dem NAS oder dem Mini-PC im Keller.
+      Die Oberfläche ist eingebaut, ein zusätzlicher Webserver ist nicht nötig.
+    </p>
+
+    <div class="code rise"><pre><span class="c"># Image holen und starten</span>
+<span class="k">docker</span> run -d --name minepower \
+  -p 8000:8000 \
+  -e DATABASE_URL=<span class="k">postgresql+asyncpg://…</span> \
+  marwinrentz1/minepower:2.4.0
+
+<span class="c"># Oder komplett mit Datenbank</span>
+<span class="k">docker</span> compose up -d</pre></div>
+
+    <div class="cards" style="margin-top:.5rem">
+      <div class="card rise">
+        <span class="tag">Schritt 1</span>
+        <h3>Geräte anlegen</h3>
+        <p>Im Einrichtungsassistenten IP eintragen, Verbindungstest starten. Der zeigt die Live-Messwerte und meldet im Klartext, wenn eine Registeradresse nicht passt.</p>
+      </div>
+      <div class="card rise">
+        <span class="tag">Schritt 2</span>
+        <h3>Reihenfolge festlegen</h3>
+        <p>Prioritätskette per Drag-and-drop: Wer bekommt den Überschuss zuerst — Auto, Warmwasser oder Speicher?</p>
+      </div>
+      <div class="card rise">
+        <span class="tag">Schritt 3</span>
+        <h3>Laufen lassen</h3>
+        <p>Dashboard am Handy, Verlaufsdiagramme, MQTT-Anbindung und Benachrichtigung per ntfy, Telegram oder E-Mail, wenn etwas ausfällt.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== EHRLICH ===================== -->
+<section id="ehrlich">
+  <div class="wrap stack">
+    <p class="eyebrow">Reifegrad</p>
+    <h2 class="rise">Was erprobt ist —<br>und was nicht.</h2>
+    <p class="lede rise">
+      Jeder Treiber trägt in der Oberfläche seinen Reifegrad. Manche laufen seit Monaten
+      an echter Hardware im Dauerbetrieb, andere sind nach Herstellerdokumentation
+      geschrieben und ungetestet. Das steht dort, wo du es vor dem Einrichten siehst,
+      nicht im Kleingedruckten.
+    </p>
+    <div class="cards">
+      <div class="card rise">
+        <span class="tag" style="color: var(--pv)">Erprobt</span>
+        <h3>Sungrow SH · my-PV AC•THOR · Tesla</h3>
+        <p>An realer Hardware im Dauerbetrieb geprüft. Registerkarten und Grenzwerte gegen Messwerte verifiziert.</p>
+      </div>
+      <div class="card rise">
+        <span class="tag" style="color: var(--solar)">Nach Doku</span>
+        <h3>Fronius · Huawei · SMA · OCPP</h3>
+        <p>Nach offizieller Spezifikation umgesetzt, aber nicht an jedem Modell erprobt. Der Verbindungstest meldet Abweichungen sofort.</p>
+      </div>
+      <div class="card rise">
+        <span class="tag">Grundsatz</span>
+        <h3>Messen statt glauben</h3>
+        <p>Fällt die Netzmessung aus, werden alle steuerbaren Lasten pausiert statt blind weitergeladen. Ein Gerät, das einen Befehl nur quittiert, ihn aber nicht übernimmt, wird als Fehler gemeldet.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FAQ ===================== -->
+<section id="faq">
+  <div class="wrap stack">
+    <p class="eyebrow">Häufige Fragen</p>
+    <h2 class="rise">Kurz beantwortet.</h2>
+    <div class="rise">
+      <details>
+        <summary>Brauche ich eine Internetverbindung?</summary>
+        <div class="a">Für die Regelung nicht — die läuft vollständig im lokalen Netz. Vier Dinge gehen aber nach draußen, wenn du sie einschaltest: die Solarprognose (forecast.solar), dynamische Strompreise (Tibber, aWATTar), Benachrichtigungen (Telegram, ntfy, E-Mail) und die Tesla-Fleet-API. Alle sind ab Werk aus. Eine vollständige Aufstellung steht unter <a href="#netz">Was nach außen geht</a>.</div>
+      </details>
+      <details>
+        <summary>Ist MinePower Open Source?</summary>
+        <div class="a">Der Quelltext ist vollständig einsehbar, und du darfst ihn forken, verändern und auf eigener Hardware betreiben — privat wie im eigenen Betrieb. Im Sinne der Open Source Definition ist die Lizenz aber nicht offen: Weiterverkauf und kommerzielles Anbieten als Dienst sind ausgenommen. Die vollständigen Bedingungen stehen in der Datei LICENSE im Repository.</div>
+      </details>
+      <details>
+        <summary>Muss ich meinen Wechselrichter umkonfigurieren?</summary>
+        <div class="a">In der Regel nur Modbus TCP freischalten — beim Sungrow WiNet-S etwa ein Haken in dessen Weboberfläche. Die Batterie wird nicht aktiv angesteuert: Hybrid-Wechselrichter regeln sie selbst auf Nulleinspeisung, MinePower liest Ladestand und Leistung nur mit.</div>
+      </details>
+      <details>
+        <summary>Funktioniert es ohne Wallbox?</summary>
+        <div class="a">Ja. Ein Tesla lässt sich direkt als Ladepunkt steuern — damit reicht eine gewöhnliche Steckdose, weil nicht die Wallbox, sondern das Fahrzeug moduliert wird. Zwei Wege stehen zur Wahl: ein BLE-Proxy im eigenen Netz (bleibt lokal, braucht aber ein Gerät in Funkreichweite, etwa einen Raspberry Pi) oder die Tesla-Fleet-API (keine zusätzliche Hardware, dafür über Teslas Server und mit Tesla-Konto).</div>
+      </details>
+      <details>
+        <summary>Was kostet es?</summary>
+        <div class="a">Für den Eigenbetrieb nichts. Es gibt kein Abo, kein Konto und keine Funktion, die hinter einer Bezahlschranke liegt. Was du brauchst, ist ein Gerät, auf dem der Container läuft.</div>
+      </details>
+      <details>
+        <summary>Welche Datenbank brauche ich?</summary>
+        <div class="a">PostgreSQL. Mit der TimescaleDB-Erweiterung werden die Messreihen deutlich kompakter gespeichert, nötig ist sie aber nicht — auf reinem PostgreSQL läuft alles ebenso, nur etwas langsamer bei langen Verläufen.</div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== CTA ===================== -->
+<section>
+  <div class="wrap stack" style="align-items:flex-start">
+    <h2 class="rise">Heute noch Sonne?<br>Dann fang damit an.</h2>
+    <div class="btn-row rise">
+      <a class="btn btn-solid" href="https://github.com/Marwinrentz/MinePower-Controller" rel="noopener">Zum Repository</a>
+      <a class="btn btn-ghost" href="https://hub.docker.com/r/marwinrentz1/minepower" rel="noopener">Image auf Docker Hub</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-col">
+        <a class="brand" href="#top" style="margin-bottom:.4rem">
+          <svg viewBox="0 0 100 100" aria-hidden="true">
+            <defs><linearGradient id="mpg2" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#22c55e"/><stop offset="1" stop-color="#0ea5b7"/>
+            </linearGradient></defs>
+            <rect width="100" height="100" rx="22.5" fill="url(#mpg2)"/>
+            <circle cx="50" cy="33.9" r="10.7" fill="#fff"/>
+            <polygon points="56.3,45 41,68.3 47.8,68.3 43.7,88 59,62.9 52.3,62.9" fill="#fff"/>
+          </svg>
+          MinePower
+        </a>
+        <p class="muted" style="font-size:.9rem">PV-Überschussregelung für E-Auto, Warmwasser und Hausspeicher.</p>
+      </div>
+      <div class="foot-col">
+        <h4>Produkt</h4>
+        <a href="#regelung">Regelung</a>
+        <a href="#geraete">Unterstützte Geräte</a>
+        <a href="#netz">Was nach außen geht</a>
+        <a href="#betreiben">Installation</a>
+        <a href="#ehrlich">Reifegrad</a>
+      </div>
+      <div class="foot-col">
+        <h4>Quellen</h4>
+        <a href="https://github.com/Marwinrentz/MinePower-Controller" rel="noopener">GitHub-Repository</a>
+        <a href="https://hub.docker.com/r/marwinrentz1/minepower" rel="noopener">Docker Hub</a>
+        <a href="https://github.com/Marwinrentz/MinePower-Controller/blob/main/LICENSE" rel="noopener">Lizenz</a>
+        <a href="https://github.com/Marwinrentz/MinePower-Controller/issues" rel="noopener">Fehler melden</a>
+      </div>
+      <div class="foot-col">
+        <h4>Rechtliches</h4>
+        <a href="#impressum">Impressum</a>
+        <a href="#datenschutz">Datenschutz</a>
+      </div>
+    </div>
+
+    <!-- ===================== IMPRESSUM ===================== -->
+    <div id="impressum" style="margin-top:3.5rem; padding-top:2.5rem; border-top:1px solid var(--line)" class="stack-tight">
+      <p class="eyebrow">Impressum</p>
+      <p class="notice">
+        <strong>Vor Veröffentlichung ausfüllen.</strong> Die mit <span class="ph">[…]</span> markierten
+        Felder sind Platzhalter. Nach § 5 DDG (früher § 5 TMG) sind Anschrift und eine
+        Kontaktmöglichkeit für geschäftsmäßige Angebote verpflichtend — erfundene Angaben
+        sind hier keine Option.
+      </p>
+      <div class="imp" style="margin-top:.6rem">
+        <div class="blk">
+          <strong>Angaben gemäß § 5 DDG</strong>
+          <span>Marwin Rentz</span>
+          <span class="ph">[Straße und Hausnummer]</span>
+          <span class="ph">[PLZ Ort]</span>
+          <span class="ph">[Land]</span>
+        </div>
+        <div class="blk">
+          <strong>Kontakt</strong>
+          <span>E-Mail: <span class="ph">[kontakt@deine-domain.de]</span></span>
+          <span>Telefon: <span class="ph">[optional]</span></span>
+        </div>
+        <div class="blk">
+          <strong>Verantwortlich für den Inhalt</strong>
+          <span>Marwin Rentz</span>
+          <span class="ph">[Anschrift wie oben]</span>
+        </div>
+        <div class="blk">
+          <strong>Umsatzsteuer-ID</strong>
+          <span class="ph">[USt-IdNr. nach § 27 a UStG — entfällt bei Kleinunternehmerregelung]</span>
+        </div>
+      </div>
+      <p class="muted" style="font-size:.86rem; margin-top:1rem; max-width:72ch">
+        <strong>Haftung für Inhalte und Links:</strong> Für eigene Inhalte auf diesen Seiten
+        besteht Verantwortlichkeit nach den allgemeinen Gesetzen. Für Inhalte verlinkter
+        externer Seiten ist deren jeweiliger Betreiber verantwortlich; zum Zeitpunkt der
+        Verlinkung waren keine Rechtsverstöße erkennbar.
+      </p>
+      <p class="muted" style="font-size:.86rem; max-width:72ch">
+        <strong>Streitbeilegung:</strong> Zur Teilnahme an einem Streitbeilegungsverfahren
+        vor einer Verbraucherschlichtungsstelle besteht weder Bereitschaft noch Verpflichtung.
+      </p>
+    </div>
+
+    <!-- ===================== DATENSCHUTZ ===================== -->
+    <div id="datenschutz" style="margin-top:2.5rem; padding-top:2.5rem; border-top:1px solid var(--line)" class="stack-tight">
+      <p class="eyebrow">Datenschutz</p>
+      <p class="muted" style="font-size:.92rem; max-width:72ch">
+        Diese Webseite bindet keine externen Schriften, Skripte, Karten oder Analysedienste ein
+        und setzt keine Cookies. Es gibt kein Kontaktformular und keine Anmeldung.
+        Welche Zugriffsdaten beim Abruf der Seite anfallen — üblicherweise IP-Adresse,
+        Zeitpunkt und angeforderte Datei — hängt vom Hoster ab und gehört an dieser Stelle
+        ergänzt: <span class="ph">[Hoster und Speicherdauer der Server-Logs eintragen]</span>.
+      </p>
+      <p class="muted" style="font-size:.92rem; max-width:72ch">
+        Die Software MinePower selbst läuft auf deiner eigenen Hardware. Messwerte, Ladevorgänge
+        und Einstellungen bleiben dort, und an den Anbieter dieser Seite wird aus dem Betrieb
+        nichts übertragen. Schaltest du in MinePower einen der optionalen Dienste ein —
+        Solarprognose, dynamische Strompreise, Benachrichtigungen oder die Tesla-Fleet-API —,
+        entsteht dabei eine direkte Verbindung von deiner Anlage zum jeweiligen Anbieter,
+        für die dessen eigene Datenschutzbestimmungen gelten. Welche das sind, steht unter
+        <a href="#netz">Was nach außen geht</a>.
+      </p>
+    </div>
+
+    <div class="legal">
+      <span>© 2026 Marwin Rentz</span>
+      <span>MinePower 2.4.0</span>
+      <span>Kein Abo · kein Anbieterkonto · Regelung ohne Internet</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* Einblenden beim Scrollen */
+  var rise = document.querySelectorAll(".rise");
+  if (reduce || !("IntersectionObserver" in window)) {
+    rise.forEach(function (el) { el.classList.add("in"); });
+  } else {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+      });
+    }, { threshold: 0.12, rootMargin: "0px 0px -40px" });
+    rise.forEach(function (el) { io.observe(el); });
+  }
+
+  /* Zahlen hochzählen — Messwerte sollen sich wie Messwerte verhalten */
+  function countUp(el) {
+    var target = parseFloat(el.dataset.count);
+    if (reduce || target === 0) { el.textContent = String(target); return; }
+    var start = performance.now(), dur = 1100;
+    (function step(now) {
+      var t = Math.min(1, (now - start) / dur);
+      var eased = 1 - Math.pow(1 - t, 3);
+      el.textContent = String(Math.round(target * eased));
+      if (t < 1) requestAnimationFrame(step);
+    })(start);
+  }
+
+  var counters = document.querySelectorAll("[data-count]");
+  var bars = document.querySelectorAll(".bar-fill");
+  if (!("IntersectionObserver" in window)) {
+    counters.forEach(countUp);
+    bars.forEach(function (b) { b.style.width = b.dataset.w + "%"; });
+  } else {
+    var io2 = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        if (e.target.dataset.count !== undefined) countUp(e.target);
+        else e.target.style.width = e.target.dataset.w + "%";
+        io2.unobserve(e.target);
+      });
+    }, { threshold: 0.5 });
+    counters.forEach(function (el) { io2.observe(el); });
+    bars.forEach(function (el) { io2.observe(el); });
+  }
+})();
+</script>
+</body>
+</html>

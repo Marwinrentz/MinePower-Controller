@@ -13,11 +13,11 @@
  *  Einspeisung blau, Ladung türkis, verschenkt orange). Prozentsätze und
  *  Eurobeträge sind keine Energiepfade und stehen neutral.
  */
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { EnergyBalanceChart, WasteChart } from "../components/charts";
-import { Banner, Button, Card, Empty, Figure, Help, Segment } from "../components/ui";
+import { Banner, Button, Card, Empty, Figure, Help, LoadError, Segment } from "../components/ui";
 import { useI18n } from "../i18n";
-import { get } from "../lib/api";
+import { useFetch } from "../lib/useFetch";
 import { fmtTime } from "../lib/format";
 import type { ChargeSession, Statistics as Stats } from "../lib/types";
 import { useAuth } from "../store/auth";
@@ -41,15 +41,11 @@ export function Statistics() {
   const { t } = useI18n();
   const isAdmin = useAuth((s) => s.user?.role === "admin");
   const [range, setRange] = useState<(typeof RANGES)[number]>("30d");
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [sessions, setSessions] = useState<ChargeSession[]>([]);
+  const statsQuery = useFetch<Stats>(`/api/statistics?range=${range}`);
+  const stats = statsQuery.data;
+  const sessions = useFetch<ChargeSession[]>("/api/sessions?limit=50").data ?? [];
   const [reportError, setReportError] = useState("");
   const [reportBusy, setReportBusy] = useState(false);
-
-  useEffect(() => {
-    get<Stats>(`/api/statistics?range=${range}`).then(setStats).catch(() => {});
-    get<ChargeSession[]>("/api/sessions?limit=50").then(setSessions).catch(() => {});
-  }, [range]);
 
   const downloadCsv = () => downloadFile(`/api/statistics/export.csv?range=${range}`, `minepower_sessions_${range}.csv`);
   const downloadHistoryCsv = () =>
@@ -89,6 +85,8 @@ export function Statistics() {
 
       {reportError && <Banner tone="err" title={t("common.error")}>{reportError}</Banner>}
 
+      {statsQuery.error && <LoadError message={statsQuery.error} onRetry={statsQuery.reload} />}
+      {statsQuery.loading && <div className="skeleton" style={{ height: 180 }} />}
       {stats && (
         <section className="page-section">
           <div className="figures">

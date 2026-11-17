@@ -19,6 +19,7 @@ import { useLive } from "../store/live";
 import { useTheme, type ThemeMode } from "../store/theme";
 import { GITHUB_URL } from "../lib/links";
 import { useToasts } from "../store/toast";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { Icon, type IconName } from "./icons";
 import { ConfirmHost } from "./Confirm";
 import { Logo } from "./Logo";
@@ -65,7 +66,7 @@ function ThemeButton({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function Toaster() {
+export function Toaster() {
   const toasts = useToasts((s) => s.toasts);
   const dismiss = useToasts((s) => s.dismiss);
   return (
@@ -224,7 +225,9 @@ export function AppShell() {
             </div>
           </div>
         )}
-        <Outlet />
+        <ErrorBoundary resetKey={location.pathname}>
+          <Outlet />
+        </ErrorBoundary>
       </main>
 
       {/* Tab-Leiste (Handy hochkant) */}

@@ -9,6 +9,7 @@
  *    Tooltip ist auf dem Touchscreen nicht erreichbar.
  */
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useI18n } from "../i18n";
 import { useCoarsePointer } from "../lib/touch";
 import { Icon, type IconName } from "./icons";
 import { TouchValue } from "./TouchValue";
@@ -419,6 +420,22 @@ export function Empty({ icon, title, children, action }: {
 }
 
 /** Große Kennzahl mit Beschriftung (Seitenköpfe von Auto, Warmwasser, Batterie). */
+/** Fehlgeschlagener Abruf: sagt, was fehlt, und bietet den erneuten Versuch an. */
+export function LoadError({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  const { t } = useI18n();
+  return (
+    <div className="card load-error" role="alert">
+      <strong>{t("error.loadTitle")}</strong>
+      <p className="field-help err-text">{message}</p>
+      {onRetry && (
+        <div className="form-actions start">
+          <button type="button" className="btn" onClick={onRetry}>{t("error.retry")}</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Stat({ label, value, sub, tone }: {
   label: string; value: ReactNode; sub?: ReactNode; tone?: FigureTone;
 }) {

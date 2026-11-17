@@ -9,10 +9,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Icon, type IconName } from "../components/icons";
 import {
-  ActionButton, Badge, Card, CardHead, Empty, PageHead, Segment, StatusDot,
+  ActionButton, Badge, Card, CardHead, Empty, LoadError, PageHead, Segment, StatusDot,
 } from "../components/ui";
 import { useI18n } from "../i18n";
 import { get, post } from "../lib/api";
+import { useFetch } from "../lib/useFetch";
 import { fmtAgo, fmtClock, fmtDay, fmtNum, fmtW } from "../lib/format";
 import type { AppEvent, Finding } from "../lib/types";
 import { useAuth } from "../store/auth";
@@ -144,24 +145,18 @@ function Findings() {
 
 /* ------------------------------------------------------------ Live-Daten */
 
-function useDiagnostics(): Diagnostics | null {
-  const [diag, setDiag] = useState<Diagnostics | null>(null);
-  useEffect(() => {
-    let alive = true;
-    const load = () => get<Diagnostics>("/api/system/diagnostics").then((d) => alive && setDiag(d)).catch(() => {});
-    load();
-    const timer = window.setInterval(load, 5000);
-    return () => { alive = false; window.clearInterval(timer); };
-  }, []);
-  return diag;
+function useDiagnostics() {
+  return useFetch<Diagnostics>("/api/system/diagnostics", { intervalMs: 5000 });
 }
 
 function Devices() {
   const { t } = useI18n();
-  const diag = useDiagnostics();
+  const query = useDiagnostics();
+  const diag = query.data;
   const isAdmin = useAuth((s) => s.user?.role === "admin");
   const [testing, setTesting] = useState<number | null>(null);
-  if (!diag) return <div className="skeleton" style={{ height: 240 }} />;
+  if (!diag) return query.error ? <LoadError message={query.error} onRetry={query.reload} />
+    : <div className="skeleton" style={{ height: 240 }} />;
   const writes = diag.battery_control?.devices ?? [];
   const test = async (d: DiagDevice) => {
     setTesting(d.id);
@@ -245,8 +240,10 @@ function Devices() {
 
 function Regulation() {
   const { t } = useI18n();
-  const diag = useDiagnostics();
-  if (!diag) return <div className="skeleton" style={{ height: 240 }} />;
+  const query = useDiagnostics();
+  const diag = query.data;
+  if (!diag) return query.error ? <LoadError message={query.error} onRetry={query.reload} />
+    : <div className="skeleton" style={{ height: 240 }} />;
   const cfg = diag.regulation_config;
   const adaptive = cfg.adaptive_deadband !== false;
   const min = Number(cfg.deadband_min_w ?? 40);

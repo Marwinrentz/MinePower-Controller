@@ -13,7 +13,13 @@ import { Tariff } from "./pages/Tariff";
 import { Wall } from "./pages/Wall";
 import { Water } from "./pages/Water";
 import { Wizard } from "./pages/Wizard";
+import { useBetaUi } from "./lib/variant";
 import { keepSessionAlive, useAuth } from "./store/auth";
+
+// BETA-Oberfläche: dieselben Seiten mit neuem Anstrich und neuen Grafiken.
+// Das Stylesheet ist ein eigener Teil des Bündels und wird nur geladen, wenn
+// sie eingeschaltet ist (Einstellungen → Darstellung, je Konto im Server).
+const loadSkin = () => import("./beta/skin");
 
 function RequireAuth() {
   const token = useAuth((s) => s.token);
@@ -24,6 +30,16 @@ function RequireAuth() {
 }
 
 export function App() {
+  const betaUi = useBetaUi();
+  useEffect(() => {
+    const root = document.documentElement;
+    if (betaUi) {
+      root.dataset.ui = "beta";
+      void loadSkin();
+    } else {
+      delete root.dataset.ui;
+    }
+  }, [betaUi]);
   return (
     <BrowserRouter>
       <Routes>

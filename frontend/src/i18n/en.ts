@@ -136,6 +136,23 @@ export const en: DeepPartial<Dict> = {
     writeTestHelp: "Sends a harmless command and checks the readback",
     writeTestOk: "Command applied",
   },
+  beta: {
+    badge: "BETA",
+    leave: "Previous interface",
+    switch: "New interface (BETA)",
+    switchHelp: "Same functions, new look. Go back via 'Previous interface' in the navigation or here.",
+    group: { control: "Control", insight: "Insights", system: "System" },
+    live: { pv: "Solar", house: "Home", grid: "Grid" },
+    mix: { title: "Power mix now", pv: "Solar", battery: "Battery", grid: "Grid", self: "Self-sufficiency now", none: "No reading" },
+  },
+  error: {
+    viewTitle: "This view cannot be displayed",
+    viewText: "The rest of the interface and the control loop keep running.",
+    retry: "Try again",
+    reload: "Reload page",
+    loadTitle: "Data not loaded",
+    offline: "No connection to the server",
+  },
   diag: {
     tabLog: "Log",
     latency: "Response time",

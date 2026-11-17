@@ -17,7 +17,7 @@
  */
 import { create } from "zustand";
 import { STORAGE } from "../lib/storage";
-import type { User } from "../lib/types";
+import type { User, UserPrefs } from "../lib/types";
 
 type AuthState = {
   token: string | null;
@@ -29,6 +29,8 @@ type AuthState = {
   verify: () => Promise<boolean>;
   /** Gültigkeit verlängern, solange die Oberfläche benutzt wird. */
   refresh: () => Promise<void>;
+  /** Persönliche Einstellung der Oberfläche im Server speichern (je Konto). */
+  setPrefs: (prefs: UserPrefs) => Promise<boolean>;
 };
 
 const TOKEN_KEY = STORAGE.token;
@@ -75,6 +77,25 @@ export const useAuth = create<AuthState>((set, get) => ({
       return false;
     }
     return true;
+  },
+
+  setPrefs: async (prefs) => {
+    const token = get().token;
+    if (!token) return false;
+    try {
+      const resp = await fetch("/api/auth/me/prefs", {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(prefs),
+      });
+      if (!resp.ok) return false;
+      const user = (await resp.json()) as User;
+      localStorage.setItem(USER_KEY, JSON.stringify(user));
+      set({ user });
+      return true;
+    } catch {
+      return false;
+    }
   },
 
   refresh: async () => {

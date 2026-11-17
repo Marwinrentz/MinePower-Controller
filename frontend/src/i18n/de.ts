@@ -253,6 +253,23 @@ export const de = {
     writeTestHelp: "Sendet einen unkritischen Befehl und prüft die Rückmeldung",
     writeTestOk: "Befehl übernommen",
   },
+  beta: {
+    badge: "BETA",
+    leave: "Bisherige Oberfläche",
+    switch: "Neue Oberfläche (BETA)",
+    switchHelp: "Gleiche Funktionen, neue Darstellung. Zurück über 'Bisherige Oberfläche' in der Navigation oder hier.",
+    group: { control: "Steuern", insight: "Auswerten", system: "System" },
+    live: { pv: "Sonne", house: "Haus", grid: "Netz" },
+    mix: { title: "Strommix jetzt", pv: "Sonne", battery: "Batterie", grid: "Netz", self: "Autarkie jetzt", none: "Kein Messwert" },
+  },
+  error: {
+    viewTitle: "Diese Ansicht lässt sich nicht anzeigen",
+    viewText: "Die übrige Oberfläche und die Regelung laufen weiter.",
+    retry: "Erneut versuchen",
+    reload: "Seite neu laden",
+    loadTitle: "Daten nicht geladen",
+    offline: "Keine Verbindung zum Server",
+  },
   diag: {
     allGood: "Alles in Ordnung",
     allGoodText: "Keine Auffälligkeiten im gewählten Zeitraum.",

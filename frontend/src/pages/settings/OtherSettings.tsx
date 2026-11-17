@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PriorityChain } from "../../components/PriorityChain";
 import { Icon } from "../../components/icons";
-import { ActionButton, Badge, Button, Card, CardHead, Field, Segment } from "../../components/ui";
+import { ActionButton, Badge, Button, Card, CardHead, Field, Segment, ToggleRow } from "../../components/ui";
 import { APP_VERSION, useServerVersion } from "../../lib/useVersion";
 import { useI18n } from "../../i18n";
 import { ApiError, del, get, post, put } from "../../lib/api";
@@ -271,8 +271,23 @@ export function AppearanceSettings() {
       <Field label={t("nav.wall")} help={t("set.appearance.wallHelp")}>
         <Button onClick={() => navigate("/wall")}><Icon name="fullscreen" size={16} /> {t("set.appearance.wall")}</Button>
       </Field>
+      <BetaSwitch />
     </Card>
   );
+}
+
+/** BETA-Oberfläche ein- und ausschalten. Die Wahl wird je Konto im Server
+ *  gespeichert und gilt damit auf jedem Gerät. */
+function BetaSwitch() {
+  const { t } = useI18n();
+  const navigate = useNavigate();
+  const on = useAuth((s) => s.user?.prefs?.beta_ui === true);
+  const setPrefs = useAuth((s) => s.setPrefs);
+  const change = async (value: boolean) => {
+    if (await setPrefs({ beta_ui: value })) navigate("/");
+    else toast.err(t("error.offline"));
+  };
+  return <ToggleRow label={t("beta.switch")} help={t("beta.switchHelp")} on={on} onChange={(v) => void change(v)} />;
 }
 
 type BackupFile = { name: string; kind: "config" | "data" | "pre-migration"; bytes: number; time: string };

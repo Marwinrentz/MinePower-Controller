@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 
 // Eine Quelle für die Version: Datei VERSION im Repository (im Image: Build-Kontext)
 const VERSION = (() => {
@@ -10,16 +10,21 @@ const VERSION = (() => {
   return process.env.npm_package_version ?? "dev";
 })();
 
-// Dev-Proxy: API und WebSocket zum lokalen Backend (uvicorn auf :8000)
+// Dev-Proxy: API und WebSocket zum lokalen Backend (uvicorn auf :8000).
+// Anderes Ziel: MINEPOWER_BACKEND=http://localhost:8080 npm run dev
+const BACKEND = process.env.MINEPOWER_BACKEND ?? "http://localhost:8000";
+
 export default defineConfig({
   plugins: [react()],
+  // Tests (vitest): Browser-Umgebung nachgestellt, Dateien neben dem Code
+  test: { environment: "jsdom", include: ["src/**/*.test.{ts,tsx}"], globals: false },
   // Versionsnummer für den Abgleich mit dem Backend (src/lib/useVersion.ts).
   define: { __APP_VERSION__: JSON.stringify(VERSION) },
   server: {
     port: 5173,
     proxy: {
-      "/api/ws": { target: "ws://localhost:8000", ws: true },
-      "/api": { target: "http://localhost:8000", changeOrigin: true },
+      "/api/ws": { target: BACKEND.replace(/^http/, "ws"), ws: true },
+      "/api": { target: BACKEND, changeOrigin: true },
     },
   },
 });
