@@ -18,10 +18,14 @@ import { EnergyBalanceChart, WasteChart } from "../components/charts";
 import { Banner, Button, Card, Empty, Figure, Help, Segment } from "../components/ui";
 import { useI18n } from "../i18n";
 import { get } from "../lib/api";
-import { fmtTime } from "../lib/format";
+import { fmtKwh, fmtNum, fmtTime } from "../lib/format";
 import type { ChargeSession, Statistics as Stats } from "../lib/types";
 import { useAuth } from "../store/auth";
 import { Icon } from "../components/icons";
+
+/** Prozent mit einer Nachkommastelle, Euro mit zwei – im Format der Oberflächensprache. */
+const pct1 = (v: number) => fmtNum(v, 1) + " %";
+const eur = (v: number) => fmtNum(v, 2) + " €";
 
 const RANGES = ["24h", "7d", "30d", "365d"] as const;
 
@@ -92,18 +96,18 @@ export function Statistics() {
       {stats && (
         <section className="page-section">
           <div className="figures">
-            <Figure lead label={t("stats.autarky")} value={`${stats.autarky_pct} %`}
-                    hint={`${t("stats.selfConsumption")} ${stats.self_consumption_pct} %`} />
-            <Figure lead label={t("stats.wasted")} value={`${stats.wasted_kwh} kWh`}
+            <Figure lead label={t("stats.autarky")} value={pct1(stats.autarky_pct)}
+                    hint={`${t("stats.selfConsumption")} ${pct1(stats.self_consumption_pct)}`} />
+            <Figure lead label={t("stats.wasted")} value={fmtKwh(stats.wasted_kwh)}
                     tone={stats.wasted_kwh > 0 ? "waste" : undefined}
                     help={t("stats.wastedHelp")}
-                    hint={`${stats.wasted_pct} % · ${t("stats.wastedValue")} ${stats.wasted_value_eur.toFixed(2)} €`} />
-            <Figure label={t("stats.savings")} value={`${stats.savings_eur.toFixed(2)} €`} />
-            <Figure label={t("stats.pvYield")} value={`${stats.pv_kwh} kWh`} tone="pv" />
-            <Figure label={t("stats.gridImport")} value={`${stats.grid_import_kwh} kWh`} tone="import" />
-            <Figure label={t("stats.gridExport")} value={`${stats.grid_export_kwh} kWh`} tone="export" />
-            <Figure label={t("stats.charged")} value={`${stats.charged_kwh} kWh`} tone="car"
-                    hint={`${t("stats.solarShare")}: ${stats.charged_solar_pct} %`} />
+                    hint={`${pct1(stats.wasted_pct)} · ${t("stats.wastedValue")} ${eur(stats.wasted_value_eur)}`} />
+            <Figure label={t("stats.savings")} value={eur(stats.savings_eur)} />
+            <Figure label={t("stats.pvYield")} value={fmtKwh(stats.pv_kwh)} tone="pv" />
+            <Figure label={t("stats.gridImport")} value={fmtKwh(stats.grid_import_kwh)} tone="import" />
+            <Figure label={t("stats.gridExport")} value={fmtKwh(stats.grid_export_kwh)} tone="export" />
+            <Figure label={t("stats.charged")} value={fmtKwh(stats.charged_kwh)} tone="car"
+                    hint={`${t("stats.solarShare")}: ${pct1(stats.charged_solar_pct)}`} />
           </div>
         </section>
       )}
@@ -148,10 +152,10 @@ export function Statistics() {
                     <tr key={s.id}>
                       <td>{fmtTime(s.started_at)}</td>
                       <td>{s.ended_at ? fmtTime(s.ended_at) : "…"}</td>
-                      <td className="num">{s.energy_kwh.toFixed(1)}</td>
-                      <td className="num">{s.solar_kwh.toFixed(1)}</td>
+                      <td className="num">{fmtNum(s.energy_kwh, 1)}</td>
+                      <td className="num">{fmtNum(s.solar_kwh, 1)}</td>
                       <td className="num">{s.energy_kwh > 0 ? Math.round((100 * s.solar_kwh) / s.energy_kwh) : 0}</td>
-                      <td className="num">{s.cost_eur.toFixed(2)}</td>
+                      <td className="num">{fmtNum(s.cost_eur, 2)}</td>
                       <td>{s.rfid_tag ?? "–"}</td>
                     </tr>
                   ))}

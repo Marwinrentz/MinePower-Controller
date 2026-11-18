@@ -10,10 +10,14 @@ import * as echarts from "echarts";
 // ECharts 6 hat neue Standardwerte (Farben, Legende, Achsen). Das v5-Theme
 // hält die Diagramme optisch auf dem bisherigen Stand.
 import "echarts/theme/v5";
+// Monats- und Wochentagsnamen auf den Zeitachsen (sonst englisch: "Oct").
+import langDE from "echarts/lib/i18n/langDE.js";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n";
 import { get } from "../lib/api";
-import { cssVar } from "../lib/format";
+import { cssVar, fmtDayMonth, fmtNum } from "../lib/format";
+
+echarts.registerLocale("DE", langDE);
 
 function useThemeVersion(): number {
   // Beobachtet das data-theme-Attribut, damit die Charts beim Umschalten
@@ -30,13 +34,13 @@ function useThemeVersion(): number {
 /** Diagramm-Hülle. Ohne `option` zeigt sie statt einer leeren Fläche, ob
  *  noch geladen wird oder ob es (noch) keine Daten gibt. */
 function EChart({ option, height, loading = false }: { option: echarts.EChartsOption | null; height: number; loading?: boolean }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const ref = useRef<HTMLDivElement>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
 
   useEffect(() => {
     if (!ref.current) return;
-    chartRef.current = echarts.init(ref.current, "v5");
+    chartRef.current = echarts.init(ref.current, "v5", { locale: lang === "en" ? "EN" : "DE" });
     const onResize = () => chartRef.current?.resize();
     window.addEventListener("resize", onResize);
     return () => {
@@ -44,11 +48,11 @@ function EChart({ option, height, loading = false }: { option: echarts.EChartsOp
       chartRef.current?.dispose();
       chartRef.current = null;
     };
-  }, []);
+  }, [lang]);
 
   useEffect(() => {
     if (option && chartRef.current) chartRef.current.setOption(option, { notMerge: true });
-  }, [option]);
+  }, [option, lang]);
 
   return (
     <div className="chart-wrap" style={{ height }}>
@@ -92,6 +96,8 @@ function valueAxis(name: string) {
     axisLine: { show: false },
     axisTick: { show: false },
     splitLine: { lineStyle: { color: cssVar("--line") } },
+    // Tausenderpunkt und Dezimalkomma wie im Rest der Oberfläche (sonst "7,000")
+    axisLabel: { formatter: (v: number) => fmtNum(v, Number.isInteger(v) ? 0 : 1) },
   };
 }
 
@@ -186,7 +192,7 @@ export function EnergyBalanceChart({ range }: { range: string }) {
   let option: echarts.EChartsOption | null = null;
   if (data && Object.keys(data).length) {
     const days = Object.keys(data).sort();
-    const short = days.map((d) => d.slice(5));
+    const short = days.map(fmtDayMonth);
     option = {
       ...baseOption(),
       xAxis: {

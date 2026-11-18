@@ -27,7 +27,7 @@ import { BalanceMeter, WallBars } from "../components/EnergyBalance";
 import { AnimatedValue, useAnimatedNumber } from "../components/ui";
 import { useI18n } from "../i18n";
 import { explain, wasteCauses } from "../lib/explain";
-import { fmtW } from "../lib/format";
+import { fmtCt, fmtW } from "../lib/format";
 import type { Snapshot, SnapshotDevice } from "../lib/types";
 import { useLive } from "../store/live";
 import { Icon, CATEGORY_ICON } from "../components/icons";
@@ -253,7 +253,7 @@ export function Wall() {
               <div className="wall-kpi">
                 <span className="wall-kpi-value num"
                       style={{ color: snapshot.price_cheap ? "var(--c-pv)" : "var(--text-dim)" }}>
-                  {snapshot.price_ct.toFixed(1)} ct
+                  {fmtCt(snapshot.price_ct)}
                 </span>
                 <span className="wall-kpi-label">
                   {t("dash.price")}

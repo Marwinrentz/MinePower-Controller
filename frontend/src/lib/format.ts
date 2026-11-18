@@ -100,3 +100,10 @@ export function fmtDate(isoDate: string): string {
   if (!y || !m || !d) return isoDate;
   return new Date(y, m - 1, d).toLocaleDateString(locale, { day: "2-digit", month: "2-digit", year: "numeric" });
 }
+
+/** Tag und Monat aus 'YYYY-MM-DD' für Diagrammachsen: '09.10.' bzw. '09/10'. */
+export function fmtDayMonth(isoDate: string): string {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  if (!y || !m || !d) return isoDate;
+  return new Date(y, m - 1, d).toLocaleDateString(locale, { day: "2-digit", month: "2-digit" });
+}

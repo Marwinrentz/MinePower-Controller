@@ -4,6 +4,13 @@ Format: eine Version je Abschnitt, Einträge gruppiert in Neu, Geändert und
 Behoben, ein Eintrag je Zeile. Die App zeigt diese Datei unter „Changelog“
 und nach einem Update als Hinweisfenster.
 
+## Unveröffentlicht
+
+### Behoben
+- Statistik: Kennzahlen, Ladevorgänge und Diagrammachsen auf Deutsch mit Dezimalkomma und Tausenderpunkt (vorher z. B. "7,000" und "38.4 kWh")
+- Diagramme: Monats- und Wochentagsnamen auf Deutsch ("Okt" statt "Oct"), Tagesachse als "09.10."
+- Wand-Ansicht: Strompreis mit Dezimalkomma
+
 ## 3.3.1 (2026-11-18)
 
 ### Geändert
