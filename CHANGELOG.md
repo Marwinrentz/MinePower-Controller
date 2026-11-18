@@ -41,6 +41,14 @@ und nach einem Update als Hinweisfenster.
 - Ladevorgang überlebt Neustart und Geräteänderung
 - Jahresauswertung zählt eingespielte Stundenwerte, Bezug und Einspeisung stimmen
 - Treiber nach Herstellerdoku korrigiert: Sungrow, my-PV, go-e, Fronius, Huawei, SMA, Tesla BLE, OCPP
+- Hardy Barth Salia zeigte die 10-fache Ladeleistung
+- Wallboxen mit kurzem Watchdog-Timeout (KEBA, Webasto, Vestel, Heidelberg, Amperfied, EM2GO, Pulsares, OBO) fielen auf ihren Sicherheitsstrom zurück; das Lebenszeichen richtet sich jetzt nach dem Timeout im Gerät
+- Mennekes Amtron 4You/4Business: Verbindung brach in jedem Takt ab (Ladestand-Register)
+- Bender: ungültige Zählerwerte nach einem Neustart der Box wurden als Leistung angezeigt
+- KEBA P40: Freigabe wurde falsch erkannt; P40 mit Produktcode 0 lässt sich als P40 einstellen
+- Alfen meldete ohne Fahrzeug einen Fehler
+- Mennekes Amtron Compact bleibt nicht mehr im Fallback-Zustand hängen
+- ABL eMH1: Freischalten nach dem Aufwachen ging manchmal verloren
 
 ## 3.2.0 (2026-10-21)
 

@@ -211,19 +211,45 @@ VersiCharge, SolaX EVC, Peblar, Pulsares, KSE, OBO Bettermann.
 
 - **Quelle:** die jeweilige Datei unter
   [evcc/charger](https://github.com/evcc-io/evcc/tree/master/charger).
-- **Geprüft:** Jede im Treiber verwendete Registeradresse kommt in der
-  Referenz vor (automatischer Abgleich aller 20 Profile). Datentypen,
-  Skalierung und Abläufe wurden nicht einzeln nachgeprüft.
-- **Stand:** Abgleich.
+- **Geprüft (3.3.0, evcc-Stand 17.11.2026):** Adressen, Registertyp,
+  Datentyp und Wortreihenfolge aller 20 Profile einzeln; kein 0/1-Versatz.
+- **Korrigiert in 3.3.0:**
+  - Alfen: Status E heißt „kein Fahrzeug“, nicht Fehler.
+  - Bender: jeder Messwert ≥ 0x80000000 ist ungültig. Modell (Reg. 142)
+    wird einmal gelesen: Amtron 4You/4Business bekommen nie Zugriffe auf
+    720/730/740 (die Box trennt sonst die Verbindung), Ladestand dort aus
+    2200 ab Protokoll 1.6. Alter Registersatz: Leistung aus den Strömen.
+  - KEBA: Lebenszeichen alle Failsafe-Timeout/2 (Reg. 1602), P40-Freigabe
+    aus 5004 ≠ 0, P30-Freigabe lokal gemerkt. Modell wählbar für P40 mit
+    Produktcode 0.
+  - Webasto/Vestel: Lebenszeichen aus dem Kommunikations-Timeout
+    (Reg. 2002): Webasto /2, Vestel /4, mindestens 1 s.
+  - Heidelberg/Amperfied (257, ms), EM2GO (89, s), Pulsares (0x61, Code),
+    OBO (28, ms): lesendes Lebenszeichen im Takt Timeout/2 bzw. /4, auch
+    wenn der Regeltakt langsamer ist.
+  - Mennekes Compact: Status 6 (Fallback) wird mit 0 A und Freigabe
+    zurückgeholt.
+  - ABL: Freischalten (0x05 = 0xA1A1) wird zweimal gesendet.
+- **Offen (unsicher, nicht geändert):** Webasto Statuscode 2 und FC06 statt
+  FC16 auf 5004; Einheit der Sitzungsenergie bei EV-ETH (132) und Mennekes
+  Compact (0x0B02); EM2GO-FW-1.4-Stopp-Workaround; 100 ms Abstand bei
+  Heidelberg.
+- **Stand:** Abgleich mit Referenz, nicht an Hardware geprüft.
 
 ### HTTP-, MQTT-, WebSocket- und Cloud-Wallboxen
 
 Hardy Barth eCB1/Salia, SMA EV Charger, EVSE-WiFi, openWB Pro, openWB 1.9
 (MQTT), Fronius Wattpilot, Easee, Zaptec.
 
-- **Stand:** unverifiziert in diesem Durchgang (Tests mit gefälschter
-  Gegenstelle bestehen). Easee und Zaptec hängen an den Cloud-Diensten der
-  Hersteller und deren Abfragegrenzen.
+- **Geprüft (3.3.0):** eCB1, SMA EV Charger, openWB Pro, openWB 1.9 und
+  Zaptec passen zu evcc; EVSE-WiFi zur Herstellerdoku.
+- **Korrigiert in 3.3.0:** Salia-Leistung kommt in 0,1 W (wurde 10-fach
+  angezeigt); Stopp setzt erst 0 A, dann Pause. EVSE-WiFi-Hinweis: auch
+  „Remote“ muss aus sein.
+- **Offen:** Easee-Phasenzuordnung T3–T5 nur für TN-Netze plausibel.
+- **Stand:** Tests mit gefälschter Gegenstelle bestehen, nicht an Hardware
+  geprüft. Easee und Zaptec hängen an den Cloud-Diensten der Hersteller und
+  deren Abfragegrenzen.
 
 ## Wärmepumpe SG-Ready, Schaltaktoren
 
