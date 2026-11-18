@@ -4,7 +4,7 @@ Format: eine Version je Abschnitt, Einträge gruppiert in Neu, Geändert und
 Behoben, ein Eintrag je Zeile. Die App zeigt diese Datei unter „Changelog“
 und nach einem Update als Hinweisfenster.
 
-## Unveröffentlicht
+## 3.3.1 (2026-11-18)
 
 ### Geändert
 - Energiefluss neu gezeichnet: isometrische Bilder auf Kacheln (Sonne, Netz, Speicher, Haus, Auto, Warmwasser) statt Symbolkästen
