@@ -4,6 +4,13 @@ Format: eine Version je Abschnitt, Einträge gruppiert in Neu, Geändert und
 Behoben, ein Eintrag je Zeile. Die App zeigt diese Datei unter „Changelog“
 und nach einem Update als Hinweisfenster.
 
+## 3.3.1 (2026-11-18)
+
+### Geändert
+- Energiefluss neu gezeichnet: isometrische Bilder auf Kacheln (Sonne, Netz, Speicher, Haus, Auto, Warmwasser) statt Symbolkästen
+- Energiefluss: Leitungen werden mit der Leistung dicker und schneller, Pfeile zeigen die Richtung, inaktive Leitungen sind nur gepunktet
+- Energiefluss: Füllstand von Speicher und Auto sowie Wassertemperatur als Plakette; Speicher-Füllstand und Thermometer auch im Bild
+
 ## 3.3.0 (2026-11-18)
 
 ### Neu
