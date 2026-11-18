@@ -418,3 +418,62 @@ async def test_reload_failure_keeps_request_and_old_config(monkeypatch):
     loop.running = True
     await asyncio.wait_for(loop._run(), timeout=5)
     assert calls["n"] == 3 and steps["n"] == 4  # jeder Takt lief, auch ohne neue Konfiguration
+
+
+async def test_replay_resumes_where_it_stopped(tmp_path, monkeypatch):
+    """Großer Rückstand: Bricht das Nachschreiben mittendrin ab, beginnt der
+    nächste Versuch beim gemerkten Stand statt wieder von vorn."""
+    monkeypatch.setattr(measurements, "CHUNK_ROWS", 10)
+    spool = tmp_path / "spool.jsonl"
+    buf = MeasurementBuffer(spool_path=spool)
+    real_write = measurements._write
+
+    async def down(rows):
+        raise ConnectionError("weg")
+
+    monkeypatch.setattr(measurements, "_write", down)
+    fill(buf, 0, 30)
+    assert await buf.flush() is False
+
+    seen: list[int] = []
+
+    async def one_chunk_then_fail(rows):
+        if seen:
+            raise TimeoutError("Datenbank wieder hängend")
+        seen.append(len(rows))
+        await real_write(rows)
+
+    monkeypatch.setattr(measurements, "_write", one_chunk_then_fail)
+    assert await buf.flush() is False
+    assert await count(Measurement) == 10
+
+    written: list[int] = []
+
+    async def record(rows):
+        written.append(len(rows))
+        await real_write(rows)
+
+    monkeypatch.setattr(measurements, "_write", record)
+    assert await buf.flush() is True
+    assert sum(written) == 20, "die ersten 10 Zeilen wurden erneut gelesen"
+    assert await count(Measurement) == 30
+    assert not spool.exists() and not (tmp_path / "spool.jsonl.pos").exists()
+
+
+async def test_value_after_torn_line_is_not_lost(tmp_path, monkeypatch):
+    """Absturz mitten in einer Zeile, danach weiterer Ausfall: Der nächste Wert
+    klebte an dem Bruchstück und ging mit ihm verloren."""
+    spool = tmp_path / "spool.jsonl"
+    spool.write_text('{"t": "2026-05-01T12:00:10+00:00", "s": "si')
+    buf = MeasurementBuffer(spool_path=spool)
+    real_write = measurements._write
+
+    async def down(rows):
+        raise ConnectionError("weg")
+
+    monkeypatch.setattr(measurements, "_write", down)
+    fill(buf, 0, 1)
+    assert await buf.flush() is False
+    monkeypatch.setattr(measurements, "_write", real_write)
+    assert await buf.flush() is True
+    assert await count(Measurement) == 1

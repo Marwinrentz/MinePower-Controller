@@ -147,7 +147,9 @@ class MeasurementBuffer:
                     self._keep(rows)
                     raise
                 except Exception as exc:  # noqa: BLE001 – DB-Ausfall darf den Loop nicht stoppen
-                    self._keep(rows)
+                    # fsync kann auf einer Festplatte im Array lange dauern –
+                    # nicht im Event-Loop, sonst stünde der Regeltakt.
+                    await asyncio.to_thread(self._keep, rows)
                     self.failures += 1
                     self.last_error = f"{type(exc).__name__}: {exc}"[:300]
                     # Nicht jede Runde melden: einmal beim Ausfall, dann seltener.
@@ -174,9 +176,14 @@ class MeasurementBuffer:
         had_failures = self.failures > 0
         try:
             count = 0
-            for chunk in self._spool_chunks():
+            # Fortschritt merken: Bei großem Rückstand brach das Nachschreiben
+            # nach FLUSH_TIMEOUT_S ab und begann beim nächsten Mal wieder von
+            # vorn – es kam nie ans Ende. Doppelt geschriebene Zeilen schadet
+            # nichts (ON CONFLICT DO NOTHING), ein veralteter Stand ist also sicher.
+            for chunk, end in self._spool_chunks():
                 await _write(chunk)
                 count += len(chunk)
+                self._spool_set_pos(end)
             if self._backlog:
                 await _write(self._backlog)
                 count += len(self._backlog)
@@ -223,7 +230,17 @@ class MeasurementBuffer:
                     log.error("Messwert-Spool voll (%d MB) – weitere Werte werden verworfen",
                               SPOOL_MAX_BYTES // (1024 * 1024))
                 return True  # bewusst verworfen, nicht zusätzlich im Speicher halten
+            # Endet die Datei nach einem Absturz mitten in einer Zeile, erst
+            # einen Zeilenumbruch schreiben – sonst klebte der nächste Wert an
+            # dem Bruchstück und ging mit ihm verloren.
+            torn = False
+            if path.exists() and path.stat().st_size > 0:
+                with open(path, "rb") as rf:
+                    rf.seek(-1, os.SEEK_END)
+                    torn = rf.read(1) != b"\n"
             with open(path, "a", encoding="utf-8") as f:
+                if torn:
+                    f.write("\n")
                 for r in rows:
                     f.write(json.dumps({"t": r["time"].isoformat(), "s": r["source"], "f": r["field"],
                                         "v": r["value"]}, separators=(",", ":")))
@@ -235,22 +252,51 @@ class MeasurementBuffer:
             log.warning("Messwert-Spool nicht schreibbar (%s) – Werte bleiben im Speicher", exc)
             return False
 
-    def _spool_chunks(self) -> Iterator[list[dict]]:
+    def _spool_chunks(self) -> Iterator[tuple[list[dict], int]]:
+        """Spool in Blöcken lesen, ab dem gemerkten Stand. Liefert (Zeilen, Byte-Ende)."""
         path = self._spool_path
         if path is None or not path.exists():
             return
         chunk: list[dict] = []
-        with open(path, "r", encoding="utf-8") as f:
-            for line in f:
-                row = _parse_spool_line(line)
-                if row is None:
-                    continue  # abgeschnittene letzte Zeile nach einem Absturz
-                chunk.append(row)
+        with open(path, "rb") as f:
+            start = self._spool_get_pos()
+            size = os.fstat(f.fileno()).st_size
+            if 0 < start <= size:
+                f.seek(start)
+            while True:
+                line = f.readline()
+                if not line:
+                    break
+                row = _parse_spool_line(line.decode("utf-8", errors="replace"))
+                if row is not None:  # abgeschnittene Zeile nach einem Absturz → überspringen
+                    chunk.append(row)
                 if len(chunk) >= CHUNK_ROWS:
-                    yield chunk
+                    yield chunk, f.tell()
                     chunk = []
-        if chunk:
-            yield chunk
+            if chunk:
+                yield chunk, f.tell()
+
+    @property
+    def _pos_path(self) -> Path | None:
+        return self._spool_path.with_name(self._spool_path.name + ".pos") if self._spool_path else None
+
+    def _spool_get_pos(self) -> int:
+        pos = self._pos_path
+        try:
+            return int(pos.read_text().strip()) if pos and pos.exists() else 0
+        except (OSError, ValueError):
+            return 0
+
+    def _spool_set_pos(self, offset: int) -> None:
+        pos = self._pos_path
+        if pos is None:
+            return
+        try:
+            tmp = pos.with_name(pos.name + ".tmp")
+            tmp.write_text(str(offset))
+            os.replace(tmp, pos)
+        except OSError:
+            pass  # nur eine Beschleunigung – ohne Stand geht es von vorn los
 
     def _spool_remove(self) -> None:
         path = self._spool_path
@@ -260,6 +306,12 @@ class MeasurementBuffer:
             path.unlink(missing_ok=True)
         except OSError as exc:
             log.warning("Messwert-Spool nicht löschbar: %s", exc)
+        pos = self._pos_path
+        if pos is not None:
+            try:
+                pos.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def _parse_spool_line(line: str) -> dict | None:
