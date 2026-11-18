@@ -829,49 +829,76 @@ button.chip.on { background: var(--accent-soft); border-color: var(--accent); co
 .soc-fill.down { animation-direction: reverse; }
 @keyframes soc-run { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 
-/* Energiefluss */
+/* Energiefluss – isometrische Kacheln mit dynamischen Leitungen */
 .flow-card .card-head { margin-bottom: 0; }
-.pflow { aspect-ratio: 1 / 1; margin-top: var(--s2); position: relative; width: 100%; }
-@media (min-width: 560px) { .pflow { aspect-ratio: 16 / 11; } }
-@media (orientation: landscape) and (max-height: 540px) { .pflow { aspect-ratio: 16 / 9; } }
-.pflow-lines { height: 100%; inset: 0; position: absolute; width: 100%; }
-.pflow-track { fill: none; stroke: var(--line-strong); stroke-linecap: round; stroke-width: 3; opacity: 0.6; }
-.pflow-wire.active .pflow-track { opacity: 0.35; }
+.pflow { aspect-ratio: 400 / 510; margin: var(--s2) auto 0; max-width: 540px; position: relative; width: 100%; }
+.pflow-lines { height: 100%; inset: 0; overflow: visible; position: absolute; width: 100%; }
+.pflow-track {
+  fill: none; stroke: var(--line-strong); stroke-dasharray: 1.5 5; stroke-linecap: round; stroke-width: 1.6; opacity: 0.55;
+  transition: stroke-width var(--t-med), opacity var(--t-med);
+}
+.pflow-wire.absent .pflow-track { opacity: 0.25; }
+.pflow-wire.active .pflow-track { opacity: 1; stroke-dasharray: none; stroke-width: calc(var(--w, 2.5) * 1px); }
 .pflow-dots {
-  animation: flow-out var(--dur, 2s) linear infinite; fill: none; stroke-dasharray: 2 14; stroke-linecap: round; stroke-width: 6;
+  animation: pflow-fwd var(--dur, 2s) linear infinite; fill: none; stroke: #fff; stroke-dasharray: 0 18;
+  stroke-linecap: round; stroke-width: calc(var(--w, 2.5) * 0.7px + 1px); opacity: 0.95;
 }
-.pflow-wire.dir-in .pflow-dots { animation-name: flow-in; }
-@keyframes flow-in { from { stroke-dashoffset: 32; } to { stroke-dashoffset: 0; } }
-@keyframes flow-out { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 32; } }
-.pflow-wire.active.tone-pv .pflow-track, .pflow-wire.tone-pv .pflow-dots { stroke: var(--c-pv); }
-.pflow-wire.active.tone-grid .pflow-track, .pflow-wire.tone-grid .pflow-dots { stroke: var(--c-grid-import); }
-.pflow-wire.active.tone-grid.dir-out .pflow-track, .pflow-wire.tone-grid.dir-out .pflow-dots { stroke: var(--c-grid-export); }
-.pflow-wire.active.tone-battery .pflow-track, .pflow-wire.tone-battery .pflow-dots { stroke: var(--c-battery); }
-.pflow-wire.active.tone-car .pflow-track, .pflow-wire.tone-car .pflow-dots { stroke: var(--c-car); }
-.pflow-wire.active.tone-water .pflow-track, .pflow-wire.tone-water .pflow-dots { stroke: var(--c-water); }
-.pflow-node, .pflow-hub {
-  align-items: center; background: var(--surface); border: 1.5px solid var(--line); border-radius: var(--r-lg);
-  box-shadow: var(--shadow-sm); color: var(--text-strong); display: flex; flex-direction: column; gap: 1px;
-  min-width: 0; padding: var(--s2) var(--s2); position: absolute; text-align: center; transform: translate(-50%, -50%);
-  transition: border-color var(--t-med), box-shadow var(--t-med); width: min(31%, 150px);
+.pflow-wire.dir-rev .pflow-dots { animation-name: pflow-rev; }
+@keyframes pflow-fwd { from { stroke-dashoffset: 18; } to { stroke-dashoffset: 0; } }
+@keyframes pflow-rev { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 18; } }
+.pflow-wire.active.tone-pv .pflow-track { stroke: var(--c-pv); }
+.pflow-wire.active.tone-grid-import .pflow-track { stroke: var(--c-grid-import); }
+.pflow-wire.active.tone-grid-export .pflow-track { stroke: var(--c-grid-export); }
+.pflow-wire.active.tone-battery .pflow-track { stroke: var(--c-battery); }
+.pflow-wire.active.tone-car .pflow-track { stroke: var(--c-car); }
+.pflow-wire.active.tone-water .pflow-track { stroke: var(--c-water); }
+
+.pflow-node {
+  align-items: center; border-radius: var(--r-lg); color: var(--text-strong); display: flex; flex-direction: column;
+  min-width: 0; position: absolute; text-align: center; text-decoration: none; transform: translateX(-50%);
 }
-a.pflow-node:hover { box-shadow: var(--shadow-md); }
-.pflow-hub { border-radius: 50%; aspect-ratio: 1; justify-content: center; width: min(28%, 130px); }
-.pflow-icon { color: var(--text-dim); line-height: 0; }
-.pflow-value { font-size: clamp(14px, 3.6vw, 18px); font-weight: 780; letter-spacing: -0.02em; white-space: nowrap; }
-.pflow-sub { color: var(--text-dim); font-size: clamp(11px, 2.8vw, 13px); font-weight: 600; line-height: 1.2; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pflow-sub2::before { content: " · "; }
-@media (max-width: 480px) {
-  .pflow-sub2 { display: block; }
-  .pflow-sub2::before { content: none; }
+a.pflow-node:hover .fa { transform: translateY(-3px); }
+a.pflow-node:focus-visible { outline: 2px solid var(--c-grid-export); outline-offset: 4px; }
+.pflow-art { display: block; width: 100%; }
+.fa { display: block; filter: drop-shadow(0 6px 6px rgba(15, 23, 42, 0.14)); height: auto; overflow: visible; transition: transform var(--t-med); width: 100%; }
+.pflow-node.absent .fa { filter: grayscale(1); opacity: 0.38; }
+.pflow-label { align-items: center; display: flex; flex-direction: column; gap: 1px; margin-top: -2px; white-space: nowrap; }
+.pflow-value { font-size: clamp(15px, 4.4vw, 20px); font-weight: 450; letter-spacing: -0.01em; line-height: 1.15; }
+.pflow-value b { font-weight: 800; }
+.pflow-sub { color: var(--text-dim); font-size: clamp(11px, 2.9vw, 13px); font-weight: 600; line-height: 1.2; }
+.pflow-badge {
+  align-items: center; border-radius: 6px; display: inline-flex; font-size: clamp(11px, 3vw, 13px); font-weight: 650;
+  gap: 4px; line-height: 1; margin-top: 3px; padding: 4px 7px;
 }
-.pflow-node.absent { opacity: 0.45; border-style: dashed; }
-.pflow-node.active.tone-pv { border-color: var(--c-pv); } .pflow-node.tone-pv .pflow-icon { color: var(--c-pv); }
-.pflow-node.active.tone-grid { border-color: var(--c-grid-import); } .pflow-node.tone-grid .pflow-icon { color: var(--c-grid-import); }
-.pflow-node.active.tone-battery { border-color: var(--c-battery); } .pflow-node.tone-battery .pflow-icon { color: var(--c-battery); }
-.pflow-node.active.tone-car { border-color: var(--c-car); } .pflow-node.tone-car .pflow-icon { color: var(--c-car); }
-.pflow-node.active.tone-water { border-color: var(--c-water); } .pflow-node.tone-water .pflow-icon { color: var(--c-water); }
-.pflow-node.alert { border-color: var(--c-waste); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-waste) 25%, transparent); }
+.pflow-badge.ok { background: color-mix(in srgb, #7cc243 26%, transparent); color: color-mix(in srgb, #2f7d16 80%, var(--text-strong)); }
+.pflow-badge.warn { background: color-mix(in srgb, var(--c-grid-import) 20%, transparent); color: var(--c-grid-import); }
+.pflow-badge.info { background: color-mix(in srgb, var(--c-water) 18%, transparent); color: var(--c-water); }
+.pflow-node.active.tone-grid-export .pflow-sub { color: var(--c-grid-export); }
+.pflow-node.active.tone-grid-import .pflow-sub { color: var(--c-grid-import); }
+.pflow-node.alert .pflow-value { color: var(--c-waste); }
+
+/* Details in den Bildern */
+.fa-cell { stroke: #7b9bd0; stroke-width: 0.45; }
+.fa-leg { stroke: #8a94a1; stroke-linecap: round; stroke-width: 1.4; }
+.fa-steel { stroke: #3f4652; stroke-linecap: round; stroke-width: 0.8; }
+.fa-insul { stroke: #e7ecf2; stroke-linecap: round; stroke-width: 1.4; }
+.fa-wire { stroke: #6b7280; stroke-width: 0.45; opacity: 0.7; }
+.fa-map { stroke: #ffffff; stroke-width: 0.4; opacity: 0.35; }
+.fa-glint { fill: #fff; opacity: 0; animation: fa-glint 3.5s ease-in-out infinite; }
+@keyframes fa-glint { 0%, 70%, 100% { opacity: 0; } 82% { opacity: 0.7; } }
+.fa-led { fill: #9aa3ad; }
+.fa.on .fa-led { animation: led 1.4s ease-in-out infinite; fill: #4ade80; filter: drop-shadow(0 0 2px #4ade80); }
+.fa-cable { fill: none; stroke: #2a2e35; stroke-linecap: round; stroke-width: 1.3; }
+.fa-pipe { fill: none; stroke-linecap: round; stroke-width: 1.8; }
+.fa-pipe.cold { stroke: #3b82f6; }
+.fa-pipe.hot { stroke: #e5484d; }
+.fa-heat { fill: #ff7a45; opacity: 0; }
+.fa.on .fa-heat { animation: fa-heat 2.2s ease-in-out infinite; }
+@keyframes fa-heat { 0%, 100% { opacity: 0.25; } 50% { opacity: 0.6; } }
+.fa-temp { fill: #e5484d; }
+.fa.on .fa-soc { animation: led 2s ease-in-out infinite; }
+[data-theme="dark"] .fa { filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.45)); }
+[data-theme="dark"] .pflow-badge.ok { color: #9be15d; }
 
 /* ---------------------------------------------------------------- Auto */
 
@@ -1173,7 +1200,8 @@ a.pflow-node:hover { box-shadow: var(--shadow-md); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
-  .pflow-dots { animation: none !important; stroke-dasharray: 2 8; }
+  .pflow-dots { animation: none !important; }
+  .fa-glint { display: none; }
   .phase-leaving .g-car, .phase-arriving .g-car { animation: none !important; }
   .phase-leaving .g-car { opacity: 0; }
   .g-ghost { animation: none !important; }
