@@ -1,5 +1,5 @@
-"""Alembic-Umgebung (async). Beim App-Start wird das Schema idempotent über
-startup.init_db() erzeugt; Alembic dient für spätere Schema-Migrationen."""
+"""Alembic-Umgebung (async). Beim App-Start ruft startup.init_db() die
+Revisionen auf (upgrade head); auf der Kommandozeile läuft Alembic wie gewohnt."""
 import asyncio
 
 from alembic import context
@@ -35,7 +35,13 @@ async def run_migrations_online() -> None:
     await engine.dispose()
 
 
-if context.is_offline_mode():
+# Beim Start der Anwendung reicht startup.init_db() seine Verbindung durch
+# (config.attributes["connection"]); auf der Kommandozeile baut Alembic
+# selbst eine auf.
+_connection = context.config.attributes.get("connection")
+if _connection is not None:
+    do_run_migrations(_connection)
+elif context.is_offline_mode():
     run_migrations_offline()
 else:
     asyncio.run(run_migrations_online())

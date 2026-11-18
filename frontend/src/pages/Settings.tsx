@@ -15,13 +15,14 @@ import { useSettings } from "../store/settings";
 import { BatterySettings } from "./settings/BatterySettings";
 import { DevicesPanel } from "./settings/DevicesPanel";
 import {
-  AppearanceSettings, BackupSettings, InfoSettings, NotificationSettings, PrioritySettings, UsersSettings,
+  AccountSettings, AppearanceSettings, BackupSettings, InfoSettings, NotificationSettings, PrioritySettings,
+  StatisticsSettings, UsersSettings,
 } from "./settings/OtherSettings";
 import { McpSettings } from "./settings/McpSettings";
 import { RegulationSettings } from "./settings/RegulationSettings";
 
-type Tab = "regulation" | "battery" | "priority" | "devices" | "notifications" | "users" | "appearance" | "backup" | "mcp"
-  | "info";
+type Tab = "regulation" | "battery" | "priority" | "devices" | "notifications" | "statistics" | "users" | "account"
+  | "appearance" | "backup" | "mcp" | "info";
 
 const TABS: { key: Tab; icon: IconName; admin?: boolean }[] = [
   { key: "regulation", icon: "auto" },
@@ -29,7 +30,9 @@ const TABS: { key: Tab; icon: IconName; admin?: boolean }[] = [
   { key: "priority", icon: "events" },
   { key: "devices", icon: "devices" },
   { key: "notifications", icon: "info" },
+  { key: "statistics", icon: "statistics" },
   { key: "users", icon: "lock", admin: true },
+  { key: "account", icon: "lock" },
   { key: "appearance", icon: "display" },
   { key: "backup", icon: "download", admin: true },
   { key: "mcp", icon: "ai" },
@@ -72,7 +75,9 @@ export function Settings() {
           {tab === "priority" && <PrioritySettings />}
           {tab === "devices" && <DevicesPanel />}
           {tab === "notifications" && <NotificationSettings />}
+          {tab === "statistics" && <StatisticsSettings />}
           {tab === "users" && <UsersSettings />}
+          {tab === "account" && <AccountSettings />}
           {tab === "appearance" && <AppearanceSettings />}
           {tab === "backup" && <BackupSettings />}
           {tab === "mcp" && <McpSettings />}

@@ -11,6 +11,16 @@ services:
   db:
     image: timescale/timescaledb:latest-pg16
     restart: unless-stopped
+    # Haltbarkeit ausdrücklich festlegen, statt sich auf Vorgaben zu
+    # verlassen: Jede bestätigte Transaktion liegt auf der Platte (fsync,
+    # synchronous_commit), und eine beim Stromausfall halb geschriebene Seite
+    # wird aus dem WAL wiederhergestellt (full_page_writes). Mit diesen drei
+    # Schaltern übersteht PostgreSQL einen harten Abbruch ohne Datenverlust –
+    # sofern der Datenträger fsync ehrlich beantwortet.
+    command: ["postgres", "-c", "fsync=on", "-c", "synchronous_commit=on", "-c", "full_page_writes=on"]
+    # Zeit für einen sauberen Abschluss (Checkpoint) beim Stoppen und Update;
+    # die Docker-Vorgabe von 10 s endet sonst im harten Abbruch.
+    stop_grace_period: 60s
     environment:
       POSTGRES_USER: minepower
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-minepower}
@@ -58,15 +68,45 @@ services:
       # backend/app/services/backup.py.
       BACKUP_INTERVAL_H: ${BACKUP_INTERVAL_H:-6}
       BACKUP_KEEP: ${BACKUP_KEEP:-30}
+      # Datensicherung (Stundenwerte, Ladevorgänge, Ereignisse) und
+      # Aufbewahrung der Rohmesswerte in Tagen (Stundenwerte bleiben länger).
+      BACKUP_DATA_INTERVAL_H: ${BACKUP_DATA_INTERVAL_H:-24}
+      BACKUP_DATA_KEEP: ${BACKUP_DATA_KEEP:-7}
+      RAW_RETENTION_DAYS: ${RAW_RETENTION_DAYS:-90}
       # Schlüssel für gespeicherte Zugangsdaten. Leer = Schlüsseldatei im
       # Volume app_data. Geht beides verloren, müssen Tokens und Passwörter
       # neu eingegeben werden.
       MINEPOWER_SECRET_KEY: ${MINEPOWER_SECRET_KEY:-}
+      # Nutzer, unter dem die Anwendung läuft (Standard 1000:1000)
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      # Browser-Zugriff von fremden Ursprüngen (leer = keiner) und die
+      # API-Dokumentation unter /docs (aus) – siehe docs/SECURITY.md.
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      API_DOCS: ${API_DOCS:-false}
+      # Hinter einem Reverse-Proxy (Nginx Proxy Manager, SWAG, Traefik):
+      # dessen Adresse/Netz, damit die Login-Sperre die echte Client-IP sieht.
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
     volumes:
       - backup_data:/app/backups
       - app_data:/app/data
+    # Härtung: Die Anwendung läuft ohne root (der Start übergibt nur die
+    # Datenordner und gibt dann alle Rechte ab, siehe docker-entrypoint.sh).
+    # Das Dateisystem des Containers ist nur lesbar – geschrieben wird
+    # ausschließlich in die beiden Volumes und nach /tmp.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN      # Datenordner übergeben
+      - SETUID     # auf den unprivilegierten Nutzer wechseln
+      - SETGID
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/system/health',timeout=5).status==200 else 1)"]
+      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/system/ready',timeout=5).status==200 else 1)"]
       interval: 15s
       timeout: 10s
       retries: 5

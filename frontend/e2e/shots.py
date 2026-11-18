@@ -10,6 +10,7 @@ Overlay (Dynamic Island, Home-Indikator) mit ins Bild gezeichnet.
 """
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -18,7 +19,7 @@ from playwright.sync_api import sync_playwright
 sys.path.insert(0, str(Path(__file__).parent))
 from mock import Mock  # noqa: E402
 
-UI = "http://localhost:5173"
+UI = os.environ.get("MINEPOWER_UI", "http://localhost:5173")
 
 #: name: (breite, höhe, dpr, safe oben, rechts, unten, links, insel)
 PHONES = {
@@ -79,7 +80,7 @@ def phone_context(browser, profile: str, theme: str, reduced: bool = True):
 def launch(p, engine: str):
     if engine == "webkit":
         return p.webkit.launch()
-    return p.chromium.launch(executable_path="/usr/bin/google-chrome", headless=True)
+    return p.chromium.launch(executable_path=os.environ.get("CHROME_PATH", "/usr/bin/google-chrome"), headless=True)
 
 
 def shoot(page, path: Path, full: bool = False):

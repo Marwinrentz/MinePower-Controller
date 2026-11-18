@@ -60,6 +60,7 @@ from ..models import ChargeSession, Device, Schedule, Setting
 from ..services.audit import log_event
 from ..services.diagnostics import waste_is_avoidable
 from ..services.measurements import MeasurementBuffer
+from .plausibility import PlausibilityTracker
 from ..services.ws import ws_manager
 from .regulation import (
     BATTERY_PROTECT_CONFIRM_S,
@@ -174,12 +175,27 @@ BATTERY_SETTLE_S = 20.0
 BATTERY_MISMATCH_TICKS = 2
 #: Wie lange beim Beenden auf die Rücksetzung eines Speichers gewartet wird.
 BATTERY_RELEASE_TIMEOUT_S = 8.0
+#: Obergrenzen beim Beenden. Docker wartet 30 s (stop_grace_period), danach
+#: SIGKILL. Geräte (parallel) + Messwerte + Rest müssen sicher darunter bleiben.
+SHUTDOWN_DEVICES_TIMEOUT_S = 12.0
+#: So lange wartet ein Regeltakt höchstens auf das Speichern eines Ladevorgangs.
+SESSION_DB_WAIT_S = 2.0
+#: Älter darf die Netzmessung nicht sein, sonst Sicherheits-Stopp (s).
+GRID_MAX_AGE_S = 12.0
+SHUTDOWN_FLUSH_TIMEOUT_S = 8.0
+#: Ereignis-Log beim Beenden: lieber verlieren als den Fail-safe aufhalten.
+SHUTDOWN_EVENT_TIMEOUT_S = 2.0
 #: Fahrzeug: Ab wann 'antwortet nicht mehr" ins Protokoll kommt. Für die
 #: Regelung gilt es schon nach 2 min als nicht erreichbar (kein Budget,
 #: keine Befehle) – gemeldet wird erst, wenn es dauert.
 VEHICLE_SILENT_LOG_S = 1800.0
 #: Lesen nach Ausfall: Abstand wächst bis zu diesem Wert (s)
 READ_BACKOFF_MAX_S = 60.0
+#: Zwischenstand eines Ladevorgangs höchstens so oft speichern (s)
+SESSION_SAVE_EVERY_S = 60.0
+#: Ein offener Ladevorgang wird nach einem Neustart fortgesetzt, wenn er
+#: höchstens so alt ist (h)
+SESSION_RESUME_H = 24.0
 #: Batterie-Ereignisse: höchstens so oft je Zustand (s)
 BATTERY_EVENT_MIN_S = 60.0
 
@@ -333,7 +349,20 @@ class ManagedDevice:
         self.wake_task: asyncio.Task | None = None
         self.wake_note: str | None = None
         # Session-Verfolgung (nur Wallbox)
+        # --- Diagnose: Antwortzeit und Zähler seit dem Start ---
+        self.read_ms: float | None = None
+        self.read_ms_avg: float | None = None
+        self.reads_ok = 0
+        self.reads_failed = 0
+        self.last_error_at: datetime | None = None
         self.session_id: int | None = None
+        #: Offene Ladevorgänge aus der Zeit vor dem Start schon geprüft?
+        self._sessions_checked = False
+        self._session_saved_at = 0.0
+        self._session_errors = 0
+        self._session_task: asyncio.Task | None = None
+        #: Zeitpunkt (monotonic) des letzten erfolgreichen Lesens; None = unbekannt.
+        self.data_at: float | None = None
         self.session_energy_kwh = 0.0
         self.session_solar_kwh = 0.0
         self.session_cost = 0.0
@@ -445,6 +474,12 @@ class ControlLoop:
         #: ein Fahrzeug sie nur während des Ladens meldet.
         self._phases_saved: dict[int, int] = {}
         self.buffer = MeasurementBuffer()
+        self.plausibility = PlausibilityTracker()
+        self._reload_failures = 0
+        #: Beginn des letzten Takts (monotone Uhr) und Zahl der Takte – daran
+        #: erkennt der Healthcheck einen stehenden Regelkreis.
+        self.last_step_at: float | None = None
+        self.steps = 0
         # Vollständig vorbelegt: Das Frontend bekommt beim allerersten Abruf
         # (vor dem ersten Tick) dieselbe Struktur wie später – sonst müsste es
         # überall gegen fehlende Felder absichern.
@@ -490,20 +525,44 @@ class ControlLoop:
         for dev in self.devices.values():
             if dev.wake_task is not None and not dev.wake_task.done():
                 dev.wake_task.cancel()
+        # Reihenfolge beim Beenden: ERST die Geräte in einen sicheren Zustand,
+        # DANN die Messwerte schreiben. Docker gibt nur 30 s bis zum harten
+        # Abbruch; hängt die Datenbank (Unraid stoppt sie oft zuerst), durfte
+        # das Wegschreiben vorher bis zu 20 s fressen – und der Speicher blieb
+        # gesperrt oder im Zwangsladen zurück.
+        #
         # Fail-safe: Keinen Speicher in einem Zwangsmodus zurücklassen – weder
         # gesperrt (das Haus zöge bis zum nächsten Start alles aus dem Netz)
         # noch im Zwangsladen/-entladen. Gilt für Preisfenster UND manuelle
-        # Befehle; vorher wurde nur bei offenem Preisfenster zurückgesetzt.
+        # Befehle. Wallbox und Heizstab bekommen ebenfalls einen sicheren
+        # Zustand, sonst liefen sie ohne Regelung unbegrenzt weiter (go-e
+        # steht nach einem Start auf frc=2 = erzwungen an).
         self.battery_manual = None
+        jobs = []
         for dev in list(self.devices.values()):
             if dev.category == DeviceCategory.BATTERY.value:
-                await self._release_battery(dev, "MinePower beendet")
-        self.grid_price_window = False
-        for dev in self.devices.values():
+                jobs.append(self._release_battery(dev, "MinePower beendet"))
+            elif isinstance(dev.driver, (WallboxDriver, WaterHeaterDriver)):
+                jobs.append(self._safe_state_on_exit(dev))
+        if jobs:
             try:
-                await dev.driver.disconnect()
+                await asyncio.wait_for(asyncio.gather(*jobs, return_exceptions=True), timeout=SHUTDOWN_DEVICES_TIMEOUT_S)
+            except asyncio.TimeoutError:
+                log.warning("Sicherer Zustand beim Beenden nicht für alle Geräte bestätigt (Zeitlimit)")
+        # Gesammelte Messwerte noch schreiben – sonst fehlen bei jedem
+        # Neustart und Update die letzten Sekunden im Verlauf. Was nicht
+        # mehr in die Datenbank geht, landet im Spool.
+        try:
+            await asyncio.wait_for(self.buffer.close(), timeout=SHUTDOWN_FLUSH_TIMEOUT_S)
+        except (asyncio.TimeoutError, Exception) as exc:  # noqa: BLE001
+            log.warning("Messwerte beim Beenden nicht vollständig geschrieben: %s", exc)
+        self.grid_price_window = False
+        async def _disc(dev: ManagedDevice) -> None:
+            try:
+                await asyncio.wait_for(dev.driver.disconnect(), timeout=2.0)
             except Exception:  # noqa: BLE001
                 pass
+        await asyncio.gather(*(_disc(d) for d in list(self.devices.values())))
 
     def request_reload(self) -> None:
         """Von der API gerufen, wenn Geräte/Einstellungen geändert wurden."""
@@ -529,7 +588,22 @@ class ControlLoop:
             self._wake.clear()
             try:
                 if self._reload_requested:
-                    await self._reload()
+                    try:
+                        await self._reload()
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as exc:  # noqa: BLE001
+                        # Datenbank gerade nicht erreichbar: mit dem bisherigen
+                        # Stand weiterregeln und beim nächsten Takt erneut
+                        # laden. Früher ging die Anforderung verloren, und der
+                        # Takt fiel aus.
+                        self._reload_requested = True
+                        self._reload_failures += 1
+                        if self._reload_failures == 1 or self._reload_failures % 30 == 0:
+                            log.error("Konfiguration nicht geladen (Versuch %d), regle mit dem bisherigen Stand: %s",
+                                      self._reload_failures, exc)
+                    else:
+                        self._reload_failures = 0
                 await self._step()
             except asyncio.CancelledError:
                 raise
@@ -726,11 +800,17 @@ class ControlLoop:
         # BLE-Proxy braucht auch mal 20 Sekunden. Ein pauschaler Timeout würde
         # so ein Gerät im Minutentakt fälschlich offline melden.
         timeout = float(getattr(dev.driver, "read_timeout_s", READ_TIMEOUT_S))
+        started = time.monotonic()
         try:
             if not dev.connected:
                 await asyncio.wait_for(dev.driver.connect(), timeout=timeout)
                 dev.connected = True
             dev.data = await asyncio.wait_for(dev.driver.read_data(), timeout=timeout)
+            dev.data_at = time.monotonic()
+            # Antwortzeit für die Diagnose: letzter Wert und gleitendes Mittel
+            dev.read_ms = (time.monotonic() - started) * 1000.0
+            dev.read_ms_avg = dev.read_ms if dev.read_ms_avg is None else 0.8 * dev.read_ms_avg + 0.2 * dev.read_ms
+            dev.reads_ok += 1
             if not dev.online and dev.failures >= OFFLINE_AFTER_FAILURES:
                 await log_event(f"Gerät wieder online: {dev.name}", category="device")
                 if self.notifier:
@@ -742,7 +822,9 @@ class ControlLoop:
             dev.last_seen = datetime.now(timezone.utc)
         except Exception as exc:  # noqa: BLE001
             dev.failures += 1
+            dev.reads_failed += 1
             dev.last_error = f"{type(exc).__name__}: {exc}"
+            dev.last_error_at = datetime.now(timezone.utc)
             dev.connected = False  # Auto-Reconnect beim nächsten Tick
             if dev.failures >= OFFLINE_AFTER_FAILURES:
                 backoff = min(READ_BACKOFF_MAX_S, 10.0 * (2 ** (dev.failures - OFFLINE_AFTER_FAILURES)))
@@ -790,6 +872,8 @@ class ControlLoop:
 
     async def _step(self) -> None:
         step_started = time.monotonic()
+        self.last_step_at = step_started
+        self.steps += 1
         active = [d for d in self.devices.values() if d.enabled]
         await self._read_all(active)
 
@@ -826,12 +910,22 @@ class ControlLoop:
                 f"(gleicher Treiber, gleiche Adresse). Bitte das Duplikat löschen."
             )
 
+        # Höchstalter der Netzmessung: Hängt der Zähler, behielt er bis zum
+        # Offline-Status (3 Fehlversuche à bis zu 6 s) seinen letzten Wert –
+        # und die Regelung verteilte bis zu 18 s lang Überschuss, den es
+        # vielleicht längst nicht mehr gab.
+        grid_max_age = max(GRID_MAX_AGE_S, 3.0 * self.cfg.interval_s)
+        now_mono = time.monotonic()
+
+        def _fresh(d: ManagedDevice) -> bool:
+            return d.data_at is None or now_mono - d.data_at <= grid_max_age
+
         for dev in counted:
             if not dev.online or dev.data is None:
                 continue
             if isinstance(dev.data, InverterData):
                 pv_power += dev.data.pv_power
-                if dev.data.grid_power is not None:
+                if dev.data.grid_power is not None and _fresh(dev):
                     grid_from_inverter = dev.data.grid_power
                 # Hybrid-Wechselrichter liefern die Batteriewerte gleich mit.
                 # Damit funktioniert Batterie-Monitoring ohne separates
@@ -840,6 +934,9 @@ class ControlLoop:
                 if dev.data.battery_soc is not None or dev.data.battery_power is not None:
                     inverter_batteries.append(dev.data)
             elif isinstance(dev.data, MeterData):
+                if not _fresh(dev):
+                    warnings.append(f"{dev.name}: Messwert veraltet – Zähler antwortet nicht")
+                    continue
                 grid_power = dev.data.grid_power
                 meter_online = True
             elif isinstance(dev.data, BatteryData):
@@ -972,6 +1069,12 @@ class ControlLoop:
 
         self.price_cheap_now = bool(cheap)
         house_power = max(0.0, float(grid_power) + pv_power - wb_power - wh_power - bat_power)
+        # Unmögliche Lagen festhalten (vertauschte Vorzeichen u. Ä., siehe core/plausibility.py)
+        self.plausibility.update(
+            now=step_started, pv=pv_power, grid=float(grid_power),
+            battery_power=battery.power if battery else None, loads=wb_power + wh_power,
+            local_hour=local_now().hour,
+        )
         recovery, forecast_surplus = self._forecast_context(pv_power, house_power)
 
         # --- Manueller Batteriebefehl (Dashboard) -------------------------
@@ -1621,11 +1724,11 @@ class ControlLoop:
         except Exception as exc:  # noqa: BLE001
             log.warning("%s: Rücksetzen auf Eigenverbrauch fehlgeschlagen (%s): %s", dev.name, reason, exc)
             try:
-                await log_event(
+                await asyncio.wait_for(log_event(
                     f"{dev.name}: Rücksetzen auf Eigenverbrauch fehlgeschlagen ({reason}) – {exc}. "
                     f"Bitte den Modus im Wechselrichter prüfen.",
                     level="error", category="control",
-                )
+                ), timeout=SHUTDOWN_EVENT_TIMEOUT_S)
             except Exception:  # noqa: BLE001
                 pass
 
@@ -2190,6 +2293,31 @@ class ControlLoop:
                     data={"detail": dev.command_error},
                 )
 
+    async def _safe_state_on_exit(self, dev: ManagedDevice) -> None:
+        """Wallbox/Heizstab beim Beenden: nicht ungeregelt weiterlaufen lassen.
+
+        Ohne Regelung zöge eine laufende Überschussladung oder ein Heizstab
+        unbegrenzt Netzstrom. Ausnahme: 'Sofort laden" – das hat der Nutzer
+        ausdrücklich verlangt, das läuft weiter. Nur Geräte, die MinePower
+        eingeschaltet hat, werden angefasst – ein von Hand
+        oder vom Gerät selbst gestarteter Vorgang bleibt unberührt."""
+        if not dev.online:
+            return
+        try:
+            if isinstance(dev.driver, WallboxDriver):
+                ctrl = dev.controller
+                if isinstance(ctrl, WallboxController) and (ctrl.override == "fast" or ctrl.s.mode == "fast"):
+                    return
+                if dev.sent.get("enable") is True:
+                    await asyncio.wait_for(dev.driver.stop_charging(), timeout=READ_TIMEOUT_S)
+                    log.info("%s beim Beenden gestoppt", dev.name)
+            elif isinstance(dev.driver, WaterHeaterDriver):
+                if float(dev.sent.get("power", 0) or 0) > 0:
+                    await asyncio.wait_for(dev.driver.set_power(0.0), timeout=READ_TIMEOUT_S)
+                    log.info("%s beim Beenden ausgeschaltet", dev.name)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("%s: sicherer Zustand beim Beenden fehlgeschlagen: %s", dev.name, exc)
+
     async def _apply_safe_stop(self, dev: ManagedDevice, reason: str) -> None:
         if not dev.online:
             return
@@ -2226,7 +2354,31 @@ class ControlLoop:
                 grid_share = data.power - solar_w
                 dev.session_cost += (grid_share * dt_h / 1000.0) * price_ct / 100.0
 
+        # Datenbankteil abgekoppelt: Antwortet die Datenbank nicht (ohne die
+        # Verbindung abzulehnen), stand vorher der ganze Regeltakt bis zu 10 s
+        # (hängende Abfrage bis 60 s) – und die Wallbox lud so lange mit dem
+        # letzten Strom weiter. Jetzt wartet der Takt höchstens
+        # SESSION_DB_WAIT_S; der Schreibvorgang läuft im Hintergrund fertig,
+        # und solange er läuft, startet für dieses Gerät kein zweiter.
+        pending = dev._session_task
+        if pending is not None and not pending.done():
+            return
+        task = asyncio.create_task(self._session_db(dev, data, charging, now), name=f"session-{dev.id}")
+        dev._session_task = task
         try:
+            await asyncio.wait_for(asyncio.shield(task), timeout=SESSION_DB_WAIT_S)
+        except asyncio.TimeoutError:
+            if dev._session_errors == 0:
+                log.warning("Ladevorgang %s: Datenbank antwortet langsam – Regelung läuft weiter", dev.name)
+        except Exception:  # noqa: BLE001 – Fehler behandelt _session_db selbst
+            pass
+
+    async def _session_db(self, dev: ManagedDevice, data: WallboxData, charging: bool, now: float) -> None:
+        try:
+            if dev.session_id is None and not dev._sessions_checked:
+                # Erster Takt nach dem Start: Ein Ladevorgang, der beim
+                # Neustart lief, ist in der Datenbank noch offen.
+                await self._adopt_open_session(dev, charging)
             if charging and dev.session_id is None:
                 async with async_session() as session:
                     cs = ChargeSession(device_id=dev.id, rfid_tag=data.rfid_tag)
@@ -2235,15 +2387,25 @@ class ControlLoop:
                     await session.refresh(cs)
                     dev.session_id = cs.id
                 dev.session_energy_kwh = dev.session_solar_kwh = dev.session_cost = 0.0
+                dev._session_saved_at = now
                 await log_event(f"Ladevorgang gestartet: {dev.name}", category="control")
             elif dev.session_id is not None:
+                ended = not charging and data.state in (WallboxState.IDLE, WallboxState.COMPLETE,
+                                                        WallboxState.CONNECTED)
+                # Zwischenstände nur etwa einmal je Minute schreiben; das Ende
+                # sofort. Vorher ging in jedem Takt ein UPDATE an die Datenbank.
+                if not ended and now - dev._session_saved_at < SESSION_SAVE_EVERY_S:
+                    return
+                dev._session_saved_at = now
                 async with async_session() as session:
                     cs = await session.get(ChargeSession, dev.session_id)
-                    if cs:
+                    if cs is None:
+                        dev.session_id = None  # Zeile verschwunden (Import, Wiederherstellung)
+                    else:
                         cs.energy_kwh = round(dev.session_energy_kwh, 3)
                         cs.solar_kwh = round(min(dev.session_solar_kwh, dev.session_energy_kwh), 3)
                         cs.cost_eur = round(dev.session_cost, 2)
-                        if not charging and data.state in (WallboxState.IDLE, WallboxState.COMPLETE, WallboxState.CONNECTED):
+                        if ended:
                             cs.ended_at = datetime.now(timezone.utc)
                             dev.session_id = None
                             # Eine Ladung, bei der nie nennenswert Energie
@@ -2260,14 +2422,51 @@ class ControlLoop:
                                     f"davon Solar {cs.solar_kwh:.1f} kWh)",
                                     category="control",
                                 )
-                            if self.notifier:
-                                await self.notifier.send(
-                                    f"🔋 Ladung beendet an {dev.name}: {cs.energy_kwh:.1f} kWh "
-                                    f"(Solaranteil {100 * cs.solar_kwh / cs.energy_kwh if cs.energy_kwh else 0:.0f} %)"
-                                )
+                                if self.notifier:
+                                    await self.notifier.send(
+                                        f"🔋 Ladung beendet an {dev.name}: {cs.energy_kwh:.1f} kWh "
+                                        f"(Solaranteil {100 * cs.solar_kwh / cs.energy_kwh if cs.energy_kwh else 0:.0f} %)"
+                                    )
                     await session.commit()
         except Exception as exc:  # noqa: BLE001
-            log.error("Session-Tracking-Fehler bei %s: %s", dev.name, exc)
+            dev._session_errors += 1
+            # Bei ausgefallener Datenbank nicht in jedem Takt melden.
+            if dev._session_errors == 1 or dev._session_errors % 30 == 0:
+                log.error("Session-Tracking-Fehler bei %s (%d×): %s", dev.name, dev._session_errors, exc)
+        else:
+            dev._session_errors = 0
+
+    async def _adopt_open_session(self, dev: ManagedDevice, charging: bool) -> None:
+        """Offene Ladevorgänge dieses Geräts nach einem Neustart aufräumen.
+
+        Lädt das Fahrzeug noch und ist der jüngste offene Vorgang frisch
+        (höchstens SESSION_RESUME_H alt), wird er **fortgesetzt** – mit den
+        bis zum Neustart gespeicherten Zählerständen. Alle anderen offenen
+        Vorgänge werden abgeschlossen. Vorher blieb der alte Vorgang für
+        immer offen, und für dieselbe Ladung begann ein zweiter bei null."""
+        async with async_session() as session:
+            rows = (await session.scalars(
+                select(ChargeSession).where(ChargeSession.device_id == dev.id, ChargeSession.ended_at.is_(None))
+                .order_by(ChargeSession.started_at.desc())
+            )).all()
+            now_utc = datetime.now(timezone.utc)
+            for index, cs in enumerate(rows):
+                started = cs.started_at if cs.started_at.tzinfo else cs.started_at.replace(tzinfo=timezone.utc)
+                fresh = (now_utc - started).total_seconds() <= SESSION_RESUME_H * 3600
+                if index == 0 and charging and fresh:
+                    dev.session_id = cs.id
+                    dev.session_energy_kwh = float(cs.energy_kwh or 0.0)
+                    dev.session_solar_kwh = float(cs.solar_kwh or 0.0)
+                    dev.session_cost = float(cs.cost_eur or 0.0)
+                    dev._session_saved_at = time.monotonic()
+                    log.info("Ladevorgang an %s nach Neustart fortgesetzt (%.1f kWh bisher)",
+                             dev.name, dev.session_energy_kwh)
+                elif (cs.energy_kwh or 0.0) < 0.05:
+                    await session.delete(cs)
+                else:
+                    cs.ended_at = now_utc
+            await session.commit()
+        dev._sessions_checked = True
 
     # ------------------------------------------------------------ Publish
 
@@ -2478,7 +2677,9 @@ class ControlLoop:
                 if dev.data.temperature_c is not None:
                     b.add(f"device:{dev.id}", "water_temp", dev.data.temperature_c)
         if b.due():
-            await b.flush()
+            # Im Hintergrund: Eine langsame oder ausgefallene Datenbank darf
+            # den Takt nicht aufhalten (siehe services/measurements.py).
+            b.flush_soon()
 
         await self._track_waste(waste_w, waste_reason)
         await ws_manager.broadcast({"type": "snapshot", "data": self.snapshot})

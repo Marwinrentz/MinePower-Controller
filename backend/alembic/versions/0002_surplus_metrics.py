@@ -32,8 +32,26 @@ NEW_REGULATION_DEFAULTS = {
 }
 
 
+def _settings_schema(bind) -> int:
+    row = bind.execute(sa.text("SELECT value FROM settings WHERE key = 'schema'")).fetchone()
+    if row is None:
+        return 1
+    value = row[0]
+    if isinstance(value, str):
+        value = json.loads(value)
+    try:
+        return int((value or {}).get("version", 1))
+    except (TypeError, ValueError):
+        return 1
+
+
 def upgrade() -> None:
     bind = op.get_bind()
+    if _settings_schema(bind) >= 2:
+        # Seit 2.16 regeln sich Totband und Glättung selbst; die Schlüssel
+        # gibt es nicht mehr. Bei einer Installation, die diese Revision nie
+        # über Alembic gefahren hat, werden sie nicht wieder eingeführt.
+        return
     row = bind.execute(
         sa.text("SELECT value FROM settings WHERE key = 'regulation'")
     ).fetchone()

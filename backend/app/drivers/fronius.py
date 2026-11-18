@@ -58,6 +58,9 @@ class _FroniusBase:
                 "deaktiviert (GEN24: Kommunikation → Solar API einschalten) oder die IP gehört "
                 "zu einem anderen Gerät."
             )
+        # Der Ladestand steht nicht unter 'Site', sondern je Wechselrichter
+        # unter 'Inverters' (Solar API v1, GetPowerFlowRealtimeData).
+        self._inverters = body.get("Inverters") if isinstance(body.get("Inverters"), dict) else {}
         return site
 
 
@@ -79,7 +82,10 @@ class FroniusInverter(_FroniusBase, InverterDriver):
         site = await self._site()
         grid = site.get("P_Grid")
         akku = site.get("P_Akku")
-        soc = site.get("StateOfCharge_Relative")
+        # Bis 3.2.0 wurde 'Site.StateOfCharge_Relative' gelesen – das Feld
+        # gibt es in dieser Antwort nicht, der Ladestand blieb immer leer.
+        soc = next((inv.get("SOC") for inv in getattr(self, "_inverters", {}).values()
+                    if isinstance(inv, dict) and inv.get("SOC") is not None), None)
         # Fronius: P_Akku + = Entladen → Vorzeichen drehen
         battery_power = None if akku is None else -float(akku)
         return InverterData(

@@ -38,13 +38,18 @@ def at(base: int, values: list[int]) -> dict[int, int]:
 
 
 class FakeModbus:
-    def __init__(self, holding=None, inputs=None, coils=None):
+    def __init__(self, holding=None, inputs=None, coils=None, fail=()):
         self.h = dict(holding or {})
         self.i = dict(inputs or {})
         self.c = dict(coils or {})
+        self.fail = set(fail)  # Holding-Adressen, die das Gerät ablehnt
         self.writes: list = []
+        self.reads: list = []
 
     async def read_holding(self, address, count=1):
+        self.reads.append(address)
+        if address in self.fail:
+            raise DriverError(f"Register {address} nicht lesbar")
         return [self.h.get(address + k, 0) for k in range(count)]
 
     async def read_input(self, address, count=1):
@@ -141,6 +146,23 @@ async def test_webasto_next_and_heartbeat():
     assert drv.conn.writes == [(5004, 16), (6000, 1), (5004, 0)]
 
 
+async def test_vestel_family_heartbeat_from_timeout():
+    web = make("webasto_next", host="192.0.2.20")
+    web.conn = FakeModbus(holding={2002: 6})
+    await web.configure_heartbeat()
+    assert web.heartbeat_s == 3.0  # Webasto: Timeout/2
+    ves = make("vestel_evc04", host="192.0.2.20")
+    ves.conn = FakeModbus(holding={2002: 20})
+    await ves.configure_heartbeat()
+    assert ves.heartbeat_s == 5.0  # Vestel: Timeout/4
+    ves.conn.h[2002] = 2
+    await ves.configure_heartbeat()
+    assert ves.heartbeat_s == 1.0  # nie unter 1 s
+    ves.conn.h[2002] = 0
+    await ves.configure_heartbeat()
+    assert ves.heartbeat_s == 5.0  # kein Timeout: Standard
+
+
 async def test_vestel_cable_and_charge_status():
     drv = make("vestel_evc04", host="192.0.2.20")
     drv.conn = FakeModbus(inputs={1004: 3, 1001: 0, **at(1502, u32(4200))})
@@ -152,13 +174,55 @@ async def test_vestel_cable_and_charge_status():
 
 async def test_bender_reads_soc_and_estimates_power_on_legacy():
     drv = make("bender_cc", host="192.0.2.20")
-    drv.conn = FakeModbus(holding={122: 3, **at(212, u32(16000) * 3), **at(220, u32(11040)), 1000: 16, 730: 64})
+    drv.conn = FakeModbus(holding={**at(142, text("CC612", 10)), 122: 3, **at(212, u32(16000) * 3),
+                                   **at(220, u32(11040)), 1000: 16, 740: 1, 730: 64})
     d = await drv.read_data()
     assert d.power == 11040 and d.soc == 64 and d.current_set == 16 and d.phases_active == 3
     drv.conn.h.update(at(220, u32(0xFFFFFFFF)))
     assert (await drv.read_data()).power == pytest.approx(3 * 16 * 230)
     await drv.set_current(8)
     assert drv.conn.writes[-1] == (1000, [8])
+
+
+async def test_bender_invalid_marker_is_highest_bit():
+    """Jeder Wert ≥ 0x80000000 ist ungültig, nicht nur 0xFFFFFFFF (evcc meterValue)."""
+    drv = make("bender_cc", host="192.0.2.20")
+    drv.conn = FakeModbus(holding={**at(142, text("CC612", 10)), 122: 3,
+                                   **at(212, u32(16000) + u32(0x80000001) + u32(16000)),
+                                   **at(220, u32(0x80000010)), 1000: 16})
+    with pytest.raises(DriverError):  # lädt, Zähler liefert Unsinn: Takt verwerfen statt raten
+        await drv.read_data()
+    drv.conn.h[122] = 2
+    d = await drv.read_data()
+    assert d.power == 0 and d.state == WallboxState.CONNECTED
+
+
+async def test_bender_mennekes_4you_never_touches_730():
+    """Amtron 4You/4Business trennen die Verbindung beim Zugriff auf 720/730/740."""
+    drv = make("bender_cc", host="192.0.2.20")
+    drv.conn = FakeModbus(holding={**at(142, text("AMTRON 4You 500", 10)), **at(120, text("1.6", 2)), 2200: 71,
+                                   122: 3, **at(212, u32(10000) * 3), **at(220, u32(6900)), 1000: 10},
+                          fail={720, 730, 740})
+    for _ in range(3):
+        d = await drv.read_data()
+    assert d.soc == 71 and not {720, 730, 740} & set(drv.conn.reads)
+    assert drv.conn.reads.count(142) == 1  # Modell nur einmal lesen
+    old = make("bender_cc", host="192.0.2.20")
+    old.conn = FakeModbus(holding={**at(142, text("AMTRON 4Business", 10)), **at(120, text("1.5", 2)), 2200: 71,
+                                   122: 2, 1000: 0}, fail={720, 730, 740})
+    assert (await old.read_data()).soc is None and 2200 not in old.conn.reads
+
+
+async def test_bender_legacy_and_soc_failure_read_once():
+    drv = make("bender_cc", host="192.0.2.20")
+    drv.conn = FakeModbus(holding={122: 3, **at(212, u32(10000) * 3), **at(220, u32(1)), 1000: 10}, fail={142})
+    d = await drv.read_data()
+    assert d.power == pytest.approx(3 * 10 * 230) and 220 not in drv.conn.reads  # alter Registersatz
+    cc = make("bender_cc", host="192.0.2.20")
+    cc.conn = FakeModbus(holding={**at(142, text("CC613", 10)), 122: 2, 1000: 0}, fail={740})
+    await cc.read_data()
+    await cc.read_data()
+    assert cc.conn.reads.count(740) == 1  # Firmware ohne Ladestand: nicht in jedem Takt fragen
 
 
 async def test_phoenix_charx_connector_offsets():
@@ -179,6 +243,42 @@ async def test_phoenix_ev_eth_coil_and_wallbe_scaling():
     await drv.set_current(10)
     await drv.stop_charging()
     assert drv.conn.writes == [(528, 100), (400, False)]
+
+
+async def test_alfen_status_e_means_no_vehicle():
+    drv = make("alfen_eve", host="192.0.2.20")
+    drv.conn = FakeModbus(holding={**at(1201, text("E", 5))})
+    assert (await drv.read_data()).state == WallboxState.IDLE
+
+
+async def test_keba_heartbeat_from_failsafe_timeout_and_p40_enable():
+    drv = make("keba_modbus", host="192.0.2.20")
+    drv.conn = FakeModbus(holding={**at(1602, u32(8)), **at(1016, u32(311110))})
+    await drv.configure_heartbeat()
+    assert drv.heartbeat_s == 4.0  # Timeout/2
+    await drv.heartbeat()
+    assert drv.conn.writes[-1] == (5018, 8)
+    off = make("keba_modbus", host="192.0.2.20")
+    off.conn = FakeModbus(holding={**at(1602, u32(0))})
+    await off.configure_heartbeat()
+    assert off.heartbeat_s == 0  # Failsafe aus: kein Lebenszeichen
+    p40 = make("keba_modbus", host="192.0.2.20")
+    p40.conn = FakeModbus(holding={**at(1000, u32(2)), **at(1004, u32(7)), **at(1016, u32(4111100)), 5004: 0})
+    assert (await p40.read_data()).current_set == 0  # Freigabe = 5004 ≠ 0
+    p40.conn.h[5004] = 16000
+    assert (await p40.read_data()).current_set == 6
+    dkv = make("keba_modbus", host="192.0.2.20", model="p40")
+    dkv.conn = FakeModbus(holding={**at(1016, u32(0))})
+    await dkv.stop_charging()
+    assert dkv.conn.writes == [(5004, 0)]
+
+
+async def test_keba_p30_tracks_enable_locally():
+    drv = make("keba_modbus", host="192.0.2.20")
+    drv.conn = FakeModbus(holding={**at(1000, u32(1)), **at(1004, u32(7)), **at(1016, u32(311110))})
+    assert (await drv.read_data()).current_set == 6
+    await drv.stop_charging()
+    assert (await drv.read_data()).current_set == 0  # Status 1 allein sagt nichts über die Freigabe
 
 
 async def test_keba_modbus_p30_and_p40():
@@ -219,6 +319,61 @@ async def test_mennekes_compact_release_and_heartbeat():
     assert drv.conn.writes == [(0x0D00, 0x55AA), (0x0D05, 0)]
 
 
+async def test_mennekes_compact_recovers_from_fallback():
+    drv = make("mennekes_compact", host="192.0.2.20")
+    drv.conn = FakeModbus(holding={0x0100: 6, 0x0D05: 0})
+    d = await drv.read_data()
+    assert d.state == WallboxState.CONNECTED
+    assert drv.conn.writes == [(0x0302, f32(0.0)), (0x0D05, 1)]
+    assert d.current_set == 0  # 0 A, der Regeltakt setzt danach den Strom
+
+
+async def test_read_only_watchdogs_take_timeout_from_device():
+    cases = [("heidelberg_ec", {257: 20000}, 5.0, ("input", 5)),
+             ("amperfied", {257: 20000}, 10.0, ("input", 5)),
+             ("em2go", {89: 30}, 15.0, ("holding", 87)),
+             ("pulsares", {0x61: 3}, 2.5, ("holding", 0x61)),
+             ("obo_wallbox", {28: 6000}, 3.0, ("holding", 11))]
+    for driver_id, regs, expected, _ in cases:
+        drv = make(driver_id, host="192.0.2.20")
+        drv.conn = FakeModbus(holding=regs)
+        await drv.configure_heartbeat()
+        assert drv.heartbeat_s == expected, driver_id
+        await drv.heartbeat()
+        assert drv.conn.writes == [], driver_id  # Lebenszeichen nur lesend
+    off = make("pulsares", host="192.0.2.20")
+    off.conn = FakeModbus(holding={0x61: 0})
+    await off.configure_heartbeat()
+    assert off.heartbeat_s == 0
+
+
+async def test_heartbeat_task_reads_timeout_and_retries(monkeypatch):
+    from app.drivers.wallbox_common import Heartbeat
+
+    drv = make("pulsares", host="192.0.2.20")
+    drv.conn = FakeModbus(holding={0x61: 2}, fail={0x61})
+    sleeps = []
+
+    async def fake_sleep(sec):
+        sleeps.append(sec)
+        if len(sleeps) == 1:
+            drv.conn.fail.clear()  # Gerät antwortet wieder
+        if len(sleeps) >= 3:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr("app.drivers.wallbox_common.asyncio.sleep", fake_sleep)
+    assert drv._wants_heartbeat()
+    with pytest.raises(asyncio.CancelledError):
+        await drv._beat_loop()
+    assert sleeps[0] == Heartbeat.BEAT_RETRY_S and sleeps[1] == 1.0  # danach Timer 2 s / 2
+    # Ohne Watchdog im Gerät endet der Task
+    off = make("pulsares", host="192.0.2.20")
+    off.conn = FakeModbus(holding={0x61: 0})
+    await off._beat_loop()
+    # Treiber ohne Watchdog starten gar keinen Task
+    assert not make("kse_wallbox", host="192.0.2.20")._wants_heartbeat()
+
+
 async def test_abl_status_byte_and_duty_cycle():
     drv = make("abl_emh1", host="192.0.2.20")
     drv.conn = FakeModbus(holding={0x04: 0xC2, **at(0x0F, [0, 0, 0, 266, 0]), **at(0x2E, [0, 0, 160, 160, 160])})
@@ -229,7 +384,7 @@ async def test_abl_status_byte_and_duty_cycle():
     assert drv.conn.writes[-2:] == [(0x14, [0x03E8]), (0x14, [0x03E8])]
     drv.conn.h[0x04] = 0xE0
     assert (await drv.read_data()).state == WallboxState.CONNECTED
-    assert (0x05, [0xA1A1]) in drv.conn.writes
+    assert drv.conn.writes.count((0x05, [0xA1A1])) == 2  # erste Anfrage verwirft die eMH1
 
 
 async def test_em2go_versicharge_solax_peblar():
@@ -330,7 +485,17 @@ async def test_salia_firmware_dependent_endpoint():
     d = await drv.read_data()
     assert d.state == WallboxState.CONNECTED and d.current_set == 16
     await drv.stop_charging()
+    assert drv.http.calls[-2] == ("POST", "/save_mqtt.php", {"grid_current_limit": "0"})
     assert drv.http.calls[-1] == ("POST", "/save_mqtt.php", {"salia/pausecharging": "1"})
+
+
+async def test_salia_power_is_in_tenth_watt():
+    api = {"device": {"software_version": "2.3.70"}, "secc": {"port0": {
+        "ci": {"charge": {"cp": {"status": "C"}}, "evse": {"basic": {"offered_current_limit": "16"}}},
+        "salia": {"pausecharging": "0"}, "metering": {"power": {"active_total": {"actual": "110400"}}}}}}
+    drv = make("hardybarth_salia", host="192.0.2.22")
+    drv.http = FakeHttp(lambda p: api)
+    assert (await drv.read_data()).power == pytest.approx(11040)
 
 
 async def test_sma_evcharger_measurements_and_params():

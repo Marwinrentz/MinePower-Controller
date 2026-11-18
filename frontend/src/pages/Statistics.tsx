@@ -52,6 +52,8 @@ export function Statistics() {
   }, [range]);
 
   const downloadCsv = () => downloadFile(`/api/statistics/export.csv?range=${range}`, `minepower_sessions_${range}.csv`);
+  const downloadHistoryCsv = () =>
+    downloadFile(`/api/history/export.csv?range=${range}`, `minepower_verlauf_${range}.csv`).catch(() => {});
 
   const downloadDiagnosticReport = async () => {
     setReportBusy(true);
@@ -75,6 +77,7 @@ export function Statistics() {
         <div className="row tight wrap">
           <Segment options={RANGES.map((r) => ({ value: r, label: t(`stats.range.${r}`) }))}
                    value={range} onChange={setRange} />
+          <Button small onClick={downloadHistoryCsv}>{t("stats.downloadHistoryCsv")}</Button>
           {isAdmin && (
             <Button small onClick={downloadDiagnosticReport} disabled={reportBusy}
                     title={t("stats.diagnosticReportHelp")}>

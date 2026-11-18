@@ -35,6 +35,8 @@ from .registry import register
 from .validation import DriverError, checked, sanitized
 
 REG_AC_POWER = 30775
+REG_DC_POWER_A = 30773   # s32 W, PV-Eingang A
+REG_DC_POWER_B = 30961   # s32 W, PV-Eingang B
 REG_DAILY_YIELD = 30535
 REG_TOTAL_YIELD = 30513
 REG_BATTERY_SOC = 30845
@@ -70,6 +72,14 @@ class _SmaBase:
 
     async def disconnect(self) -> None:
         await self.conn.close()
+
+    async def _s32(self, register: int) -> float | None:
+        """Optionales s32-Register lesen; SMA-NaN-Marker → None."""
+        try:
+            regs = await self.conn.read_holding(register, 2)
+        except Exception:  # noqa: BLE001 – Register gibt es nicht an jedem Gerät
+            return None
+        return nan_to_none(float(s32(regs, 0, "big")))
 
     async def _u32(self, register: int) -> float | None:
         """Optionales u32-Register lesen; SMA-NaN-Marker → None."""
@@ -114,8 +124,16 @@ class SmaInverter(_SmaBase, InverterDriver):
         if charge is not None or discharge is not None:
             battery_power = (charge or 0.0) - (discharge or 0.0)
 
+        # Mit Speicher (Hybrid, Sunny Boy Storage) enthält die AC-Leistung
+        # auch die Batterieentladung – nachts erschiene sie als Sonnenstrom.
+        # Dann zählt die DC-Leistung der PV-Eingänge (30773, 30961).
+        if soc is not None or battery_power is not None:
+            dc = [v for v in (await self._s32(REG_DC_POWER_A), await self._s32(REG_DC_POWER_B)) if v is not None]
+            if dc:
+                power = max(0.0, sum(dc))
+
         return InverterData(
-            pv_power=checked("pv_power", power, source="SMA Register 30775"),
+            pv_power=checked("pv_power", power, source="SMA Register 30775 bzw. 30773/30961"),
             daily_yield_kwh=sanitized("energy_kwh", None if daily is None else daily / 1000.0),
             total_yield_kwh=sanitized("energy_kwh", None if total is None else total / 1000.0),
             battery_soc=sanitized("battery_soc", soc),

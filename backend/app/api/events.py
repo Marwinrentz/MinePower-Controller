@@ -21,7 +21,7 @@ async def list_events(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    query = select(Event).order_by(Event.time.desc()).limit(min(limit, 1000))
+    query = select(Event).order_by(Event.time.desc()).limit(max(1, min(limit, 1000)))
     if level:
         query = query.where(Event.level == level)
     if category:

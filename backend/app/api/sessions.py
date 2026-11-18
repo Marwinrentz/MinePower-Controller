@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db import get_db
-from ..models import ChargeSession, User
+from ..models import ChargeSession, User, Vehicle
 from ..schemas import ChargeSessionOut
 from ..security import get_current_user, require_role
 
@@ -21,7 +21,8 @@ async def list_sessions(
     _: User = Depends(get_current_user),
 ):
     rows = await db.scalars(
-        select(ChargeSession).order_by(ChargeSession.started_at.desc()).limit(min(limit, 500)).offset(offset)
+        select(ChargeSession).order_by(ChargeSession.started_at.desc())
+        .limit(max(1, min(limit, 500))).offset(max(0, offset))
     )
     return rows.all()
 
@@ -39,8 +40,12 @@ async def assign_session(
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Session nicht gefunden")
     if user_id is not None:
+        if await db.get(User, user_id) is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Benutzer nicht gefunden")
         row.user_id = user_id
     if vehicle_id is not None:
+        if await db.get(Vehicle, vehicle_id) is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Fahrzeug nicht gefunden")
         row.vehicle_id = vehicle_id
     await db.commit()
     await db.refresh(row)

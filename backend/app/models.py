@@ -48,6 +48,11 @@ class User(Base):
     #: starten mit der laufenden Version – nach einer Neuinstallation gibt es
     #: also kein Hinweisfenster.
     last_seen_version: Mapped[str | None] = mapped_column(String(20), nullable=True, default=_current_version)
+    #: Letzter Passwortwechsel (ganze Sekunden). Anmelde-Tokens, die davor
+    #: ausgestellt wurden, gelten nicht mehr (siehe security.token_revoked).
+    password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: Persönliche Einstellungen der Oberfläche (z. B. BETA-Oberfläche an/aus).
+    prefs: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=dict)
 
 
 class ApiToken(Base):

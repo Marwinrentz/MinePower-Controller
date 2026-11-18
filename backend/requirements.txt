@@ -1,17 +1,61 @@
-fastapi>=0.115,<1
-uvicorn[standard]>=0.30,<1
-sqlalchemy[asyncio]>=2.0,<3
-asyncpg>=0.29,<1
-alembic>=1.13,<2
-pydantic>=2.7,<3
-email-validator>=2.1,<3
-pydantic-settings>=2.3,<3
-bcrypt>=4.1,<5
-PyJWT>=2.8,<3
-aiohttp>=3.9,<4
-# <3.8 gepinnt: ab 3.9 wird der 'slave='-Parameter umbenannt (device_id)
-pymodbus>=3.6,<3.8
-aiomqtt>=2.0,<3
-websockets>=13,<14
-tzdata
-cryptography>=42
+# Exakt gepinnte Laufzeit-Abhängigkeiten (erzeugt aus requirements.in).
+#
+# Das Image installiert genau diese Versionen – ein Build von heute und einer
+# in drei Monaten enthalten dasselbe. Aktualisieren:
+#
+#   python3.12 -m venv /tmp/v && /tmp/v/bin/pip install -r requirements.in
+#   /tmp/v/bin/pip freeze          # Ergebnis hier eintragen
+#   pip-audit -r requirements.txt  # muss ohne Befund sein
+#   pytest                         # muss grün sein
+#
+# Stand: geprüft mit pip-audit, keine bekannten Schwachstellen.
+
+# --- direkt verwendet (Versionsbereiche: requirements.in) ---
+aiohttp==3.14.5
+aiomqtt==2.5.1
+alembic==1.20.1
+asyncpg==0.32.0
+bcrypt==4.3.0
+cryptography==50.0.2
+email-validator==2.3.0
+fastapi==0.162.7
+pydantic-settings==2.16.3
+pydantic==2.14.3
+PyJWT==2.15.1
+pymodbus==3.7.4
+SQLAlchemy==2.1.8
+tzdata==2026.6
+uvicorn==0.54.0
+websockets==13.1
+
+# --- mitgezogen ---
+aiohappyeyeballs==2.7.1
+aiosignal==1.4.0
+annotated-doc==0.0.6
+annotated-types==0.8.0
+anyio==4.16.0
+attrs==26.1.0
+cffi==2.1.1
+click==8.5.1
+dnspython==2.9.2
+frozenlist==1.8.0
+greenlet==3.5.6
+h11==0.16.0
+httptools==0.9.0
+idna==3.20
+Mako==1.4.3
+MarkupSafe==3.0.4
+multidict==7.2.1
+opentelemetry-api==1.45.2
+paho-mqtt==2.2.0
+propcache==0.5.4
+pycparser==3.12
+pydantic_core==2.50.4
+python-dotenv==1.2.4
+PyYAML==6.0.3
+starlette==1.10.0
+typing-inspection==0.4.5
+typing_extensions==4.16.0
+uvloop==0.23.0
+watchfiles==1.3.0
+yarl==1.25.1

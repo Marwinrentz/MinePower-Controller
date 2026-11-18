@@ -9,10 +9,18 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install --no-compile -r requirements.txt
 
 COPY . .
+# Wie im All-in-One-Image: eigener Nutzer ohne Rechte (siehe docker-entrypoint.sh)
+RUN groupadd --gid 1000 minepower \
+    && useradd --uid 1000 --gid 1000 --no-create-home --home-dir /tmp --shell /usr/sbin/nologin minepower \
+    && mkdir -p /app/data /app/backups \
+    && chown minepower:minepower /app/data /app/backups \
+    && chmod 0755 /app/docker-entrypoint.sh
+ENV HOME=/tmp
 
 EXPOSE 8000
 
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

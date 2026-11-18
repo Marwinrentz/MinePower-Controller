@@ -44,6 +44,7 @@ backend/tools
 backend/scripts
 backend/pytest.ini
 backend/Dockerfile
+backend/requirements.in
 frontend/e2e
 **/.pytest_cache
 frontend/tsconfig.tsbuildinfo

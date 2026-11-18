@@ -10,7 +10,8 @@ Registerkarte (1-basiert wie in der Sungrow-Doku 'Communication Protocol of
 Residential Hybrid Inverter", beim Zugriff −1):
 
   13001 (Input)  Running-State (Bit 1 = lädt, Bit 2 = entlädt)
-  13022 (Input)  Batterie-Leistung W (Richtung über Running-State)
+  13022 (Input)  Batterie-Leistung W (je nach Firmware mit oder ohne
+                 Vorzeichen, siehe common.battery_power_w)
   13023 (Input)  Batterie-SoC 0,1 %
   13024 (Input)  Batterie-SoH 0,1 %
   13025 (Input)  Batterie-Temperatur 0,1 °C
@@ -51,7 +52,7 @@ from ..base import (
 from ..modbus_util import s16, u16
 from ..registry import register
 from ..validation import DeviceRejected, checked, sanitized
-from .common import SUNGROW_COMMON_FIELDS, SungrowDriverMixin, make_connection
+from .common import SUNGROW_COMMON_FIELDS, SungrowDriverMixin, battery_power_w, make_connection
 
 REG_RUNNING_STATE = 13001   # Input, Bitfeld
 REG_BATTERY_POWER = 13022   # Input, W
@@ -67,9 +68,6 @@ REG_MIN_SOC = 13059         # Holding, 0,1 %
 #: Block, der für den Modus-Readback gelesen wird (13050 … 13059)
 CONTROL_BLOCK_START = REG_EMS_MODE
 CONTROL_BLOCK_LEN = REG_MIN_SOC - REG_EMS_MODE + 1
-
-BIT_BAT_CHARGING = 0x0002
-BIT_BAT_DISCHARGING = 0x0004
 
 EMS_SELF_CONSUMPTION = 0
 EMS_FORCED = 2
@@ -196,11 +194,7 @@ class SungrowBattery(SungrowDriverMixin, BatteryDriver):
     async def read_data(self) -> BatteryData:
         state = u16(await self.conn.read_input(REG_RUNNING_STATE - 1, 1))
         regs = await self.conn.read_input(REG_BATTERY_POWER - 1, 4)
-        power = float(u16(regs, 0))
-        if state & BIT_BAT_DISCHARGING:
-            power = -power
-        elif not (state & BIT_BAT_CHARGING):
-            power = 0.0
+        power = battery_power_w(regs[0], state)
 
         extra: dict = {"Zustand (SoH)": f"{u16(regs, 2) * 0.1:.1f} %"}
         mode = BatteryMode.AUTO

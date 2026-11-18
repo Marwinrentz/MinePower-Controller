@@ -18,26 +18,61 @@ from ..security import get_current_user, hash_password, require_role
 from ..services.audit import log_event
 
 log = logging.getLogger(__name__)
-from ..core.secrets import protect_config, protect_settings, readable, strip_config, strip_settings
+from ..core.secrets import (SETTINGS_SECRETS, device_secret_keys, protect_config, protect_settings, readable,
+                            strip_config, strip_settings)
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
 EXPORT_VERSION = 1
 
 
-@router.get("/health")
-async def health():
-    """Ungeschützter Healthcheck für Docker/Monitoring."""
-    loop_ok = False
+#: Der Regelkreis gilt als stehend, wenn so lange kein Takt begonnen hat (s).
+#: Großzügig: Ein Takt darf auf langsame Geräte warten.
+LOOP_STALL_S = 180.0
+
+
+def loop_health() -> dict[str, Any]:
+    """Zustand des Regelkreises: läuft die Aufgabe, und kommen noch Takte?"""
+    import time as _time
+
     try:
         loop = runtime.get_loop()
-        loop_ok = loop._task is not None and not loop._task.done()
     except RuntimeError:
-        pass
+        return {"control_loop": "stopped", "healthy": False, "last_step_age_s": None}
+    running = loop._task is not None and not loop._task.done()
+    last = getattr(loop, "last_step_at", None)
+    age = None if last is None else round(_time.monotonic() - last, 1)
+    stalled = running and age is not None and age > max(LOOP_STALL_S, 6 * loop.cfg.interval_s)
+    state = "stalled" if stalled else ("running" if running else "stopped")
+    return {"control_loop": state, "healthy": running and not stalled, "last_step_age_s": age}
+
+
+def _health_body() -> tuple[dict[str, Any], bool]:
     from .. import __version__
 
-    return {"status": "ok", "control_loop": "running" if loop_ok else "stopped",
-            "version": __version__, "time": datetime.now(timezone.utc).isoformat()}
+    state = loop_health()
+    return ({"status": "ok" if state["healthy"] else "degraded", "control_loop": state["control_loop"],
+             "last_step_age_s": state["last_step_age_s"], "version": __version__,
+             "time": datetime.now(timezone.utc).isoformat()}, state["healthy"])
+
+
+@router.get("/health")
+async def health():
+    """Ungeschützte Auskunft für Oberfläche und Apps: Version und Zustand.
+    Antwortet immer mit 200 – auch eine Anlage mit stehendem Regelkreis muss
+    sich noch öffnen lassen, um nachzusehen. `status` nennt den Zustand."""
+    return _health_body()[0]
+
+
+@router.get("/ready")
+async def ready():
+    """Healthcheck für Docker und Monitoring: 503, wenn der Regelkreis nicht
+    läuft oder steht. Ohne ihn regelt nichts mehr, auch wenn die Oberfläche
+    noch antwortet; Docker markiert den Container dann als 'unhealthy'."""
+    from fastapi.responses import JSONResponse
+
+    body, healthy = _health_body()
+    return JSONResponse(body, status_code=200 if healthy else 503)
 
 
 @router.get("/changelog")
@@ -83,6 +118,88 @@ async def backup_status(_: User = Depends(require_role("admin"))):
     return backup.status()
 
 
+@router.get("/backups")
+async def list_backups(_: User = Depends(require_role("admin"))):
+    """Sicherungsdateien (Konfiguration, Verlauf), Speicherplatz und der
+    Zustand des Messwert-Puffers."""
+    from ..services import backup
+
+    out: dict[str, Any] = {"backups": backup.list_backups(), "status": backup.status(),
+                           "storage": await backup.storage_status()}
+    try:
+        out["measurements"] = runtime.get_loop().buffer.status()
+    except RuntimeError:
+        out["measurements"] = None
+    return out
+
+
+@router.post("/backups")
+async def create_backup(user: User = Depends(require_role("admin"))):
+    """Jetzt sichern: Konfiguration und Verlauf."""
+    from ..services import backup
+
+    config_path = await backup.run_once()
+    data_path = await backup.run_data_dump()
+    await log_event("Sicherung manuell erstellt", category="config", user_id=user.id)
+    return {"ok": True, "config": config_path.name, "data": data_path.name}
+
+
+@router.post("/backups/{name}/restore")
+async def restore_backup(name: str, user: User = Depends(require_role("admin"))):
+    """Eine Sicherung einspielen.
+
+    * Konfiguration: Geräte, Einstellungen, Zeitpläne und Fahrzeuge kommen
+      auf den Stand der Sicherung. Konten bleiben unverändert.
+    * Verlauf: füllt nur auf, was fehlt (Stundenwerte, Ladevorgänge)."""
+    from ..services import backup
+
+    try:
+        path = backup.resolve(name)
+    except FileNotFoundError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Sicherung nicht gefunden")
+    if name.startswith("pre-migration-"):
+        raise HTTPException(422, "Sicherungen von vor einer Schema-Migration lassen sich nur von Hand einspielen")
+    try:
+        if name.endswith(".jsonl.gz"):
+            counts = await backup.restore_data(path)
+            result: dict[str, Any] = {"ok": True, "kind": "data", **counts}
+        else:
+            data = backup.read_config(path)
+            # Vorher den jetzigen Stand sichern – das Einspielen ist sonst
+            # nicht rückgängig zu machen.
+            await backup.run_once()
+            devices = await backup.restore_config(path, data)
+            result = {"ok": True, "kind": "config", "devices": devices}
+    except ConfigImportError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except (ValueError, KeyError, OSError) as exc:
+        raise HTTPException(422, f"Sicherung nicht lesbar: {exc}") from exc
+    await log_event(f"Sicherung eingespielt: {name}", category="config", user_id=user.id)
+    try:
+        runtime.get_loop().request_reload()
+    except RuntimeError:
+        pass
+    return result
+
+
+@router.get("/backups/{name}/download")
+async def download_backup(name: str, _: User = Depends(require_role("admin"))):
+    """Verlaufssicherung herunterladen (Stundenwerte, Ladevorgänge,
+    Ereignisse – keine Zugangsdaten). Die Konfiguration gibt es als Export
+    ohne Zugangsdaten unter /api/system/export."""
+    from fastapi.responses import FileResponse
+
+    from ..services import backup
+
+    if not name.endswith(".jsonl.gz"):
+        raise HTTPException(422, "Nur Verlaufssicherungen lassen sich herunterladen")
+    try:
+        path = backup.resolve(name)
+    except FileNotFoundError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Sicherung nicht gefunden")
+    return FileResponse(path, media_type="application/gzip", filename=name)
+
+
 @router.get("/export")
 async def export_config(db: AsyncSession = Depends(get_db), _: User = Depends(require_role("admin"))):
     """Komplette Konfiguration als JSON (Backup / Übertragung auf andere Instanz).
@@ -125,7 +242,10 @@ async def import_config(data: dict[str, Any], user: User = Depends(require_role(
     """Konfiguration aus Export-JSON wiederherstellen (ersetzt Geräte & Einstellungen)."""
     if data.get("version") != EXPORT_VERSION:
         raise HTTPException(422, "Unbekannte Export-Version")
-    await apply_config_import(data)
+    try:
+        await apply_config_import(data)
+    except ConfigImportError as exc:
+        raise HTTPException(422, str(exc)) from exc
     await log_event("Konfiguration importiert", category="config", user_id=user.id)
     try:
         runtime.get_loop().request_reload()
@@ -134,53 +254,141 @@ async def import_config(data: dict[str, Any], user: User = Depends(require_role(
     return {"ok": True}
 
 
+class ConfigImportError(ValueError):
+    """Die Importdatei passt nicht (Aufbau, Treiber, Werte)."""
+
+
+#: Obergrenzen einer Importdatei – eine Anlage hat eine Handvoll Geräte.
+_IMPORT_MAX = {"devices": 200, "schedules": 500, "vehicles": 100}
+
+
+def _check_import(data: dict[str, Any]) -> None:
+    """Aufbau und Werte prüfen, bevor irgendetwas geändert wird."""
+    from .devices import validate_device_settings
+
+    for key, limit in _IMPORT_MAX.items():
+        items = data.get(key, [])
+        if not isinstance(items, list) or len(items) > limit or not all(isinstance(i, dict) for i in items):
+            raise ConfigImportError(f"'{key}' muss eine Liste mit höchstens {limit} Einträgen sein")
+    if not isinstance(data.get("settings") or {}, dict):
+        raise ConfigImportError("'settings' muss ein Objekt sein")
+    for dev in data.get("devices", []):
+        name = str(dev.get("name") or "").strip()
+        if not name or len(name) > 120:
+            raise ConfigImportError("Gerät ohne gültigen Namen")
+        try:
+            meta = registry.get_driver_class(str(dev.get("driver_id"))).meta
+        except KeyError:
+            raise ConfigImportError(f"{name}: unbekannter Treiber '{dev.get('driver_id')}'") from None
+        if meta.category.value != dev.get("category"):
+            raise ConfigImportError(f"{name}: Kategorie passt nicht zum Treiber")
+        if not isinstance(dev.get("config", {}), dict):
+            raise ConfigImportError(f"{name}: 'config' muss ein Objekt sein")
+        try:
+            validate_device_settings(meta.category.value, dev.get("settings", {}))
+        except HTTPException as exc:
+            raise ConfigImportError(f"{name}: {exc.detail}") from exc
+    for sch in data.get("schedules", []):
+        for key in ("device_id", "start_time", "end_time"):
+            if key not in sch:
+                raise ConfigImportError(f"Zeitplan ohne '{key}'")
+    for veh in data.get("vehicles", []):
+        if not str(veh.get("name") or "").strip():
+            raise ConfigImportError("Fahrzeug ohne Namen")
+
+
 async def apply_config_import(data: dict[str, Any], create_admin_if_missing: bool = False) -> None:
-    """Import-Kern – auch vom Headless-Start (startup.py) genutzt."""
+    """Import-Kern – auch vom Headless-Start (startup.py) genutzt.
+
+    Bestehende Geräte werden **an Ort und Stelle** aktualisiert, wenn die
+    Datei sie wiedererkennt (gleiche ID und gleicher Treiber). Früher wurden
+    alle Geräte gelöscht und neu angelegt – damit verschwanden die
+    Ladevorgänge (Fremdschlüssel mit Löschweitergabe) und alle gespeicherten
+    Zugangsdaten, weil der Export sie nicht enthält. Jetzt bleiben beide
+    erhalten; gelöscht wird nur, was in der Datei nicht mehr vorkommt."""
+    _check_import(data)
     async with async_session() as session:
-        # Geräte ersetzen; Mapping alter → neuer IDs für Priorität/Zeitpläne
-        old_devices = (await session.scalars(select(Device))).all()
-        for d in old_devices:
-            await session.delete(d)
+        existing = {d.id: d for d in (await session.scalars(select(Device))).all()}
         old_schedules = (await session.scalars(select(Schedule))).all()
         for s in old_schedules:
             await session.delete(s)
-        await session.flush()
 
+        # Mapping alter → neuer IDs für Priorität/Zeitpläne
         id_map: dict[int, int] = {}
+        kept: set[int] = set()
         for dev in data.get("devices", []):
-            row = Device(
-                name=dev["name"], category=dev["category"], driver_id=dev["driver_id"],
-                config=protect_config(dev["driver_id"], dev.get("config", {})), settings=dev.get("settings", {}),
-                enabled=dev.get("enabled", True),
-            )
-            session.add(row)
-            await session.flush()
-            if "_id" in dev:
-                id_map[int(dev["_id"])] = row.id
+            driver_id = dev["driver_id"]
+            config = dev.get("config", {}) or {}
+            old_id = int(dev["_id"]) if str(dev.get("_id", "")).lstrip("-").isdigit() else None
+            row = existing.get(old_id) if old_id is not None else None
+            if row is not None and row.driver_id == driver_id and row.id not in kept:
+                # Leere Zugangsdaten in der Datei = gespeicherten Wert behalten
+                secrets = device_secret_keys(driver_id)
+                merged = {k: v for k, v in config.items() if not (k in secrets and v in (None, ""))}
+                row.name = dev["name"]
+                row.category = dev["category"]
+                row.config = protect_config(driver_id, merged, row.config or {})
+                row.settings = dev.get("settings", {}) or {}
+                row.enabled = bool(dev.get("enabled", True))
+            else:
+                row = Device(
+                    name=dev["name"], category=dev["category"], driver_id=driver_id,
+                    config=protect_config(driver_id, config), settings=dev.get("settings", {}) or {},
+                    enabled=bool(dev.get("enabled", True)),
+                )
+                session.add(row)
+                await session.flush()
+            kept.add(row.id)
+            if old_id is not None:
+                id_map[old_id] = row.id
+        for device_id, row in existing.items():
+            if device_id not in kept:
+                await session.delete(row)
+        await session.flush()
 
         for key, value in (data.get("settings") or {}).items():
             if key in ("system", "runtime", "schema"):
                 continue  # instanzeigen, siehe export_config
-            if key == "priority" and id_map:
-                value = {"order": [id_map.get(i, i) for i in value.get("order", [])]}
-            if isinstance(value, dict):
-                value = protect_settings(key, value)
+            if not isinstance(value, dict):
+                continue
+            if key == "priority":
+                order = value.get("order", [])
+                value = {"order": [id_map.get(i, i) for i in order if isinstance(i, int) and id_map.get(i, i) in kept]}
             row = await session.get(Setting, key)
+            old_value = row.value if row is not None and isinstance(row.value, dict) else None
+            # Wie bei den Geräten: leere Zugangsdaten überschreiben nichts.
+            secret_keys = SETTINGS_SECRETS.get(key, set())
+            value = {k: v for k, v in value.items() if not (k in secret_keys and v in (None, "") and old_value)}
+            value = protect_settings(key, value, old_value)
             if row is None:
                 session.add(Setting(key=key, value=value))
             else:
                 row.value = value
 
         for sch in data.get("schedules", []):
-            device_id = id_map.get(int(sch["device_id"]), sch["device_id"])
+            try:
+                device_id = id_map.get(int(sch["device_id"]), int(sch["device_id"]))
+            except (TypeError, ValueError):
+                continue
+            if device_id not in kept:
+                continue  # Zeitplan eines Geräts, das es nicht (mehr) gibt
             session.add(Schedule(device_id=device_id, days_mask=sch.get("days_mask", 127),
-                                 start_time=sch["start_time"], end_time=sch["end_time"],
+                                 start_time=str(sch["start_time"])[:5], end_time=str(sch["end_time"])[:5],
                                  enabled=sch.get("enabled", True)))
 
+        # Fahrzeuge über den Namen zuordnen: Ein zweiter Import legte sie
+        # sonst jedes Mal doppelt an.
+        vehicles = {v.name: v for v in (await session.scalars(select(Vehicle))).all()}
         for veh in data.get("vehicles", []):
-            session.add(Vehicle(name=veh["name"], capacity_kwh=veh.get("capacity_kwh", 60),
-                                soc_source=veh.get("soc_source", "none"),
-                                default_target_soc=veh.get("default_target_soc", 80)))
+            name = str(veh["name"]).strip()[:120]
+            row = vehicles.get(name)
+            if row is None:
+                row = Vehicle(name=name)
+                session.add(row)
+                vehicles[name] = row
+            row.capacity_kwh = float(veh.get("capacity_kwh", 60) or 60)
+            row.soc_source = str(veh.get("soc_source", "none"))[:20]
+            row.default_target_soc = int(veh.get("default_target_soc", 80) or 80)
 
         if create_admin_if_missing:
             users = await session.scalar(select(func.count(User.id)))
@@ -382,6 +590,9 @@ async def diagnostics(_: User = Depends(get_current_user)):
         "regulation_config": vars(loop.cfg),
         "priority": loop.priority,
         "paused": loop.paused,
+        # Regelkreis (läuft/steht) und Messwert-Puffer (wartet etwas auf die Datenbank?)
+        "health": loop_health(),
+        "measurements": loop.buffer.status(),
         "grid_smoothed": loop.grid_smoother.value,
         # Regelgüte auf einen Blick: Wie ruhig ist das Wetter, wie eng wird
         # dadurch geregelt, und wie viel Überschuss geht gerade verloren?
@@ -416,6 +627,11 @@ async def diagnostics(_: User = Depends(get_current_user)):
                 "online": d.online, "failures": d.failures, "last_error": d.last_error,
                 "command_error": d.command_error,
                 "last_seen": d.last_seen.isoformat() if d.last_seen else None,
+                # Antwortzeit (letzte, gleitendes Mittel) und Zähler seit dem Start
+                "read_ms": None if d.read_ms is None else round(d.read_ms, 1),
+                "read_ms_avg": None if d.read_ms_avg is None else round(d.read_ms_avg, 1),
+                "reads_ok": d.reads_ok, "reads_failed": d.reads_failed,
+                "last_error_at": d.last_error_at.isoformat() if d.last_error_at else None,
                 "raw_data": d.data.model_dump() if d.data is not None else None,
                 "decision": d.decision,
                 "sent": {k: v for k, v in d.sent.items()},
@@ -423,6 +639,131 @@ async def diagnostics(_: User = Depends(get_current_user)):
             for d in loop.devices.values()
         ],
     }
+
+
+# ---------------------------------------------------------------- Protokoll, Export
+
+@router.get("/logs")
+async def logs(
+    level: str = Query("info"),
+    q: str = Query("", max_length=200),
+    limit: int = Query(200, ge=1, le=2000),
+    after_id: int = Query(0, ge=0),
+    _: User = Depends(require_role("admin")),
+):
+    """Die jüngsten Protokollzeilen der Anwendung (im Speicher, seit dem
+    Start), gefiltert nach Mindeststufe und Suchtext. Zugangsdaten sind
+    geschwärzt. `after_id` liefert nur neuere Zeilen (für das Mitlesen)."""
+    from ..core import logbuffer
+
+    return {"entries": logbuffer.entries(level=level, query=q, limit=limit, after_id=after_id)}
+
+
+@router.post("/notify-test")
+async def notify_test(user: User = Depends(require_role("admin"))):
+    """Testnachricht an alle eingerichteten Kanäle; Ergebnis je Kanal."""
+    loop = runtime.get_loop()
+    if loop.notifier is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Benachrichtigungen sind nicht verfügbar")
+    await loop.notifier.refresh_config()
+    result = await loop.notifier.deliver("Testnachricht – die Benachrichtigung funktioniert.")
+    if not result:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Kein Kanal eingerichtet")
+    return {"ok": all(v is None for v in result.values()),
+            "channels": [{"channel": k, "ok": v is None, "error": v} for k, v in result.items()]}
+
+
+async def _or_error(fn) -> Any:
+    """Einen Teil des Exports beschaffen; ein Fehler dabei wird als Text
+    eingetragen, statt den ganzen Export zu verhindern."""
+    import inspect
+
+    try:
+        result = fn()
+        return await result if inspect.isawaitable(result) else result
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"{type(exc).__name__}: {str(exc)[:200]}"}
+
+
+@router.get("/diagnostic-export")
+async def diagnostic_export(
+    range: str = Query("24h"),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role("admin")),
+):
+    """Diagnose als ZIP für den Support: Bericht, Protokoll und Systemangaben.
+
+    **Anonymisiert:** Zugangsdaten fehlen (wie im Diagnosebericht), dazu
+    werden Netzwerkadressen, E-Mail-Adressen, Fahrgestellnummern und die
+    Namen der Geräte durch Platzhalter ersetzt – gleiche Werte bekommen
+    denselben Platzhalter, damit sich die Dateien weiter aufeinander
+    beziehen lassen."""
+    import io
+    import json
+    import platform
+    import zipfile
+
+    from fastapi.responses import Response
+
+    from .. import __version__
+    from ..core import logbuffer
+    from ..services import backup
+    from ..services.anonymize import Anonymizer
+
+    devices = (await db.scalars(select(Device))).all()
+    db.expunge_all()
+    try:
+        report: dict[str, Any] = await diagnostic_report(range=range, db=db, user=user)
+    except Exception as exc:  # noqa: BLE001
+        # Gerade wenn etwas klemmt (Datenbank, Auswertung), wird der Export
+        # gebraucht: dann ohne Verlauf, mit dem, was der Regelkreis weiß.
+        await db.rollback()
+        loop = runtime.get_loop()
+        from ..services.diagnostics import findings
+
+        report = {
+            "report_error": f"{type(exc).__name__}: {str(exc).splitlines()[0][:300]}",
+            "findings": findings(loop, list(loop.devices.values()), {}),
+            "live": loop.snapshot,
+            "devices": [{"id": d.id, "name": d.name, "category": d.category, "driver_id": d.driver_id,
+                         "enabled": d.enabled, "config": _redact_config(d.driver_id, d.config or {}),
+                         "settings": d.settings or {}} for d in devices],
+        }
+    anon = Anonymizer(device_names=[d.name for d in devices])
+    try:
+        from .. import startup
+
+        current, head = await startup._schema_revisions()
+    except Exception:  # noqa: BLE001
+        current = head = None
+    system = {
+        "version": __version__, "python": platform.python_version(), "platform": platform.platform(),
+        "generated_at": datetime.now(timezone.utc).isoformat(), "health": loop_health(),
+        "schema": {"database": current, "program": head},
+        "storage": await _or_error(backup.storage_status), "backups": await _or_error(backup.status),
+        "measurements": runtime.get_loop().buffer.status(),
+        "drivers": sorted({d.driver_id for d in devices}),
+    }
+    lines = [f"{e['time']} {e['level'].upper():7s} {e['logger']}: {e['message']}"
+             for e in logbuffer.entries(level="info", limit=logbuffer.CAPACITY)]
+    readme = (
+        "MinePower Diagnose-Export\n\n"
+        "report.json  Befunde, Regelung, Verlauf und Ereignisse des Zeitraums\n"
+        "system.json  Version, Zustand des Regelkreises, Speicherplatz, Sicherungen\n"
+        "log.txt      Protokoll seit dem Start der Anwendung\n\n"
+        "Anonymisiert: keine Zugangsdaten; Adressen, E-Mail-Adressen, Fahrgestellnummern und\n"
+        "Gerätenamen sind durch Platzhalter ersetzt.\n"
+    )
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("LIESMICH.txt", readme)
+        zf.writestr("report.json", json.dumps(anon.scrub(report), ensure_ascii=False, indent=1, default=str))
+        zf.writestr("system.json", json.dumps(anon.scrub(system), ensure_ascii=False, indent=1, default=str))
+        zf.writestr("log.txt", anon.text("\n".join(lines)) + "\n")
+    await log_event("Diagnose-Export erstellt", category="system", user_id=user.id)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M")
+    return Response(buf.getvalue(), media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="minepower-diagnose-{stamp}.zip"'})
 
 
 # ---------------------------------------------------------------- Demo-Szenarien

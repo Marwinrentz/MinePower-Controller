@@ -7,6 +7,9 @@
  *  statt bis zum nächsten Datenabruf in den alten Farben stehen zu bleiben.
  */
 import * as echarts from "echarts";
+// ECharts 6 hat neue Standardwerte (Farben, Legende, Achsen). Das v5-Theme
+// hält die Diagramme optisch auf dem bisherigen Stand.
+import "echarts/theme/v5";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n";
 import { get } from "../lib/api";
@@ -33,7 +36,7 @@ function EChart({ option, height, loading = false }: { option: echarts.EChartsOp
 
   useEffect(() => {
     if (!ref.current) return;
-    chartRef.current = echarts.init(ref.current);
+    chartRef.current = echarts.init(ref.current, "v5");
     const onResize = () => chartRef.current?.resize();
     window.addEventListener("resize", onResize);
     return () => {

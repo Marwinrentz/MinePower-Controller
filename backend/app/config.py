@@ -31,7 +31,20 @@ class AppSettings(BaseSettings):
     demo_mode: bool = False
     headless_config: str = ""  # Pfad zu gemounteter JSON-Config (optional)
 
-    cors_origins: str = "*"
+    #: Zusätzliche Ursprünge für Browser-Zugriffe von fremden Seiten
+    #: (kommagetrennt, ``*`` = alle). Leer = keine: Die mitgelieferte
+    #: Oberfläche läuft auf demselben Ursprung und braucht kein CORS, die
+    #: Apps und KI-Konnektoren ebenso wenig.
+    cors_origins: str = ""
+    #: Interaktive API-Dokumentation (/docs, /redoc, /openapi.json).
+    #: Standardmäßig aus – sie beschreibt jede Schnittstelle ohne Anmeldung.
+    api_docs: bool = False
+    #: Reverse-Proxys, deren X-Forwarded-For geglaubt wird (kommagetrennte
+    #: IPs oder Netze, z. B. 172.17.0.0/16 für Nginx Proxy Manager).
+    #: Leer = keinem. Ohne diese Angabe sehen hinter einem Proxy alle
+    #: Anmeldungen dieselbe Adresse – 30 Fehlversuche von irgendwem sperrten
+    #: dann die Anmeldung für alle.
+    trusted_proxies: str = ""
 
     # Optionale MQTT-Integration (mqtt://host:port oder leer = deaktiviert)
     mqtt_url: str = ""
@@ -46,6 +59,12 @@ class AppSettings(BaseSettings):
     data_dir: str = "/app/data"
     backup_interval_h: float = 6.0
     backup_keep: int = 30
+    #: Datensicherung (Stundenwerte, Ladevorgänge, Ereignisse): Abstand und
+    #: Anzahl aufbewahrter Dateien.
+    backup_data_interval_h: float = 24.0
+    backup_data_keep: int = 7
+    #: Aufbewahrung der Rohmesswerte in Tagen. Stundenwerte bleiben länger.
+    raw_retention_days: int = 90
 
     class Config:
         env_file = ".env"

@@ -10,6 +10,13 @@ export type User = {
   disabled: boolean;
   /** Zuletzt gesehene Version (Hinweisfenster nach Updates) */
   last_seen_version: string | null;
+  /** Persönliche Einstellungen der Oberfläche (je Konto, im Server gespeichert) */
+  prefs: UserPrefs;
+};
+
+export type UserPrefs = {
+  /** Neue Oberfläche (BETA) statt der bisherigen */
+  beta_ui?: boolean;
 };
 
 export type ConfigField = {

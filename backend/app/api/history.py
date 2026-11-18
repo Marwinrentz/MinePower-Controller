@@ -33,12 +33,29 @@ async def get_history(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
+    from .. import startup
+
     span, bucket = RANGES.get(range, RANGES["24h"])
     since = datetime.now(timezone.utc) - span
     field_list = [f.strip() for f in fields.split(",") if f.strip()][:12]
+    # Lange Zeiträume aus den Stundenwerten: Die Rohdaten reichen nur
+    # RAW_RETENTION_DAYS zurück, das Jahr zeigte deshalb nur ein Quartal.
+    hourly = startup.HOURLY_VIEW and span >= timedelta(days=30)
 
     result: dict[str, list[dict]] = {}
     for field in field_list:
+        params = {"bucket": bucket, "field": field, "source": source, "since": since}
+        if hourly:
+            rows = await db.execute(
+                text(
+                    "SELECT time_bucket(:bucket, bucket) AS ts, avg(avg_value) AS val "
+                    "FROM measurements_hourly WHERE field = :field AND source = :source AND bucket >= :since "
+                    "GROUP BY ts ORDER BY ts"
+                ),
+                params,
+            )
+            result[field] = [{"time": r.ts.isoformat(), "value": round(r.val, 1)} for r in rows]
+            continue
         # time_bucket ist Timescale-spezifisch; date_bin als Fallback (PG14+)
         try:
             rows = await db.execute(
@@ -48,7 +65,7 @@ async def get_history(
                     "FROM measurements WHERE field = :field AND source = :source AND time >= :since "
                     "GROUP BY ts ORDER BY ts"
                 ),
-                {"bucket": bucket, "field": field, "source": source, "since": since},
+                params,
             )
         except Exception:  # noqa: BLE001 – reines PostgreSQL ohne Timescale
             await db.rollback()
@@ -58,10 +75,45 @@ async def get_history(
                     "FROM measurements WHERE field = :field AND source = :source AND time >= :since "
                     "GROUP BY ts ORDER BY ts"
                 ),
-                {"bucket": bucket, "field": field, "source": source, "since": since},
+                params,
             )
         result[field] = [{"time": r.ts.isoformat(), "value": round(r.val, 1)} for r in rows]
     return result
+
+
+#: Größter Abstand zweier Messwerte, der als durchgehende Messung zählt (s)
+MAX_SAMPLE_GAP_S = 300.0
+
+_DAILY_RAW_SQL = """
+    WITH s AS (
+        SELECT time, field, value,
+               extract(epoch FROM (lead(time) OVER (PARTITION BY field ORDER BY time) - time)) AS dt
+        FROM measurements
+        WHERE source = 'site' AND time >= :since AND field IN ('pv_power', 'house_power', 'grid_power')
+    )
+    SELECT date_trunc('day', time) AS day, field,
+           sum(GREATEST(value, 0) * LEAST(COALESCE(dt, 0), :gap)) / 3600000.0 AS pos_kwh,
+           sum(GREATEST(-value, 0) * LEAST(COALESCE(dt, 0), :gap)) / 3600000.0 AS neg_kwh
+    FROM s GROUP BY day, field ORDER BY day
+"""
+
+_DAILY_HOURLY_SQL = """
+    SELECT date_trunc('day', bucket) AS day, field,
+           sum(avg_pos * dur) / 3600000.0 AS pos_kwh,
+           sum(-avg_neg * dur) / 3600000.0 AS neg_kwh
+    FROM (
+        SELECT bucket, field, avg_pos, avg_neg,
+               LEAST(3600.0, CASE
+                    WHEN samples > 1 THEN extract(epoch FROM (last_time - first_time)) * samples / (samples - 1)
+                    -- ein einzelner Wert genau zur vollen Stunde ist ein aus der
+                    -- Sicherung eingespielter Stundenwert und gilt für die ganze Stunde
+                    WHEN first_time = bucket THEN 3600.0
+                    ELSE 0 END) AS dur
+        FROM measurements_hourly
+        WHERE source = 'site' AND bucket >= :since AND field IN ('pv_power', 'house_power', 'grid_power')
+    ) h
+    GROUP BY day, field ORDER BY day
+"""
 
 
 @router.get("/energy")
@@ -70,34 +122,61 @@ async def energy_balance(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    """Tages-Energiebilanz (kWh) aus den Leistungs-Zeitreihen integriert."""
+    """Tages-Energiebilanz (kWh) aus den Leistungs-Zeitreihen integriert.
+
+    Jeder Messwert gilt bis zum nächsten, höchstens MAX_SAMPLE_GAP_S. Die
+    frühere Rechnung (Summe mal mittlerer Abstand) lag bei Bezug und
+    Einspeisung daneben: Der Abstand wurde nur aus den Werten einer Richtung
+    bestimmt, zwei Stunden Bezug am Abend zählten damit wie ein ganzer Tag."""
+    from .. import startup
+
     span, _bucket = RANGES.get(range, RANGES["7d"])
     since = datetime.now(timezone.utc) - span
-    rows = await db.execute(
-        text(
-            """
-            SELECT date_trunc('day', time) AS day, field,
-                   sum(value) * (extract(epoch FROM (max(time) - min(time))) / NULLIF(count(*) - 1, 0)) / 3600000.0 AS kwh
-            FROM measurements
-            WHERE source = 'site' AND time >= :since
-              AND field IN ('pv_power', 'house_power')
-            GROUP BY day, field
-
-            UNION ALL
-
-            SELECT date_trunc('day', time) AS day,
-                   CASE WHEN value >= 0 THEN 'grid_import' ELSE 'grid_export' END AS field,
-                   sum(abs(value)) * (extract(epoch FROM (max(time) - min(time))) / NULLIF(count(*) - 1, 0)) / 3600000.0 AS kwh
-            FROM measurements
-            WHERE source = 'site' AND field = 'grid_power' AND time >= :since
-            GROUP BY day, CASE WHEN value >= 0 THEN 'grid_import' ELSE 'grid_export' END
-            ORDER BY day
-            """
-        ),
-        {"since": since},
-    )
+    if startup.HOURLY_VIEW and span > timedelta(days=30):
+        rows = await db.execute(text(_DAILY_HOURLY_SQL), {"since": since})
+    else:
+        rows = await db.execute(text(_DAILY_RAW_SQL), {"since": since, "gap": MAX_SAMPLE_GAP_S})
     out: dict[str, dict[str, float]] = {}
     for r in rows:
-        day = r.day.date().isoformat()
-        out.setdefault(day, {})[r.field] = round(r.kwh or 0.0, 2)
+        day = out.setdefault(r.day.date().isoformat(), {})
+        if r.field == "grid_power":
+            day["grid_import"] = round(r.pos_kwh or 0.0, 2)
+            day["grid_export"] = round(r.neg_kwh or 0.0, 2)
+        else:
+            day[r.field] = round(r.pos_kwh or 0.0, 2)
     return out
+
+
+@router.get("/export.csv")
+async def export_history_csv(
+    fields: str = Query("pv_power,grid_power,house_power,wallbox_power,water_power,battery_power,battery_soc"),
+    range: str = Query("24h"),
+    source: str = Query("site"),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Verlauf als CSV (Semikolon, Dezimalkomma – öffnet in Excel direkt).
+    Eine Zeile je Zeitpunkt, eine Spalte je Größe; fehlende Werte bleiben leer."""
+    import csv
+    import io
+
+    from fastapi.responses import Response
+
+    data = await get_history(fields=fields, range=range, source=source, db=db, _=user)
+    names = list(data)
+    by_time: dict[str, dict[str, float]] = {}
+    for name, points in data.items():
+        for point in points:
+            by_time.setdefault(point["time"], {})[name] = point["value"]
+    buf = io.StringIO()
+    writer = csv.writer(buf, delimiter=";")
+    writer.writerow(["Zeit (UTC)", *names])
+    for when in sorted(by_time):
+        row = by_time[when]
+        writer.writerow([when, *("" if row.get(n) is None else f"{row[n]:.1f}".replace(".", ",") for n in names)])
+    safe_range = range if range in RANGES else "24h"
+    return Response(
+        "\ufeff" + buf.getvalue(),  # BOM: Excel erkennt UTF-8
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="minepower_verlauf_{safe_range}.csv"'},
+    )

@@ -14,3 +14,11 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     </I18nProvider>
   </React.StrictMode>,
 );
+
+// Service Worker nur im fertigen Build: schneller Start der Handy-App und
+// gewohnte Oberfläche, wenn der Server kurz weg ist (siehe public/sw.js).
+if (import.meta.env.PROD && "serviceWorker" in navigator && window.isSecureContext) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+  });
+}

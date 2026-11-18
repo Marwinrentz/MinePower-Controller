@@ -12,20 +12,24 @@ import {
   ActionButton, Badge, Card, CardHead, Empty, PageHead, Segment, StatusDot,
 } from "../components/ui";
 import { useI18n } from "../i18n";
-import { get } from "../lib/api";
+import { get, post } from "../lib/api";
 import { fmtAgo, fmtClock, fmtDay, fmtNum, fmtW } from "../lib/format";
 import type { AppEvent, Finding } from "../lib/types";
 import { useAuth } from "../store/auth";
 import { toast } from "../store/toast";
 
-type Tab = "findings" | "devices" | "regulation" | "events";
+type Tab = "findings" | "devices" | "regulation" | "events" | "log";
 type Range = "24h" | "7d" | "30d";
 
 type DiagDevice = {
   id: number; name: string; driver_id: string; category: string; online: boolean; failures: number;
   last_error: string | null; command_error: string | null; last_seen: string | null;
   decision: Record<string, unknown>; sent: Record<string, unknown>;
+  /** Antwortzeit der letzten Abfrage und gleitendes Mittel (ms) */
+  read_ms?: number | null; read_ms_avg?: number | null;
+  reads_ok?: number; reads_failed?: number;
 };
+type LogEntry = { id: number; time: string; level: string; logger: string; message: string };
 type Write = { time: string; register: number; value: number; readback: number | null; ok: boolean; error: string | null; ms?: number };
 type Diagnostics = {
   devices: DiagDevice[];
@@ -38,6 +42,8 @@ type Diagnostics = {
   waste_reason: string | null;
   gap_filled_w: number | null;
   battery_control?: { devices: { id: number; name: string; writes: Write[] }[] };
+  health?: { control_loop: string; healthy: boolean; last_step_age_s: number | null };
+  measurements?: { spool_bytes: number; failures: number; last_error: string | null } | null;
 };
 
 const LEVEL_ICON: Record<Finding["level"], IconName> = { error: "warning", warn: "warning", info: "info", ok: "check" };
@@ -153,10 +159,28 @@ function useDiagnostics(): Diagnostics | null {
 function Devices() {
   const { t } = useI18n();
   const diag = useDiagnostics();
+  const isAdmin = useAuth((s) => s.user?.role === "admin");
+  const [testing, setTesting] = useState<number | null>(null);
   if (!diag) return <div className="skeleton" style={{ height: 240 }} />;
   const writes = diag.battery_control?.devices ?? [];
+  const test = async (d: DiagDevice) => {
+    setTesting(d.id);
+    try {
+      const r = await post<{ ok: boolean; message: string }>(`/api/devices/${d.id}/test`);
+      if (r.ok) toast.ok(r.message || t("diag.testOk", { name: d.name }));
+      else toast.err(`${d.name}: ${r.message}`);
+    } catch (e) {
+      toast.err(e instanceof Error ? e.message : String(e));
+    } finally { setTesting(null); }
+  };
   return (
     <>
+      {diag.health && !diag.health.healthy && (
+        <Card><p className="err-text" role="alert">{t("diag.loopStalled")}</p></Card>
+      )}
+      {diag.measurements && diag.measurements.failures > 0 && (
+        <Card><p className="err-text" role="alert">{t("diag.spoolWaiting")}: {diag.measurements.last_error}</p></Card>
+      )}
       <ul className="diag-devices">
         {diag.devices.map((d) => (
           <li key={d.id} className="card diag-device">
@@ -169,6 +193,14 @@ function Devices() {
             </div>
             <dl className="kv">
               <dt>{t("diag.lastSeen")}</dt><dd>{fmtAgo(d.last_seen)}</dd>
+              {d.read_ms != null && (
+                <><dt>{t("diag.latency")}</dt>
+                  <dd className="num">{t("diag.latencyValue", { last: Math.round(d.read_ms), avg: Math.round(d.read_ms_avg ?? d.read_ms) })}</dd></>
+              )}
+              {d.reads_ok != null && (
+                <><dt>{t("diag.reads")}</dt>
+                  <dd className="num">{t("diag.readsValue", { ok: d.reads_ok, failed: d.reads_failed ?? 0 })}</dd></>
+              )}
               {d.last_error && (<><dt>{t("diag.lastError")}</dt><dd className="err-text">{d.last_error}</dd></>)}
               {d.command_error && (<><dt>{t("diag.commandError")}</dt><dd className="err-text">{d.command_error}</dd></>)}
               {typeof d.decision?.reason === "string" && (<><dt>{t("diag.decision")}</dt><dd>{String(d.decision.reason)}</dd></>)}
@@ -176,6 +208,11 @@ function Devices() {
                 <><dt>{t("diag.sent")}</dt><dd className="num">{Object.entries(d.sent).map(([k, v]) => `${k}: ${String(v)}`).join(" · ")}</dd></>
               )}
             </dl>
+            {isAdmin && (
+              <div className="form-actions start">
+                <ActionButton size="sm" disabled={testing !== null} onClick={() => test(d)}>{t("diag.test")}</ActionButton>
+              </div>
+            )}
           </li>
         ))}
       </ul>
@@ -340,17 +377,107 @@ function Events() {
 
 /* ------------------------------------------------------------ Seite */
 
-const TABS: { key: Tab; label: string; icon: IconName }[] = [
+/** Protokoll der Anwendung zum Mitlesen: Mindeststufe, Textfilter, und alle
+ *  paar Sekunden die neuen Zeilen (über die laufende Nummer, nicht neu laden). */
+function LiveLog() {
+  const { t } = useI18n();
+  const [level, setLevel] = useState<"info" | "warning" | "error">("info");
+  const [query, setQuery] = useState("");
+  const [paused, setPaused] = useState(false);
+  const [lines, setLines] = useState<LogEntry[] | null>(null);
+  const lastId = useRef(0);
+
+  useEffect(() => {
+    let alive = true;
+    lastId.current = 0;
+    setLines(null);
+    const load = () => {
+      const params = new URLSearchParams({ level, q: query, limit: "500", after_id: String(lastId.current) });
+      get<{ entries: LogEntry[] }>(`/api/system/logs?${params}`).then((r) => {
+        if (!alive) return;
+        if (r.entries.length) lastId.current = r.entries[r.entries.length - 1].id;
+        setLines((old) => [...(old ?? []), ...r.entries].slice(-1000));
+      }).catch(() => alive && setLines((old) => old ?? []));
+    };
+    load();
+    if (paused) return () => { alive = false; };
+    const timer = window.setInterval(load, 3000);
+    return () => { alive = false; window.clearInterval(timer); };
+  }, [level, query, paused]);
+
+  return (
+    <Card>
+      <CardHead title={t("diag.tabLog")} sub={t("diag.logHelp")} />
+      <div className="row wrap">
+        <Segment value={level} onChange={setLevel} options={[
+          { value: "info", label: t("diag.logLevelInfo") },
+          { value: "warning", label: t("diag.logLevelWarning") },
+          { value: "error", label: t("diag.logLevelError") },
+        ]} />
+        <input className="input" type="search" value={query} placeholder={t("diag.logFilter")}
+               aria-label={t("diag.logFilter")} onChange={(e) => setQuery(e.target.value)} />
+        <ActionButton size="sm" onClick={() => setPaused((p) => !p)}>
+          {paused ? t("diag.logResume") : t("diag.logPause")}
+        </ActionButton>
+      </div>
+      {lines === null ? <div className="skeleton" style={{ height: 200 }} />
+        : lines.length === 0 ? <Empty icon={<Icon name="events" size={28} />} title={t("diag.logEmpty")} />
+        : (
+          <ol className="log-lines" aria-live="off">
+            {[...lines].reverse().map((l) => (
+              <li key={l.id} className={`log-line level-${l.level}`}>
+                <time className="num">{fmtClock(l.time)}</time>
+                <span className="log-level">{l.level}</span>
+                <span className="log-text">{l.message}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+    </Card>
+  );
+}
+
+/** Diagnose als ZIP herunterladen (anonymisiert, für den Support). */
+function ExportButton() {
+  const { t } = useI18n();
+  const [busy, setBusy] = useState(false);
+  const download = async () => {
+    setBusy(true);
+    try {
+      const token = useAuth.getState().token;
+      const resp = await fetch("/api/system/diagnostic-export", { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const name = /filename="([^"]+)"/.exec(resp.headers.get("Content-Disposition") ?? "")?.[1] ?? "minepower-diagnose.zip";
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(await resp.blob());
+      a.download = name;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (e) {
+      toast.err(e instanceof Error ? e.message : String(e));
+    } finally { setBusy(false); }
+  };
+  return (
+    <ActionButton disabled={busy} onClick={download} title={t("diag.exportZipHelp")}>
+      <Icon name="download" size={16} /> {t("diag.exportZip")}
+    </ActionButton>
+  );
+}
+
+const TABS: { key: Tab; label: string; icon: IconName; admin?: boolean }[] = [
   { key: "findings", label: "diag.tabFindings", icon: "pulse" },
   { key: "devices", label: "diag.tabDevices", icon: "devices" },
   { key: "regulation", label: "diag.tabRegulation", icon: "auto" },
   { key: "events", label: "diag.tabEvents", icon: "events" },
+  { key: "log", label: "diag.tabLog", icon: "info", admin: true },
 ];
 
 export function Diagnose() {
   const { t } = useI18n();
   const [params, setParams] = useSearchParams();
-  const tab = (params.get("tab") as Tab) || "findings";
+  const isAdmin = useAuth((s) => s.user?.role === "admin");
+  const tabs = TABS.filter((x) => !x.admin || isAdmin);
+  const tab = tabs.find((x) => x.key === params.get("tab"))?.key ?? "findings";
   const setTab = (v: Tab) => setParams(v === "findings" ? {} : { tab: v }, { replace: true });
   const navRef = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -359,8 +486,9 @@ export function Diagnose() {
   return (
     <div className="page">
       <PageHead title={t("diag.title")} sub={t("diag.sub")} />
+      {isAdmin && <div className="row wrap"><ExportButton /></div>}
       <nav ref={navRef} className="subnav" aria-label={t("diag.title")}>
-        {TABS.map((x) => (
+        {tabs.map((x) => (
           <button key={x.key} type="button" className={`subnav-item ${tab === x.key ? "active" : ""}`}
                   aria-current={tab === x.key ? "page" : undefined} onClick={() => setTab(x.key)}>
             <Icon name={x.icon} size={18} />
@@ -372,6 +500,7 @@ export function Diagnose() {
       {tab === "devices" && <Devices />}
       {tab === "regulation" && <Regulation />}
       {tab === "events" && <Events />}
+      {tab === "log" && isAdmin && <LiveLog />}
     </div>
   );
 }

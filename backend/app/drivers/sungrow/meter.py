@@ -2,9 +2,13 @@
 
 Der DTSU666 hängt am RS485 des Sungrow-WR; seine Netzmessung ist über die
 Register des Wechselrichters verfügbar (1-basierte Doku-Nummern):
-  SH-Serie: 13010 Export-Leistung W (s32, + = Einspeisung)
-  SG-Serie: 5083  Export-Leistung W (s32, + = Einspeisung)
-grid_power (unsere Konvention: + = Bezug) = −Export.
+  SH-Serie: 13010 Export-Leistung W (s32, + = Einspeisung)  → grid_power = −Wert
+  SG-Serie: 5083  Zählerleistung W  (s32, + = Bezug)         → grid_power = +Wert
+
+Die beiden Register haben **entgegengesetzte Vorzeichen**. Bis 3.2.0 wurde
+auch das SG-Register negiert; Bezug und Einspeisung waren dort vertauscht.
+Quellen: evcc-Vorlage sungrow-inverter (5082 ohne Vorzeichenwechsel als
+Netzleistung), SungrowClient (import_from_grid = meter_power > 0).
 
 Hinweis: Beim SH liefert bereits der Wechselrichter-Treiber `sungrow_sh` die
 Netzleistung mit. Ein separates Zählergerät ist dann optional – es macht die
@@ -22,9 +26,9 @@ from ..base import (
     MeterData,
     MeterDriver,
 )
-from ..modbus_util import s32
+from ..modbus_util import s32, u32
 from ..registry import register
-from ..validation import checked
+from ..validation import DeviceRejected, checked
 from .common import SUNGROW_COMMON_FIELDS, SungrowDriverMixin, make_connection
 
 REG_EXPORT_SH = 13010
@@ -47,7 +51,8 @@ class SungrowMeter(SungrowDriverMixin, MeterDriver):
         ],
         maturity=Maturity.STABLE,
         notes="An einem DTSU666 hinter einem SH-Wechselrichter im Dauerbetrieb erprobt. "
-              "Die SG-Variante (Register 5083) ist nicht an echter Hardware getestet.",
+              "Die SG-Variante (Register 5083, Bezug positiv) folgt der Dokumentation und ist "
+              "nicht an echter Hardware getestet.",
     )
 
     def __init__(self, config: dict) -> None:
@@ -57,9 +62,14 @@ class SungrowMeter(SungrowDriverMixin, MeterDriver):
 
     async def read_data(self) -> MeterData:
         regs = await self.conn.read_input(self.register - 1, 2)
-        export = checked(
+        if u32(regs) == 0x7FFFFFFF:
+            raise DeviceRejected(
+                f"Sungrow meldet keine Netzleistung (Register {self.register} ohne Wert). Ist der "
+                "Energiezähler am Wechselrichter angeschlossen und die richtige Serie gewählt?")
+        value = checked(
             "grid_power", float(s32(regs)),
-            source=f"Sungrow Export-Leistung (Register {self.register})",
+            source=f"Sungrow Netzleistung (Register {self.register})",
             scale_hint="Passt der Wert nicht, ist vermutlich die falsche Wechselrichter-Serie gewählt.",
         )
-        return MeterData(grid_power=-export)
+        # SH: Register zählt Einspeisung positiv. SG: Bezug positiv.
+        return MeterData(grid_power=-value if self.register == REG_EXPORT_SH else value)

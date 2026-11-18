@@ -186,7 +186,8 @@ class HardyBarthSalia(_HttpWallbox):
     async def read_data(self) -> WallboxData:
         port = ci(await self._api(), "secc", "port0") or {}
         state = iec_state(str(ci(port, "ci", "charge", "cp", "status") or ""))
-        power = f(ci(port, "metering", "power", "active_total", "actual"))
+        # active_total.actual kommt in 0,1 W (evcc: / 10)
+        power = f(ci(port, "metering", "power", "active_total", "actual")) / 10.0
         if (self._fw or (0,)) < (2,):
             limit = f(ci(port, "grid_current_limit"))
         else:
@@ -210,6 +211,8 @@ class HardyBarthSalia(_HttpWallbox):
 
     async def stop_charging(self) -> None:
         await self._ensure_manual()
+        # Erst 0 A, dann Pause: ältere Firmware (< 1.52) kennt die Pause nicht
+        await self._post("grid_current_limit", "0")
         await self._post("salia/pausecharging", "1")
 
 
@@ -311,7 +314,7 @@ class EvseWifi(_HttpWallbox):
         id="evse_wifi", name="EVSE-WiFi / SimpleEVSE (HTTP)", category=WALLBOX,
         description="SimpleEVSE mit EVSE-WiFi-Modul über die lokale HTTP-API.",
         capabilities=CAPS,
-        notes="In EVSE-WiFi 'Always Active' ausschalten, sonst ist Sperren nicht möglich.",
+        notes="In EVSE-WiFi 'Always Active' und 'Remote' ausschalten (Normal Mode), sonst ist Sperren nicht möglich.",
         fields=[host_field("192.0.2.24"), MAX_CURRENT_FIELD],
     )
 

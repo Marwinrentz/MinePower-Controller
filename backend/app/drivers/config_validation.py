@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from .base import ConfigField, DriverMeta, FieldType
+from .netguard import blocked_reason
 
 MASK = "•••"
 
@@ -60,6 +61,8 @@ def validate_config(meta: DriverMeta, config: dict[str, Any], *, masked_ok: bool
                 errors.append(_err(field, "nur Hostname oder IP-Adresse"))
             elif field.key.endswith("url") and not text.startswith(("http://", "https://", "mqtt://", "mqtts://", "ws://", "wss://")):
                 errors.append(_err(field, "URL mit http:// oder https://"))
+            elif (field.key in ("host", "ip") or field.key.endswith(("url", "host"))) and blocked_reason(text):
+                errors.append(_err(field, blocked_reason(text) or ""))
     return errors
 
 

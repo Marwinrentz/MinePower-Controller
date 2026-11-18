@@ -56,3 +56,41 @@ class SungrowDriverMixin:
 
     async def disconnect(self) -> None:
         await release_connection(self.conn)
+
+
+#: Running-State (Register 13001): Bit 1 = Batterie lädt, Bit 2 = entlädt
+BIT_BAT_CHARGING = 0x0002
+BIT_BAT_DISCHARGING = 0x0004
+#: Unterhalb dieser Leistung (W) gilt die Batterie ohne gesetztes
+#: Richtungsbit als ruhend (Messrauschen).
+BATTERY_IDLE_W = 30.0
+
+
+def battery_power_w(raw_register: int, running_state: int) -> float:
+    """Batterieleistung aus Register 13022, + = laden, − = entladen.
+
+    Das Register hat seine Bedeutung mit der Firmware gewechselt:
+
+    * **bis Herbst 2024**: vorzeichenlos, immer positiv. Die Richtung steht
+      im Running-State (Register 13001, Bit 1 lädt, Bit 2 entlädt).
+    * **seitdem**: vorzeichenbehaftet (int16), positiv = laden, negativ =
+      entladen.
+
+    Vorzeichenlos gelesen wird aus −3000 W der Wert 62536. Mit gesetztem
+    Entlade-Bit kam daraus −62 kW Entladung – der Batterie-Schutz hätte
+    damit alle Lasten abgeworfen. Deshalb: als int16 lesen, den Betrag
+    nehmen und die Richtung aus dem Vorzeichen (neue Firmware) oder aus den
+    Zustandsbits (alte Firmware) bestimmen. Beide Wege führen bei beiden
+    Firmware-Ständen zum selben Ergebnis.
+
+    Quellen: Registerkarte mkaiser/Sungrow-SHx-Inverter-Modbus-Home-Assistant
+    (Hinweis zu Register 13022, Issue 406), evcc-Vorlage sungrow-hybrid."""
+    raw = raw_register - 0x10000 if raw_register >= 0x8000 else raw_register
+    magnitude = float(abs(raw))
+    if raw < 0 or running_state & BIT_BAT_DISCHARGING:
+        return -magnitude
+    if running_state & BIT_BAT_CHARGING:
+        return magnitude
+    # Kein Richtungsbit: Ruhe. Meldet neue Firmware trotzdem eine deutliche
+    # positive Leistung, lädt die Batterie.
+    return magnitude if magnitude >= BATTERY_IDLE_W else 0.0

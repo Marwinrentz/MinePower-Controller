@@ -461,6 +461,7 @@ strong { color: var(--text-strong); }
 @media (min-width: 640px) { .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .form-grid > .field + .field { margin-top: 0; }
 .form-actions { display: flex; flex-wrap: wrap; gap: var(--s2); justify-content: flex-end; margin-top: var(--s5); }
+.form-actions.start { justify-content: flex-start; margin-top: var(--s3); }
 .example { background: var(--surface-2); border-radius: var(--r-md); color: var(--text-strong); font-weight: 600; margin-top: var(--s3); padding: var(--s3) var(--s4); }
 
 /* Schalter */
@@ -1300,3 +1301,14 @@ a.pflow-node:hover { box-shadow: var(--shadow-md); }
 .info-list { display: grid; gap: var(--s2) var(--s5); grid-template-columns: max-content 1fr; margin: 0 0 var(--s4); }
 .info-list dt { color: var(--text-dim); font-weight: 600; }
 .info-list dd { color: var(--text-strong); margin: 0; }
+
+/* ---------- Diagnose: Protokoll ---------- */
+.log-lines { list-style: none; margin: var(--s4) 0 0; padding: 0; max-height: 60vh; overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.5; }
+.log-line { display: grid; grid-template-columns: auto 5.5em 1fr; gap: var(--s3); padding: 3px 0;
+  border-bottom: 1px solid var(--line); }
+.log-line time { color: var(--text-dim); }
+.log-level { text-transform: uppercase; font-size: 11px; letter-spacing: .04em; color: var(--text-dim); }
+.log-line.level-warning .log-level { color: var(--warn); }
+.log-line.level-error .log-level, .log-line.level-critical .log-level { color: var(--err); }
+.log-text { overflow-wrap: anywhere; white-space: pre-wrap; }

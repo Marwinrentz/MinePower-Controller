@@ -48,14 +48,28 @@ REG_POWER_TIMEOUT = 1004  # R/W Watchdog [10–600 s]
 REG_CONTROL_TYPE = 1070  # R/W 1=HTTP 2=Modbus TCP
 REG_POUT1 = 1074         # R   Ist-Leistung Heizstab [W]
 
+#: Statuscodes nach my-PV 'Documentation Controls'. Die Zahl 9 bedeutet je
+#: nach Gerät etwas anderes: beim AC ELWA-E/ELWA 2 'Setup', beim AC•THOR
+#: 'Betrieb' (dort stehen 1–8 für den Hochlauf). Ein Fehler ist sie nie –
+#: Fehler liegen bei beiden Familien ab 200.
 STATUS_LABELS = {
     1: "No Control – Gerät nimmt keine externen Sollwerte an",
     2: "Heizen",
     3: "Standby",
     4: "Boost (eigenes Programm des Geräts)",
     5: "Heizen abgeschlossen",
-    9: "Fehler",
+    9: "Betrieb (AC•THOR) bzw. Setup (ELWA)",
+    201: "Fehler: Übertemperatur, Sicherung ausgelöst",
+    202: "Fehler: Übertemperatur gemessen",
+    203: "Fehler: Übertemperatur der Elektronik",
+    204: "Fehler: Hardware",
+    205: "Fehler: Temperaturfühler",
+    209: "Fehler: Hauptplatine",
 }
+#: Ab diesem Code meldet das Gerät eine Störung
+STATUS_ERROR_FROM = 200
+#: Darunter gilt der Heizstab als aus (Eigenverbrauch der Elektronik)
+STANDBY_POWER_W = 10.0
 STATUS_HEATING = {2, 4}
 STATUS_NO_CONTROL = 1
 #: 'Boost' heißt bei my-PV: Das Gerät heizt nach eigenem Programm mit
@@ -151,20 +165,22 @@ class MyPvAcThor(WaterHeaterDriver):
         )
         self._conn: ModbusConnection | None = None
         self._last_status: int | None = None
+        #: Gibt es Register 1074 an diesem Gerät? None = noch nicht geprüft.
+        self._has_pout1: bool | None = None
 
     # ---------------------------------------------------------------- HTTP
 
     async def _read_http(self) -> WaterHeaterData:
         d = await self.http.get_json("/data.jsn")
-        power = _f(d.get("power_elwa2") if d.get("power_elwa2") is not None else d.get("power"))
+        power = _http_power(d)
         status = int(_f(d.get("status")))
         self._last_status = status or None
         temp = sanitized("water_temperature", _f(d.get("temp1")) / 10.0, zero_is_none=True)
         return WaterHeaterData(
             power=checked("heater_power", power, source="my-PV Ist-Leistung"),
             temperature_c=temp,
-            is_on=power > 0,
-            device_mode=DEVICE_BOOST_TEXT if status == STATUS_DEVICE_BOOST else None,
+            is_on=power > STANDBY_POWER_W,
+            device_mode=DEVICE_BOOST_TEXT if status == STATUS_DEVICE_BOOST or _f(d.get("boostactive")) > 0 else None,
             extra=self._status_extra(status),
         )
 
@@ -201,14 +217,25 @@ class MyPvAcThor(WaterHeaterDriver):
     async def _read_modbus(self) -> WaterHeaterData:
         conn = self._connection()
         # Blocklesung 1000..1003 (Einzelregister-Reads sind bei my-PV unzuverlässig)
-        head = await conn.read_holding(REG_POWER_SET, 4)   # power_set, temp1, tmax, status
-        pout = await conn.read_holding(REG_POUT1, 2)        # Ist-Leistung
+        head = await conn.read_holding(REG_POWER_SET, 4)   # Leistung, temp1, tmax, status
         status = u16(head, 3)
         self._last_status = status
+        # Ist-Leistung: Register 1000 liefert beim Lesen, was das Gerät gerade
+        # abgibt (nicht den geschriebenen Sollwert). Register 1074 (P out1)
+        # gibt es nur bei einem Teil der Geräte – beim AC ELWA-E fehlt es und
+        # der Lesezugriff schlug fehl, womit das ganze Gerät als gestört galt.
+        # Deshalb: 1074 nur zusätzlich, und nicht mehr fragen, wenn es fehlt.
+        power = float(u16(head, 0))
+        if self._has_pout1 is not False:
+            try:
+                power = max(power, float(u16(await conn.read_holding(REG_POUT1, 1), 0)))
+                self._has_pout1 = True
+            except DeviceRejected:
+                self._has_pout1 = False
         return WaterHeaterData(
-            power=checked("heater_power", float(u16(pout, 0)), source="my-PV Register 1074"),
+            power=checked("heater_power", power, source="my-PV Register 1000/1074"),
             temperature_c=sanitized("water_temperature", s16(head, 1) / 10.0, zero_is_none=True),
-            is_on=status in STATUS_HEATING,
+            is_on=power > STANDBY_POWER_W,
             device_mode=DEVICE_BOOST_TEXT if status == STATUS_DEVICE_BOOST else None,
             extra=self._status_extra(status),
         )
@@ -236,6 +263,10 @@ class MyPvAcThor(WaterHeaterDriver):
 
     def _status_extra(self, status: int) -> dict:
         label = STATUS_LABELS.get(status)
+        if label is None and status >= STATUS_ERROR_FROM:
+            label = f"Fehler (Code {status})"
+        elif label is None and 1 < status < 9:
+            label = f"Hochlauf (Code {status})"
         return {"Gerätestatus": label} if label else {}
 
     # ---------------------------------------------------------------- Interface
@@ -289,6 +320,17 @@ class MyPvAcThor(WaterHeaterDriver):
         if self._last_status == STATUS_NO_CONTROL:
             out.append(NO_CONTROL_HINT)
         return out
+
+
+def _http_power(d: dict) -> float:
+    """Heizleistung aus /data.jsn. Der Schlüssel heißt je Gerät anders:
+    ``power_elwa2`` (AC ELWA 2), ``power_act`` (AC•THOR, dazu ``power_ac9``
+    für die geschalteten Ausgänge des 9s) und ``power`` (AC ELWA-E)."""
+    if d.get("power_elwa2") is not None:
+        return _f(d.get("power_elwa2"))
+    if d.get("power_act") is not None:
+        return _f(d.get("power_act")) + _f(d.get("power_ac9"))
+    return _f(d.get("power"))
 
 
 def _f(value) -> float:

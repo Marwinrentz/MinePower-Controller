@@ -24,7 +24,9 @@ from ..security import get_current_user, require_role
 from ..services.audit import log_event
 
 from ..core.limits import CATEGORY_LIMITS, active_count, limit_error
-from ..core.secrets import mask_config, protect_config, reveal_config
+from ..core.secrets import (
+    SECRET_TARGET_CHANGED, mask_config, protect_config, reveal_config, secret_reused_for_new_target,
+)
 from ..drivers.config_validation import config_error, validate_config
 
 router = APIRouter(prefix="/api/devices", tags=["devices"])
@@ -73,6 +75,10 @@ async def create_device(body: DeviceCreate, db: AsyncSession = Depends(get_db), 
     errors = validate_config(meta, body.config or {})
     if errors:
         raise HTTPException(422, config_error(errors))
+    # Auch beim Anlegen: Bisher wurden Einstellungen nur beim Ändern geprüft,
+    # ein neues Gerät konnte also mit beliebigen Strom- und Leistungswerten
+    # in den Regelkreis kommen.
+    validate_device_settings(body.category, body.settings)
     duplicate = await _find_duplicate(db, body.driver_id, body.config or {})
     if duplicate is not None:
         # Im Diagnosebericht stand derselbe Sungrow SH zweimal (angelegt im
@@ -99,14 +105,14 @@ async def update_device(device_id: int, body: DeviceUpdate, db: AsyncSession = D
     device = await db.get(Device, device_id)
     if device is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Gerät nicht gefunden")
-    if body.settings is not None and device.category == "water_heater":
-        _validate_boost(body.settings)
     if body.settings is not None:
-        _validate_common(body.settings)
+        validate_device_settings(device.category, body.settings)
     if body.enabled and not device.enabled and device.category in CATEGORY_LIMITS \
             and await active_count(db, device.category, exclude_id=device.id) >= CATEGORY_LIMITS[device.category]:
         raise HTTPException(status.HTTP_409_CONFLICT, limit_error(device.category))
     if body.config is not None:
+        if secret_reused_for_new_target(device.driver_id, body.config, device.config or {}):
+            raise HTTPException(422, SECRET_TARGET_CHANGED)
         meta = registry.get_driver_class(device.driver_id).meta
         errors = validate_config(meta, protect_config(device.driver_id, body.config, device.config or {}),
                                  masked_ok=True)
@@ -151,6 +157,8 @@ async def test_connection(body: TestConnectionRequest, db: AsyncSession = Depend
         # Bestehendes Gerät: '•••" heißt 'gespeicherten Wert verwenden".
         stored = await db.get(Device, body.device_id)
         if stored is not None and stored.driver_id == body.driver_id:
+            if secret_reused_for_new_target(body.driver_id, config, stored.config or {}):
+                return TestResult(ok=False, message=SECRET_TARGET_CHANGED)
             config = protect_config(body.driver_id, config, stored.config or {})
     config = reveal_config(body.driver_id, config)
     try:
@@ -178,6 +186,29 @@ async def test_connection(body: TestConnectionRequest, db: AsyncSession = Depend
                     "Unit-ID prüfen; bei Modbus-Geräten außerdem, ob Modbus TCP im Gerät "
                     "aktiviert ist.",
         )
+    finally:
+        try:
+            await driver.disconnect()
+        except Exception:  # noqa: BLE001 – Aufräumen darf den Test nicht kippen
+            pass
+
+
+@router.post("/{device_id}/test", response_model=TestResult)
+async def test_saved_device(device_id: int, db: AsyncSession = Depends(get_db),
+                            _: User = Depends(require_role("admin"))):
+    """Verbindungstest eines eingerichteten Geräts mit seinen gespeicherten
+    Einstellungen (nur lesend) – für die Diagnose."""
+    device = await db.get(Device, device_id)
+    if device is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Gerät nicht gefunden")
+    try:
+        driver = registry.create_driver(device.driver_id, reveal_config(device.driver_id, device.config or {}))
+    except KeyError:
+        raise HTTPException(422, f"Unbekannter Treiber: {device.driver_id}")
+    try:
+        return await asyncio.wait_for(driver.test_connection(include_write=False), timeout=20)
+    except asyncio.TimeoutError:
+        return TestResult(ok=False, message="Zeitüberschreitung – das Gerät antwortet nicht.")
     finally:
         try:
             await driver.disconnect()
@@ -281,6 +312,25 @@ async def device_action(
     await log_event(f"Override: {action} → {dev.name}", category="control", user_id=user.id,
                     data={"value": body.value})
     return {"ok": True}
+
+
+def validate_device_settings(category: str, settings: dict | None) -> None:
+    """Regelungs-Einstellungen eines Geräts prüfen (422 mit Ursache).
+    Gilt für Anlegen, Ändern und Import."""
+    if settings is None:
+        return
+    if not isinstance(settings, dict):
+        raise HTTPException(422, "Einstellungen müssen ein Objekt sein.")
+    _validate_common(settings)
+    mode = settings.get("mode")
+    if category == "water_heater":
+        _validate_boost(settings)
+        if mode is not None:
+            _check_mode(mode, WATER_MODES)
+    elif category == "wallbox" and mode is not None:
+        # 'fast' und 'schedule' stammen aus älteren Versionen und werden vom
+        # Regler weiter verstanden.
+        _check_mode(mode, WALLBOX_MODES + ("fast", "schedule"))
 
 
 def _validate_common(settings: dict) -> None:
