@@ -34,8 +34,28 @@ def host_of(value: str) -> str:
     return text
 
 
+_NAT64 = ipaddress.ip_network("64:ff9b::/96")
+
+
+def ip_blocked_reason(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> str | None:
+    """Grund für eine gesperrte IP-Adresse – oder None."""
+    if isinstance(ip, ipaddress.IPv6Address):
+        if ip.ipv4_mapped is not None:
+            ip = ip.ipv4_mapped
+        elif ip in _NAT64:  # 64:ff9b::a9fe:a9fe = 169.254.169.254 über NAT64
+            ip = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+    if ip in _METADATA_IPS:
+        return "Adresse eines Cloud-Metadatendienstes"
+    if ip.is_unspecified or ip.is_multicast:
+        return "keine Geräteadresse"
+    return None
+
+
 def blocked_reason(value: str) -> str | None:
-    """Grund, warum die Adresse nicht abgerufen wird – oder None."""
+    """Grund, warum die Adresse nicht abgerufen wird – oder None.
+
+    Prüft nur die Schreibweise. DNS-Namen (z. B. 169.254.169.254.nip.io)
+    fängt erst GuardedResolver nach der Namensauflösung ab."""
     host = host_of(value).rstrip(".").lower()
     if not host:
         return None
@@ -45,10 +65,12 @@ def blocked_reason(value: str) -> str | None:
         ip = ipaddress.ip_address(host)
     except ValueError:
         return None
-    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
-        ip = ip.ipv4_mapped
-    if ip in _METADATA_IPS:
-        return "Adresse eines Cloud-Metadatendienstes"
-    if ip.is_unspecified or ip.is_multicast:
-        return "keine Geräteadresse"
-    return None
+    return ip_blocked_reason(ip)
+
+
+def resolved_blocked_reason(address: str) -> str | None:
+    """Für bereits aufgelöste Adressen (Resolver)."""
+    try:
+        return ip_blocked_reason(ipaddress.ip_address(address.split("%", 1)[0]))
+    except ValueError:
+        return None

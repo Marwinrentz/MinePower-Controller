@@ -18,8 +18,9 @@ import logging
 from typing import Any
 
 import aiohttp
+from urllib.parse import urljoin
 
-from .netguard import blocked_reason
+from .netguard import blocked_reason, resolved_blocked_reason
 from .validation import ConnectionProblem, DeviceRejected
 
 log = logging.getLogger(__name__)
@@ -48,7 +49,8 @@ class HttpDevice:
 
     def _ensure_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
-            connector = aiohttp.TCPConnector(ssl=None if self.verify_ssl else False, limit=4)
+            connector = aiohttp.TCPConnector(ssl=None if self.verify_ssl else False, limit=4,
+                                             resolver=GuardedResolver())
             self._session = aiohttp.ClientSession(
                 timeout=self._timeout, connector=connector, headers=self.headers,
                 trace_configs=[_redirect_guard()],
@@ -151,13 +153,30 @@ class HttpDevice:
         raise DeviceRejected(f"{self.name}: HTTP {resp.status} von {url}{f' – {body}' if body else ''}")
 
 
+class GuardedResolver(aiohttp.ThreadedResolver):
+    """Namensauflösung mit Sperrliste: Ein DNS-Name, der auf einen
+    Metadatendienst zeigt (nip.io, DNS-Rebinding), wird nach der Auflösung
+    abgewiesen – die reine Schreibweisen-Prüfung sieht nur den Namen."""
+
+    async def resolve(self, host: str, port: int = 0, family: int = 0):  # type: ignore[override]
+        results = await super().resolve(host, port, family)
+        allowed = [r for r in results if not resolved_blocked_reason(str(r.get("host", "")))]
+        if not allowed:
+            reason = resolved_blocked_reason(str(results[0].get("host", ""))) if results else "nicht auflösbar"
+            raise OSError(f"{host} zeigt auf eine gesperrte Adresse ({reason})")
+        return allowed
+
+
 def _redirect_guard() -> aiohttp.TraceConfig:
     """Weiterleitungen prüfen: Ein Gerät (oder wer sich dafür ausgibt) darf
     den Server nicht auf eine gesperrte Adresse umlenken."""
     async def on_redirect(session, ctx, params) -> None:  # noqa: ARG001
-        target = params.response.headers.get("Location", "")
-        if "://" in target and blocked_reason(target):
-            raise aiohttp.ClientError(f"Weiterleitung auf gesperrte Adresse ({blocked_reason(target)})")
+        # Relativ zur aktuellen Adresse auflösen: Ein schema-relatives Ziel
+        # wie "//0.0.0.0/…" enthält kein "://" und wurde vorher durchgewunken.
+        target = urljoin(str(params.url), params.response.headers.get("Location", ""))
+        reason = blocked_reason(target)
+        if reason:
+            raise aiohttp.ClientError(f"Weiterleitung auf gesperrte Adresse ({reason})")
 
     trace = aiohttp.TraceConfig()
     trace.on_request_redirect.append(on_redirect)

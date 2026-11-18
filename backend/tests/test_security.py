@@ -421,3 +421,49 @@ async def test_broadcast_slow_clients_do_not_add_up(monkeypatch):
     assert time.monotonic() - t0 < 0.8
     assert fast.sent
     assert m.count == 1
+
+
+def test_netguard_nat64_metadata_blocked():
+    assert blocked_reason("http://[64:ff9b::a9fe:a9fe]/") is not None
+
+
+async def test_guarded_resolver_blocks_dns_name_pointing_to_metadata(monkeypatch):
+    import aiohttp
+    import socket
+
+    from app.drivers.http_util import GuardedResolver
+
+    async def fake(self, host, port=0, family=0):
+        return [{"hostname": host, "host": "169.254.169.254", "port": port, "family": socket.AF_INET,
+                 "proto": 0, "flags": 0}]
+
+    monkeypatch.setattr(aiohttp.ThreadedResolver, "resolve", fake)
+    with pytest.raises(OSError):
+        await GuardedResolver().resolve("169.254.169.254.nip.io", 80)
+
+
+async def test_scheme_relative_redirect_to_blocked_address_is_refused():
+    from aiohttp import web
+
+    from app.drivers.http_util import HttpDevice
+
+    async def red(_r):
+        raise web.HTTPFound("//0.0.0.0:18767/secret")
+
+    async def sec(_r):
+        return web.json_response({"leak": True})
+
+    app = web.Application()
+    app.router.add_get("/r", red)
+    app.router.add_get("/secret", sec)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    await web.TCPSite(runner, "127.0.0.1", 18767).start()
+    dev = HttpDevice("http://127.0.0.1:18767")
+    try:
+        with pytest.raises(Exception) as exc:
+            await dev.get_json("/r")
+        assert "gesperrte Adresse" in str(exc.value)
+    finally:
+        await dev.close()
+        await runner.cleanup()
