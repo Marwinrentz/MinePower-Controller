@@ -178,6 +178,8 @@ BATTERY_RELEASE_TIMEOUT_S = 8.0
 #: Obergrenzen beim Beenden. Docker wartet 30 s (stop_grace_period), danach
 #: SIGKILL. Geräte (parallel) + Messwerte + Rest müssen sicher darunter bleiben.
 SHUTDOWN_DEVICES_TIMEOUT_S = 12.0
+#: So lange wartet ein Regeltakt höchstens auf das Speichern eines Ladevorgangs.
+SESSION_DB_WAIT_S = 2.0
 SHUTDOWN_FLUSH_TIMEOUT_S = 8.0
 #: Ereignis-Log beim Beenden: lieber verlieren als den Fail-safe aufhalten.
 SHUTDOWN_EVENT_TIMEOUT_S = 2.0
@@ -356,6 +358,7 @@ class ManagedDevice:
         self._sessions_checked = False
         self._session_saved_at = 0.0
         self._session_errors = 0
+        self._session_task: asyncio.Task | None = None
         self.session_energy_kwh = 0.0
         self.session_solar_kwh = 0.0
         self.session_cost = 0.0
@@ -2333,6 +2336,26 @@ class ControlLoop:
                 grid_share = data.power - solar_w
                 dev.session_cost += (grid_share * dt_h / 1000.0) * price_ct / 100.0
 
+        # Datenbankteil abgekoppelt: Antwortet die Datenbank nicht (ohne die
+        # Verbindung abzulehnen), stand vorher der ganze Regeltakt bis zu 10 s
+        # (hängende Abfrage bis 60 s) – und die Wallbox lud so lange mit dem
+        # letzten Strom weiter. Jetzt wartet der Takt höchstens
+        # SESSION_DB_WAIT_S; der Schreibvorgang läuft im Hintergrund fertig,
+        # und solange er läuft, startet für dieses Gerät kein zweiter.
+        pending = dev._session_task
+        if pending is not None and not pending.done():
+            return
+        task = asyncio.create_task(self._session_db(dev, data, charging, now), name=f"session-{dev.id}")
+        dev._session_task = task
+        try:
+            await asyncio.wait_for(asyncio.shield(task), timeout=SESSION_DB_WAIT_S)
+        except asyncio.TimeoutError:
+            if dev._session_errors == 0:
+                log.warning("Ladevorgang %s: Datenbank antwortet langsam – Regelung läuft weiter", dev.name)
+        except Exception:  # noqa: BLE001 – Fehler behandelt _session_db selbst
+            pass
+
+    async def _session_db(self, dev: ManagedDevice, data: WallboxData, charging: bool, now: float) -> None:
         try:
             if dev.session_id is None and not dev._sessions_checked:
                 # Erster Takt nach dem Start: Ein Ladevorgang, der beim
