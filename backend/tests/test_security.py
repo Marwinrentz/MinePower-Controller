@@ -467,3 +467,25 @@ async def test_scheme_relative_redirect_to_blocked_address_is_refused():
     finally:
         await dev.close()
         await runner.cleanup()
+
+
+def test_traceback_is_redacted():
+    import io
+    import logging
+
+    from app.core import logsafe
+
+    stream = io.StringIO()
+    handler = logging.StreamHandler(stream)
+    handler.addFilter(logsafe.RedactFilter())
+    logger = logging.getLogger("test.redact")
+    logger.addHandler(handler)
+    try:
+        try:
+            raise ConnectionError("GET https://api.example/v1?apikey=SUPERGEHEIM123 fehlgeschlagen")
+        except ConnectionError:
+            logger.exception("Abruf fehlgeschlagen")
+    finally:
+        logger.removeHandler(handler)
+    out = stream.getvalue()
+    assert "SUPERGEHEIM123" not in out and "apikey=***" in out

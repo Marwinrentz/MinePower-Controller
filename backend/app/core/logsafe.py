@@ -13,7 +13,7 @@ import re
 
 _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"/mcp/k/[^/?\s\"']+"), "/mcp/k/***"),
-    (re.compile(r"([?&](?:token|access_token|refresh_token|api_key|apikey|key|password|pw)=)[^&\s\"']+", re.I),
+    (re.compile(r"([?&](?:token|access_token|refresh_token|id_token|api_key|apikey|api-key|key|appid|secret|client_secret|password|passwd|pw|auth|sig|signature)=)[^&\s\"']+", re.I),
      r"\1***"),
     (re.compile(r"(Bearer\s+)[A-Za-z0-9._~+/=-]{8,}", re.I), r"\1***"),
     (re.compile(r"(api\.telegram\.org/bot)[^/\s\"']+"), r"\1***"),
@@ -33,6 +33,14 @@ class RedactFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         if isinstance(record.msg, str):
             record.msg = redact(record.msg)
+        # Tracebacks (log.exception) wiederholen oft Adressen samt Schlüssel.
+        # Hier vorformatieren und schwärzen; der Formatter nimmt exc_text.
+        if record.exc_info and not record.exc_text:
+            record.exc_text = redact(logging.Formatter().formatException(record.exc_info))
+        elif record.exc_text:
+            record.exc_text = redact(record.exc_text)
+        if record.stack_info:
+            record.stack_info = redact(record.stack_info)
         args = record.args
         if isinstance(args, tuple):
             record.args = tuple(_clean(a) for a in args)

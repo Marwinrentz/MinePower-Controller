@@ -39,6 +39,7 @@ from sqlalchemy import select, text
 from ..config import get_settings
 from ..db import async_session, engine
 from ..models import ApiToken, ChargeSession, Device, Event, Schedule, Setting, User, Vehicle
+from ..security import password_changed_now
 
 log = logging.getLogger(__name__)
 
@@ -344,11 +345,16 @@ async def restore(path: Path) -> int:
                 default_target_soc=veh.get("default_target_soc", 80),
             ))
 
+        # Alle vor der Wiederherstellung ausgestellten Anmeldungen ungültig
+        # machen: Die Konten bekommen neue IDs (ein altes Token für ID 1 hätte
+        # sonst womöglich ein anderes Konto getroffen), und in der Sicherung
+        # widerrufene Tokens wären wieder gültig geworden.
+        revoked = password_changed_now()
         for u in data.get("users", []):
             session.add(User(email=u["email"], name=u.get("name", u["email"]),
                              password_hash=u["password_hash"], role=u.get("role", "user"),
                              rfid_tag=u.get("rfid_tag"), language=u.get("language", "de"),
-                             disabled=u.get("disabled", False)))
+                             disabled=u.get("disabled", False), password_changed_at=revoked))
         await session.flush()
 
         # Schlüssel dem Konto über die E-Mail zuordnen (IDs werden neu vergeben).

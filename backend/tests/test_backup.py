@@ -101,6 +101,9 @@ async def test_restore_round_trip(tmp_path, monkeypatch):
     # Passwort-Hash wandert 1:1 mit – kein Re-Hash, sonst könnte sich
     # niemand nach einer automatischen Wiederherstellung mehr anmelden.
     assert users[0].password_hash == "hash"
+    # Alte Anmeldungen gelten nach der Wiederherstellung nicht mehr (neue
+    # Konto-IDs, widerrufene Tokens aus der Sicherung).
+    assert users[0].password_changed_at is not None
     assert len(vehicles) == 1
     # Fremdschlüssel korrekt auf die NEU vergebene Geräte-ID nachgezogen,
     # nicht auf die alte (die nach dem Neuanlegen nicht mehr existiert).
