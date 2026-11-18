@@ -95,3 +95,24 @@ async def test_wallbox_not_started_by_minepower_is_left_alone():
     await loop.stop()
 
     assert w.wb_enabled is True
+
+
+async def test_stale_meter_value_triggers_safety_stop():
+    """Hängender Zähler: Der letzte Wert gilt nur GRID_MAX_AGE_S lang."""
+    from app.core import loop as L
+
+    _world(bat_soc=40.0, car_connected=True)
+    loop = await build_loop(price_ct=30.0, battery_controllable=False, wallbox_mode="pv_only")
+    await loop._step()
+    meter = next(d for d in loop.devices.values() if d.category == "meter")
+    assert loop.snapshot.get("safety") in (None, "")
+
+    async def hang():
+        await asyncio.sleep(3600)
+
+    meter.driver.read_data = hang
+    meter.data_at = time.monotonic() - L.GRID_MAX_AGE_S - 5
+    await loop._step()
+    assert "Netzmessung" in (loop.snapshot.get("safety") or "")
+    assert any("veraltet" in w for w in loop.warnings)
+    loop._cancel_read(meter.id)

@@ -180,6 +180,8 @@ BATTERY_RELEASE_TIMEOUT_S = 8.0
 SHUTDOWN_DEVICES_TIMEOUT_S = 12.0
 #: So lange wartet ein Regeltakt höchstens auf das Speichern eines Ladevorgangs.
 SESSION_DB_WAIT_S = 2.0
+#: Älter darf die Netzmessung nicht sein, sonst Sicherheits-Stopp (s).
+GRID_MAX_AGE_S = 12.0
 SHUTDOWN_FLUSH_TIMEOUT_S = 8.0
 #: Ereignis-Log beim Beenden: lieber verlieren als den Fail-safe aufhalten.
 SHUTDOWN_EVENT_TIMEOUT_S = 2.0
@@ -359,6 +361,8 @@ class ManagedDevice:
         self._session_saved_at = 0.0
         self._session_errors = 0
         self._session_task: asyncio.Task | None = None
+        #: Zeitpunkt (monotonic) des letzten erfolgreichen Lesens; None = unbekannt.
+        self.data_at: float | None = None
         self.session_energy_kwh = 0.0
         self.session_solar_kwh = 0.0
         self.session_cost = 0.0
@@ -802,6 +806,7 @@ class ControlLoop:
                 await asyncio.wait_for(dev.driver.connect(), timeout=timeout)
                 dev.connected = True
             dev.data = await asyncio.wait_for(dev.driver.read_data(), timeout=timeout)
+            dev.data_at = time.monotonic()
             # Antwortzeit für die Diagnose: letzter Wert und gleitendes Mittel
             dev.read_ms = (time.monotonic() - started) * 1000.0
             dev.read_ms_avg = dev.read_ms if dev.read_ms_avg is None else 0.8 * dev.read_ms_avg + 0.2 * dev.read_ms
@@ -905,12 +910,22 @@ class ControlLoop:
                 f"(gleicher Treiber, gleiche Adresse). Bitte das Duplikat löschen."
             )
 
+        # Höchstalter der Netzmessung: Hängt der Zähler, behielt er bis zum
+        # Offline-Status (3 Fehlversuche à bis zu 6 s) seinen letzten Wert –
+        # und die Regelung verteilte bis zu 18 s lang Überschuss, den es
+        # vielleicht längst nicht mehr gab.
+        grid_max_age = max(GRID_MAX_AGE_S, 3.0 * self.cfg.interval_s)
+        now_mono = time.monotonic()
+
+        def _fresh(d: ManagedDevice) -> bool:
+            return d.data_at is None or now_mono - d.data_at <= grid_max_age
+
         for dev in counted:
             if not dev.online or dev.data is None:
                 continue
             if isinstance(dev.data, InverterData):
                 pv_power += dev.data.pv_power
-                if dev.data.grid_power is not None:
+                if dev.data.grid_power is not None and _fresh(dev):
                     grid_from_inverter = dev.data.grid_power
                 # Hybrid-Wechselrichter liefern die Batteriewerte gleich mit.
                 # Damit funktioniert Batterie-Monitoring ohne separates
@@ -919,6 +934,9 @@ class ControlLoop:
                 if dev.data.battery_soc is not None or dev.data.battery_power is not None:
                     inverter_batteries.append(dev.data)
             elif isinstance(dev.data, MeterData):
+                if not _fresh(dev):
+                    warnings.append(f"{dev.name}: Messwert veraltet – Zähler antwortet nicht")
+                    continue
                 grid_power = dev.data.grid_power
                 meter_online = True
             elif isinstance(dev.data, BatteryData):
