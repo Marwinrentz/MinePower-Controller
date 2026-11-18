@@ -4,6 +4,44 @@ Format: eine Version je Abschnitt, Einträge gruppiert in Neu, Geändert und
 Behoben, ein Eintrag je Zeile. Die App zeigt diese Datei unter „Changelog“
 und nach einem Update als Hinweisfenster.
 
+## 3.3.0 (2026-11-18)
+
+### Neu
+- Einstellungen: Tab Sicherung mit täglicher Datensicherung und Wiederherstellen
+- Diagnose: Antwortzeit und Fehlerzähler je Gerät, Verbindungstest, Protokoll der Anwendung mit Filter
+- Diagnose-Export als ZIP, anonymisiert (keine Zugangsdaten, Adressen und Namen ersetzt)
+- Plausibilitätsprüfung: Energiebilanz, Einspeisung ohne Erzeugung, PV nachts
+- Verlauf als CSV; Strompreis, Einspeisevergütung und CO2 einstellbar
+- Benachrichtigungen: Testnachricht je Kanal, Webhook als Kanal
+- Eigenes Passwort ändern (Einstellungen, Konto)
+- Webapp startet schneller und zeigt bei Serverausfall die Oberfläche statt einer Fehlerseite (bei HTTPS)
+- TRUSTED_PROXIES: Login-Sperre sieht hinter einem Reverse-Proxy die echte Adresse
+
+### Geändert
+- Beim Beenden kommen erst Speicher, Wallbox und Heizstab in einen sicheren Zustand, dann werden die Messwerte geschrieben
+- Wallbox (außer bei Sofort laden) und Heizstab werden beim Beenden ausgeschaltet, wenn MinePower sie eingeschaltet hat
+- Messwerte gehen bei einem Datenbankausfall in eine Spool-Datei und werden danach ohne Lücke nachgeschrieben
+- Datenbankschema wird beim Start automatisch angehoben, vorher Rohsicherung der Konfiguration
+- Anwendung läuft im Container ohne root, Dateisystem nur lesbar
+- CORS und API-Dokumentation nur noch auf Wunsch (CORS_ORIGINS, API_DOCS)
+- Gespeicherte Gerätepasswörter gehen nie an eine geänderte Adresse; nach Änderung der Adresse Passwort neu eingeben
+- Nach einer Wiederherstellung muss sich jeder neu anmelden
+- Bibliotheken aktualisiert (keine bekannten Sicherheitslücken mehr), Diagramme sehen aus wie bisher
+
+### Behoben
+- Anmelde-Token stand in der Adresse der Live-Verbindung und damit im Zugriffsprotokoll
+- Tokens von vor einem Passwortwechsel blieben gültig; offene Live-Verbindungen enden jetzt bei Passwortwechsel, Sperre und Löschen
+- Nach einem Stromausfall konnte eine leere Schlüsseldatei den Start dauerhaft verhindern
+- Hängende Datenbank hielt den Regeltakt an, die Wallbox lud so lange mit dem letzten Strom weiter
+- Hängender Zähler: Regelung lief bis zu 18 s mit einem alten Messwert, jetzt Sicherheits-Stopp nach 12 s
+- Hängende Geräte bremsten den Regeltakt um je 5 Sekunden
+- Großer Rückstand an Messwerten wurde nach einem Abbruch nie fertig nachgeschrieben
+- Weiterleitungen und DNS-Namen konnten den Schutz vor Metadatendiensten umgehen
+- Zugangsdaten in Fehlermeldungen mit Traceback standen im Klartext im Protokoll
+- Ladevorgang überlebt Neustart und Geräteänderung
+- Jahresauswertung zählt eingespielte Stundenwerte, Bezug und Einspeisung stimmen
+- Treiber nach Herstellerdoku korrigiert: Sungrow, my-PV, go-e, Fronius, Huawei, SMA, Tesla BLE, OCPP
+
 ## 3.2.0 (2026-10-21)
 
 ### Neu
