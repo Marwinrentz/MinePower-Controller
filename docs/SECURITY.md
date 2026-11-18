@@ -23,6 +23,10 @@ großem Schaden), **mittel** (braucht Zugang zum Netz oder ein Konto),
 | S7 | Zwei gleichzeitige Aufrufe des Erst-Setups legten zwei Admins an. | niedrig | behoben: das Setup läuft einzeln. |
 | S8 | Passwörter ohne Obergrenze; bcrypt wertet nur 72 Byte aus. | niedrig | behoben: höchstens 256 Zeichen, ausdrücklich auf 72 Byte gekürzt. |
 | S9 | Fehlgeschlagene Anmeldungen standen nicht im Ereignisprotokoll. | niedrig | behoben: mit Adresse, ohne Passwort. |
+| S9a | Hinter einem Reverse-Proxy sahen alle Anmeldungen dieselbe Adresse: 30 Fehlversuche von irgendwem sperrten die Anmeldung für alle. | mittel | behoben: `TRUSTED_PROXIES` nennt den Proxy; dann zählt die echte Adresse aus `X-Forwarded-For` (von rechts ausgewertet, vorangestellte Fälschungen wirken nicht). |
+| S9b | Offene Live-Verbindungen blieben nach Passwortwechsel, Sperre, Rollenwechsel oder Löschen bestehen. | niedrig | behoben: sie werden getrennt. |
+| S9c | Mit geänderter Geräteadresse und `•••` im Passwortfeld schickte der Server das gespeicherte Gerätepasswort an die neue Adresse (Verbindungstest, Ändern). Ein Admin konnte so Passwörter abgreifen, die die API nie ausliefert. | mittel | behoben: Bei geänderter Adresse muss das Passwort neu eingegeben werden. |
+| S9d | Nach einer Wiederherstellung galten bereits widerrufene Tokens wieder, und Konten bekamen neue IDs. | niedrig | behoben: Die Wiederherstellung beendet alle Anmeldungen. |
 
 Passwörter werden mit bcrypt gespeichert (12 Runden). Tokens sind mit HS256
 signiert; das Geheimnis wird beim ersten Start erzeugt (64 Hex-Zeichen). Ein
@@ -99,6 +103,10 @@ KI-Assistenten sind nur als SHA-256-Hash gespeichert.
   eingebunden ist (Fehler in 3.1.0). Wer die Volumes lesen kann, kann die
   gespeicherten Zugangsdaten entschlüsseln. Abhilfe: `MINEPOWER_SECRET_KEY`
   setzen und außerhalb der Volumes aufbewahren.
+- **Datensicherungen enthalten Passwort-Hashes und Schlüssel-Prüfsummen.**
+  Sonst wäre nach einer Wiederherstellung niemand mehr anmeldbar. Die
+  Sicherungsdateien deshalb wie die Datenbank selbst schützen (Volume nicht
+  freigeben).
 - **`/api/system/health` und `/api/system/setup-state` ohne Anmeldung.**
   Healthcheck und Erststart brauchen sie. Sie nennen Version und ob schon
   ein Konto existiert.
@@ -114,7 +122,6 @@ KI-Assistenten sind nur als SHA-256-Hash gespeichert.
 | Kein TLS im Image. Im Heimnetz läuft alles über HTTP. | mittel | Für Zugriff von außen einen Reverse-Proxy mit TLS oder ein VPN davorsetzen. Die App verlangt für entfernte Server bereits HTTPS. |
 | Optionaler MQTT-Broker (`--profile mqtt`) nimmt jeden ohne Anmeldung an und veröffentlicht Port 1883. | mittel | Nur im vertrauenswürdigen Netz nutzen oder in `deploy/mosquitto.conf` Benutzer und Passwort einrichten. Nicht geändert, weil bestehende Home-Assistant-Anbindungen sonst brechen. |
 | OCPP ohne Passwort (Sicherheitsprofil 0): Ein Gerät im Netz, das die Kennung kennt, kann sich als Wallbox ausgeben und falsche Messwerte liefern. Seit 3.3.0 verbinden sich nur noch eingerichtete Kennungen, und ein Passwort lässt sich hinterlegen (HTTP Basic, Profil 1). | niedrig | Im Gerät „Passwort der Wallbox“ setzen, wenn die Box das unterstützt. TLS (Profil 2) nur über einen vorgeschalteten Proxy. |
-| Eine offene WebSocket-Verbindung bleibt nach Passwortwechsel oder Sperrung bis zum nächsten Verbindungsaufbau bestehen (nur lesend). | niedrig | Bei Bedarf Anwendung neu starten. |
 | Zwei-Faktor-Anmeldung gibt es nicht. | niedrig | Für den Zugriff von außen ein VPN verwenden. |
 | GitHub-Actions sind per Versions-Tag eingebunden, nicht per Commit-Hash. Die Workflows sind derzeit abgeschaltet. | niedrig | Vor dem Wiedereinschalten auf Hashes umstellen. |
 | Persönliche Daten in alten Commits (siehe `AUDIT.md`, Abschnitt „Offen“). | niedrig | Entscheidung des Betreibers. |
