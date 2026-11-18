@@ -39,6 +39,10 @@ def _float_regs(value: float) -> list[int]:
     return [hi, lo]
 
 
+#: Bender: gesetztes höchstes Bit = Messwert nicht verfügbar (auch kurz nach einem Neustart)
+_BENDER_INVALID = 0x80000000
+
+
 def _estimate(state: WallboxState, amps: float, phases: int) -> float:
     """Leistung schätzen, wenn das Gerät keinen Zähler hat (230 V je Phase)."""
     return amps * phases * 230.0 if state == WallboxState.CHARGING else 0.0
@@ -105,7 +109,9 @@ class AlfenEve(LimitWallbox):
         await self.conn.write_registers(1210, _float_regs(amps))
 
     async def read_data(self) -> WallboxData:
-        state = iec_state(regs_text(await self.conn.read_holding(1201, 5)))
+        text = regs_text(await self.conn.read_holding(1201, 5))
+        # Alfen meldet „E“ ohne Fahrzeug bzw. nach dem Abstecken, kein Fehler
+        state = WallboxState.IDLE if text.strip().upper().startswith("E") else iec_state(text)
         limit = f32(await self.conn.read_holding(1210, 2))
         power = f32(await self.conn.read_holding(344, 2))
         currents = _f32s(await self.conn.read_holding(320, 6))
@@ -120,6 +126,12 @@ class _VestelFamily(LimitWallbox):
     """Webasto Next/Ampure Unite basieren auf Vestel EVC04: gleiche Register."""
 
     heartbeat_s = 5.0
+    #: Lebenszeichen alle Timeout/n Sekunden (Webasto 2, Vestel 4)
+    timeout_divisor = 2.0
+
+    async def configure_heartbeat(self) -> None:
+        timeout = (await self.conn.read_holding(2002, 1))[0]
+        self.beat_from_timeout(timeout, self.timeout_divisor, default=5.0)
 
     async def heartbeat(self) -> None:
         await self.conn.write_register(6000, 1)
@@ -155,6 +167,7 @@ class WebastoNext(_VestelFamily):
 
 @register
 class VestelEvc04(_VestelFamily):
+    timeout_divisor = 4.0
     meta = DriverMeta(
         id="vestel_evc04", name="Vestel EVC04 (Modbus TCP)", category=WALLBOX,
         description="Vestel EVC04 und baugleiche Boxen (z. B. Hager witty start) über Modbus TCP.",
@@ -187,27 +200,79 @@ class BenderCC(LimitWallbox):
         fields=[*modbus_fields(unit=255), MAX_CURRENT_FIELD, PHASES_FIELD],
     )
 
+    def __init__(self, config: dict) -> None:
+        super().__init__(config)
+        self._model: str | None = None   # None = noch nicht gelesen
+        self._legacy = False             # alter Registersatz (kein Modell in 142)
+        self._mennekes4 = False          # Amtron 4You/4Business
+        self._soc_reg: int | None = None  # 730 (ISO 15118) oder 2200 (Mennekes ab Protokoll 1.6)
+        self._soc_failed = False
+
+    async def _probe(self) -> None:
+        """Modell einmal lesen. Mennekes 4You/4Business trennen die Verbindung beim Zugriff
+        auf 720/730/740, dort kommt der Ladestand aus 2200 (ab Protokoll 1.6, Reg. 120)."""
+        if self._model is not None:
+            return
+        try:
+            self._model = regs_text(await self.conn.read_holding(142, 10))
+        except DriverError:
+            self._model, self._legacy = "", True
+            return
+        self._mennekes4 = "4You" in self._model or "4Business" in self._model
+        if not self._mennekes4:
+            self._soc_reg = 730
+            return
+        try:
+            proto = regs_text(await self.conn.read_holding(120, 2))
+            major, _, minor = proto.partition(".")
+            if (int(major), int(minor or 0)) >= (1, 6):
+                self._soc_reg = 2200
+        except (DriverError, ValueError):
+            pass
+
+    async def _soc(self) -> float | None:
+        if self._soc_reg is None or self._soc_failed:
+            return None
+        try:
+            if self._soc_reg == 2200:
+                v = s16((await self.conn.read_holding(2200, 1)), 0)  # -101 = nicht verfügbar
+                return float(v) if 0 < v <= 100 else None
+            if (await self.conn.read_holding(740, 1))[0] != 1:
+                return None  # kein Fahrzeug mit ISO 15118
+            v = (await self.conn.read_holding(730, 1))[0]
+            return float(v) if 0 < v <= 100 else None
+        except DriverError:
+            self._soc_failed = True  # Firmware ohne Ladestand: nicht in jedem Takt erneut fragen
+            return None
+
     async def write_limit(self, amps: float) -> None:
         await self.conn.write_registers(1000, [int(round(amps))])
 
     async def read_data(self) -> WallboxData:
+        await self._probe()
         code = (await self.conn.read_holding(122, 1))[0]
         state = {1: WallboxState.IDLE, 2: WallboxState.CONNECTED, 3: WallboxState.CHARGING,
                  4: WallboxState.CHARGING}.get(code, WallboxState.ERROR)
         cur = await self.conn.read_holding(212, 6)
-        currents = [0.0 if u32(cur, 2 * i, "big") == 0xFFFFFFFF else u32(cur, 2 * i, "big") / 1000.0
-                    for i in range(3)]
-        raw = u32(await self.conn.read_holding(220, 2), word_order="big")
-        power = sum(currents) * 230.0 if raw == 0xFFFFFFFF else float(raw)
+        raw_cur = [u32(cur, 2 * i, "big") for i in range(3)]
+        currents = [0.0 if v >= _BENDER_INVALID else v / 1000.0 for v in raw_cur]
+        if self._legacy:
+            # Alter Registersatz: 220 gibt es nicht, Leistung aus den Strömen
+            power = sum(currents) * 230.0
+            source = "Bender 212 (230 V angenommen)"
+        else:
+            raw = u32(await self.conn.read_holding(220, 2), word_order="big")
+            if raw < _BENDER_INVALID:
+                power, source = float(raw), "Bender 220"
+            elif any(v >= _BENDER_INVALID for v in raw_cur) and state == WallboxState.CHARGING:
+                # Zähler liefert gerade keine Werte (z. B. Neustart): lieber Takt verwerfen als raten
+                raise DriverError("Bender: Zähler meldet vorübergehend keine gültigen Werte")
+            else:
+                power = sum(currents) * 230.0 if state == WallboxState.CHARGING else 0.0
+                source = "Bender 212 (230 V angenommen)"
         limit = (await self.conn.read_holding(1000, 1))[0]
-        soc = None
-        try:
-            v = (await self.conn.read_holding(730, 1))[0]
-            soc = float(v) if 0 < v <= 100 else None
-        except DriverError:
-            pass  # ältere Firmware ohne ISO-15118-Ladestand
-        return wallbox_data(state, power, current_set=float(limit), currents=currents, soc=soc,
-                            source="Bender 220")
+        return wallbox_data(state, power, current_set=float(limit), currents=currents, soc=await self._soc(),
+                            source=source)
 
 
 # ---------------------------------------------------------------- Phoenix Contact
@@ -300,15 +365,23 @@ class KebaModbus(ModbusWallbox):
         description="KEBA KeContact P30 x-Serie und P40 über Modbus TCP.",
         capabilities=CAPS,
         notes="Modbus TCP in der Web-Oberfläche bzw. per DIP-Schalter aktivieren.",
-        fields=[*modbus_fields(unit=255), MAX_CURRENT_FIELD],
+        fields=[*modbus_fields(unit=255), MAX_CURRENT_FIELD,
+                ConfigField(key="model", label="Modell", type=FieldType.SELECT, default="auto",
+                            options=[{"value": "auto", "label": "Automatisch"},
+                                     {"value": "p30", "label": "P30 x"},
+                                     {"value": "p40", "label": "P40"}],
+                            help="Nur nötig, wenn eine P40 den Produktcode 0 meldet (z. B. DKV-Boxen)")],
     )
+    #: Standard, bis der Failsafe-Timeout (1602) gelesen ist; danach Timeout/2
     heartbeat_s = 10.0
 
     def __init__(self, config: dict) -> None:
         super().__init__(config)
-        self._p40: bool | None = None
+        model = str(config.get("model") or "auto").lower()
+        self._p40: bool | None = {"p30": False, "p40": True}.get(model)
         self._amps = self.min_current
         self._timeout: int | None = None
+        self._enabled: bool | None = None  # P30: Freigabe lokal merken (Status 1 heißt auch „kein Fahrzeug“)
 
     async def _is_p40(self) -> bool:
         if self._p40 is None:
@@ -316,9 +389,12 @@ class KebaModbus(ModbusWallbox):
             self._p40 = len(code) == 7 and code.startswith("4")
         return self._p40
 
+    async def configure_heartbeat(self) -> None:
+        self._timeout = u32(await self.conn.read_holding(1602, 2), word_order="big")
+        # 0 = Failsafe aus, dann ist kein Lebenszeichen nötig
+        self.beat_from_timeout(self._timeout, 2.0)
+
     async def heartbeat(self) -> None:
-        if self._timeout is None:
-            self._timeout = u32(await self.conn.read_holding(1602, 2), word_order="big")
         if self._timeout:
             await self.conn.write_register(5018, min(self._timeout, 0xFFFF))
 
@@ -337,7 +413,12 @@ class KebaModbus(ModbusWallbox):
         currents = []
         for reg in (1008, 1010, 1012):
             currents.append(u32(await self.conn.read_holding(reg, 2), word_order="big") / 1000.0)
-        enabled = charging != 5
+        if await self._is_p40():
+            enabled = (await self.conn.read_holding(5004, 1))[0] != 0
+        else:
+            if self._enabled is None:
+                self._enabled = charging != 5
+            enabled = self._enabled
         return wallbox_data(state, power, current_set=self._amps if enabled else 0.0, currents=currents,
                             source="KEBA 1020")
 
@@ -353,18 +434,33 @@ class KebaModbus(ModbusWallbox):
             await self.conn.write_register(5004, int(self._amps * 1000))
         else:
             await self.conn.write_register(5014, 1)
+        self._enabled = True
 
     async def stop_charging(self) -> None:
         if await self._is_p40():
             await self.conn.write_register(5004, 0)
         else:
             await self.conn.write_register(5014, 0)
+        self._enabled = False
 
 
 # ---------------------------------------------------------------- Heidelberg / Amperfied
 
 class _Heidelberg(LimitWallbox):
-    """Heidelberg Energy Control und Amperfied: gleiche Registerkarte, Strom in 0,1 A."""
+    """Heidelberg Energy Control und Amperfied: gleiche Registerkarte, Strom in 0,1 A.
+
+    Holding 257 ist der Watchdog-Timeout in ms. Als Lebenszeichen genügt ein
+    Lesezugriff (wie evcc: Status lesen, Heidelberg alle Timeout/4,
+    Amperfied alle Timeout/2). 0 = Watchdog aus.
+    """
+
+    timeout_divisor = 4.0
+
+    async def configure_heartbeat(self) -> None:
+        self.beat_from_timeout((await self.conn.read_holding(257, 1))[0] / 1000.0, self.timeout_divisor)
+
+    async def heartbeat(self) -> None:
+        await self.conn.read_input(5, 1)
 
     async def connect(self) -> None:
         await super().connect()
@@ -405,6 +501,7 @@ class HeidelbergEC(_Heidelberg):
 
 @register
 class Amperfied(_Heidelberg):
+    timeout_divisor = 2.0
     meta = DriverMeta(
         id="amperfied", name="Amperfied connect.home/business (Modbus TCP)", category=WALLBOX,
         description="Amperfied Wallbox connect.home, connect.business, connect.solar über Modbus TCP.",
@@ -436,8 +533,15 @@ class MennekesCompact(ModbusWallbox):
 
     async def read_data(self) -> WallboxData:
         code = (await self.conn.read_holding(0x0100, 1))[0]
-        state = {1: WallboxState.IDLE, 2: WallboxState.CONNECTED, 3: WallboxState.CONNECTED,
-                 4: WallboxState.CONNECTED, 5: WallboxState.CHARGING}.get(code, WallboxState.ERROR)
+        if code == 6:
+            # Fallback-Zustand (z. B. nach Watchdog-Ablauf): mit 0 A und Freigabe zurückholen,
+            # danach setzt der Regeltakt den gewünschten Strom (wie evcc)
+            await self.conn.write_registers(0x0302, _float_regs(0.0))
+            await self.conn.write_register(0x0D05, 1)
+            state = WallboxState.CONNECTED
+        else:
+            state = {1: WallboxState.IDLE, 2: WallboxState.CONNECTED, 3: WallboxState.CONNECTED,
+                     4: WallboxState.CONNECTED, 5: WallboxState.CHARGING}.get(code, WallboxState.ERROR)
         released = (await self.conn.read_holding(0x0D05, 1))[0] == 1
         limit = f32(await self.conn.read_holding(0x0302, 2))
         power = f32(await self.conn.read_holding(0x0512, 2))
@@ -494,7 +598,8 @@ class AblEmh1(LimitWallbox):
         raw = (await self._read(0x04, 1))[0] & 0xFF
         if raw == 0xE0:
             # Ausgang gesperrt: freischalten, danach regelt der Ladestrom
-            await self.conn.write_registers(0x05, [0xA1A1])
+            for _ in range(2):  # die eMH1 verwirft die erste Anfrage
+                await self.conn.write_registers(0x05, [0xA1A1])
             state = WallboxState.CONNECTED
         else:
             state = iec_state(chr(((raw >> 4) - 0x0A) + ord("A")) if raw >= 0xA0 else "")
@@ -521,6 +626,13 @@ class Em2Go(ModbusWallbox):
     def __init__(self, config: dict) -> None:
         super().__init__(config)
         self._amps = self.min_current
+
+    async def configure_heartbeat(self) -> None:
+        # Holding 89 = Kommunikations-Timeout in s; ein Lesezugriff genügt als Lebenszeichen
+        self.beat_from_timeout((await self.conn.read_holding(89, 1))[0], 2.0)
+
+    async def heartbeat(self) -> None:
+        await self.conn.read_holding(87, 1)
 
     async def read_data(self) -> WallboxData:
         code = (await self.conn.read_holding(0, 1))[0]
@@ -679,6 +791,15 @@ class Pulsares(LimitWallbox):
         capabilities=CAPS,
         fields=[*modbus_fields(unit=1), MAX_CURRENT_FIELD, PHASES_FIELD],
     )
+    #: Backup-Timer (Holding 0x61): Code → Sekunden; andere Codes = Timer aus
+    BACKUP_TIMER_S = {2: 2, 3: 5, 4: 10, 5: 30, 6: 60}
+
+    async def configure_heartbeat(self) -> None:
+        code = (await self.conn.read_holding(0x61, 1))[0]
+        self.beat_from_timeout(self.BACKUP_TIMER_S.get(code, 0), 2.0)
+
+    async def heartbeat(self) -> None:
+        await self.conn.read_holding(0x61, 1)
 
     async def write_limit(self, amps: float) -> None:
         await self.conn.write_registers(0x5D, [int(round(amps * 1000))])
@@ -733,6 +854,13 @@ class OboWallbox(ModbusWallbox):
     def __init__(self, config: dict) -> None:
         super().__init__(config)
         self._amps = self.min_current
+
+    async def configure_heartbeat(self) -> None:
+        # Holding 28 = Watchdog-Timeout in ms; ein Lesezugriff genügt als Lebenszeichen
+        self.beat_from_timeout((await self.conn.read_holding(28, 1))[0] / 1000.0, 2.0)
+
+    async def heartbeat(self) -> None:
+        await self.conn.read_holding(11, 1)
 
     async def read_data(self) -> WallboxData:
         code = (await self.conn.read_holding(11, 1))[0]

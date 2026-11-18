@@ -10,8 +10,11 @@
 * Feldvorlagen, damit alle Wallbox-Treiber dieselben Bezeichnungen haben.
 
 Registerbelegungen und Abläufe der Modbus-, HTTP- und Cloud-Treiber folgen
-den Herstellerdokumentationen. Wo diese lückenhaft sind, dient der
-Quelltext von evcc (MIT-Lizenz, github.com/evcc-io/evcc) als Referenz.
+den Herstellerdokumentationen. Wo diese lückenhaft sind, wurden Register-
+adressen und Abläufe mit evcc (github.com/evcc-io/evcc) abgeglichen. Es ist
+kein evcc-Quelltext übernommen, die Treiber sind eigenständig geschrieben.
+Hinweis: Viele Dateien in evcc/charger stehen ausdrücklich NICHT unter der
+MIT-Lizenz des Projekts („All rights reserved“); von dort nichts kopieren.
 """
 from __future__ import annotations
 
@@ -101,17 +104,46 @@ def phases_of(config: dict) -> int:
 # ---------------------------------------------------------------- Basisklassen
 
 class Heartbeat:
-    """Lebenszeichen per Hintergrund-Task für Geräte mit Watchdog."""
+    """Lebenszeichen per Hintergrund-Task für Geräte mit Watchdog.
+
+    Viele Boxen haben einen einstellbaren Watchdog-Timeout. Treiber lesen ihn
+    in ``configure_heartbeat`` und setzen daraus ``heartbeat_s`` (wie evcc:
+    Timeout/2 bzw. /4). Das passiert im Hintergrund-Task, damit ein nicht
+    erreichbares Gerät den Start nicht verzögert; schlägt es fehl, gilt der
+    Standardtakt und der nächste Takt versucht es erneut. Setzt der Treiber
+    ``heartbeat_s`` auf 0 (Watchdog im Gerät aus), endet der Task.
+    """
 
     #: Abstand der Lebenszeichen in s (0 = Gerät hat keinen Watchdog)
     heartbeat_s: float = 0.0
+    #: kürzester erlaubter Abstand, schützt Bus und Gerät
+    HEARTBEAT_MIN_S = 1.0
+    #: neuer Versuch, den Timeout zu lesen, solange das Gerät nicht antwortet
+    BEAT_RETRY_S = 30.0
     _beat_task: asyncio.Task | None = None
+    _beat_configured: bool = False
 
     async def heartbeat(self) -> None:
         """Lebenszeichen an das Gerät (Treiber mit Watchdog überschreiben das)."""
 
+    async def configure_heartbeat(self) -> None:
+        """Takt aus dem Watchdog-Timeout des Geräts ableiten (optional)."""
+
+    def beat_from_timeout(self, timeout_s: float, divisor: float, *, default: float | None = None) -> None:
+        """heartbeat_s = Timeout/divisor, mindestens HEARTBEAT_MIN_S.
+
+        Timeout 0 bedeutet „Watchdog aus“: dann ``default`` (None = kein Lebenszeichen).
+        """
+        if timeout_s and timeout_s > 0:
+            self.heartbeat_s = max(self.HEARTBEAT_MIN_S, float(timeout_s) / divisor)
+        else:
+            self.heartbeat_s = default or 0.0
+
+    def _wants_heartbeat(self) -> bool:
+        return bool(self.heartbeat_s) or type(self).configure_heartbeat is not Heartbeat.configure_heartbeat
+
     def start_heartbeat(self) -> None:
-        if self.heartbeat_s and (self._beat_task is None or self._beat_task.done()):
+        if self._wants_heartbeat() and (self._beat_task is None or self._beat_task.done()):
             self._beat_task = asyncio.create_task(self._beat_loop())
 
     def stop_heartbeat(self) -> None:
@@ -119,9 +151,26 @@ class Heartbeat:
             self._beat_task.cancel()
             self._beat_task = None
 
+    async def _ensure_beat_config(self) -> None:
+        if self._beat_configured:
+            return
+        try:
+            await self.configure_heartbeat()
+            self._beat_configured = True
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 – Standardtakt, nächster Versuch im nächsten Takt
+            log.debug("%s: Watchdog-Timeout nicht lesbar: %s", type(self).__name__, exc)
+
     async def _beat_loop(self) -> None:
         while True:
-            await asyncio.sleep(self.heartbeat_s)
+            await self._ensure_beat_config()
+            if self.heartbeat_s <= 0:
+                if self._beat_configured:
+                    return  # Watchdog im Gerät abgeschaltet
+                await asyncio.sleep(self.BEAT_RETRY_S)  # Gerät antwortet noch nicht
+                continue
+            await asyncio.sleep(max(self.HEARTBEAT_MIN_S, self.heartbeat_s))
             try:
                 await self.heartbeat()
             except asyncio.CancelledError:
