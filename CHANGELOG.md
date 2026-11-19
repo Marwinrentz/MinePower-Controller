@@ -4,6 +4,12 @@ Format: eine Version je Abschnitt, Einträge gruppiert in Neu, Geändert und
 Behoben, ein Eintrag je Zeile. Die App zeigt diese Datei unter „Changelog“
 und nach einem Update als Hinweisfenster.
 
+## Unveröffentlicht
+
+### Behoben
+- Simulation: Warmwasser heizte etwa 1000-mal zu schnell (nach Boost in Sekunden über 75 °C bis 100 °C); jetzt rund 14 K pro Stunde bei 3 kW
+- Simulation: Standverlust des Warmwasserspeichers 3,6 K pro Tag statt pro Stunde
+
 ## 3.3.1 (2026-11-18)
 
 ### Geändert
