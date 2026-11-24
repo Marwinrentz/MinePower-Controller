@@ -4,9 +4,30 @@ Format: eine Version je Abschnitt, Einträge gruppiert in Neu, Geändert und
 Behoben, ein Eintrag je Zeile. Die App zeigt diese Datei unter „Changelog“
 und nach einem Update als Hinweisfenster.
 
-## Unveröffentlicht
+## 3.4.0 (2026-11-24)
+
+### Neu
+- Wärmepumpen und Klimaanlagen: Überschuss geht auch in Wärme; MinePower gibt das Gerät frei, die Temperatur regelt es selbst
+- Treiber Viessmann-Wärmepumpe (ViCare-API): Warmwasser-Einmalladung oder höhere Warmwasser-Solltemperatur bei Überschuss
+- Treiber Homey Pro: beliebiges Homey-Gerät bei Überschuss einschalten oder Solltemperatur verschieben
+- Treiber Daikin-Klimaanlage (lokaler WLAN-Adapter, Airbase): bei Überschuss heizen oder kühlen
+- Verdichterschutz: Mindestlaufzeit und Mindestpause je Gerät (Vorgabe 10 / 5 min für Wärmepumpe und Klima)
+- Hilfsskript backend/tools/vicare_token.py für das Viessmann-Refresh-Token
+- Simulation: Wärmepumpe mit SG-Ready-Freigabe und Pufferspeicher, im Demo-Modus zwischen Auto und Heizstab
+- Energiefluss: jedes Auto und jedes Wärmegerät mit eigenem Bild und eigener Leitung (bis vier, darüber „+n weitere“); neue Bilder für Wärmepumpe und Klimaanlage
+- Übersicht: Verlauf mit eigener Linie je Auto und Wärmegerät
+- Wand-Ansicht: ein Balken je Auto und Wärmegerät
+
+### Geändert
+- Seite Warmwasser heißt Wärme und zeigt alle Wärmegeräte gleichzeitig: Kacheln oben, darunter die Details jedes Geräts, sortiert nach Reihenfolge
+- Seite Auto zeigt alle Autos gleichzeitig statt Umschalter
+- Mehrere Wärmegeräte laufen gleichzeitig nach der Reihenfolge (Platz 1 zuerst, der Rest an die nächsten)
+- „Warum?“ nennt jedes Gerät einzeln, bei mehreren mit Namen
+- SG-Ready-Wärmepumpen gelten als selbstregelnd mit Verdichterschutz
+- Ein-/Aus-Geräte (Relais, SG-Ready) werden nie mehr als modulierend geregelt, auch wenn das gespeichert war
 
 ### Behoben
+- Wärmepumpe im eigenen Normalbetrieb wurde als „folgt der Regelung nicht“ gemeldet
 - Statistik: Kennzahlen, Ladevorgänge und Diagrammachsen auf Deutsch mit Dezimalkomma und Tausenderpunkt (vorher z. B. "7,000" und "38.4 kWh")
 - Diagramme: Monats- und Wochentagsnamen auf Deutsch ("Okt" statt "Oct"), Tagesachse als "09.10."
 - Wand-Ansicht: Strompreis mit Dezimalkomma
