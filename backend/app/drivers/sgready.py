@@ -71,7 +71,7 @@ class SgReadyShelly(_SgReady):
     meta = DriverMeta(
         id="sgready_shelly", name="Wärmepumpe SG-Ready über Shelly (2 Kanäle)", category=DeviceCategory.WATER_HEATER,
         description="SG-Ready über einen zweikanaligen Shelly (Gen2+, z. B. Pro 2, Plus 2PM).",
-        capabilities={"relay", "sg_ready", "write_test"},
+        capabilities={"relay", "sg_ready", "heat_pump", "write_test"},
         notes=SG_NOTES,
         fields=[ConfigField(key="host", label="IP-Adresse", placeholder="192.0.2.13"),
                 ConfigField(key="channel_1", label="Kanal Kontakt 1", type=FieldType.NUMBER, default=0),
@@ -111,7 +111,7 @@ class SgReadyHomeAssistant(_SgReady):
         id="sgready_homeassistant", name="Wärmepumpe SG-Ready über Home Assistant",
         category=DeviceCategory.WATER_HEATER,
         description="SG-Ready über zwei Schalt-Entitäten in Home Assistant.",
-        capabilities={"relay", "sg_ready", "write_test"},
+        capabilities={"relay", "sg_ready", "heat_pump", "write_test"},
         notes=SG_NOTES,
         fields=[URL, TOKEN, entity("switch_1", "Entität Kontakt 1", placeholder="switch."),
                 entity("switch_2", "Entität Kontakt 2", placeholder="switch."),

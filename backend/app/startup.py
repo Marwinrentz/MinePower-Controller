@@ -584,6 +584,8 @@ async def setup_demo_mode() -> None:
                    settings={"mode": "pv_only", "min_current": 6, "max_current": 16, "phases_mode": "auto"}),
             Device(name="Heizstab (Simulation)", category="water_heater", driver_id="sim_water_heater",
                    config={"rated_power": 3000}, settings={"mode": "pv_only", "max_power_w": 3000}),
+            Device(name="Wärmepumpe (Simulation)", category="water_heater", driver_id="sim_heat_pump",
+                   config={"rated_power": 1800}, settings={"mode": "pv_only", "kind": "heat_pump"}),
             Device(name="Hausbatterie (Simulation)", category="battery", driver_id="sim_battery",
                    config={"capacity_kwh": 9.6, "max_power": 5000, "allow_active_control": True},
                    settings={"manage_reserve": True}),
@@ -592,10 +594,10 @@ async def setup_demo_mode() -> None:
         await session.flush()
         prio = await session.get(Setting, "priority")
         if prio is not None:
-            # Standard-Kette: Auto → Warmwasser (der Speicher hat seinen Platz
+            # Standard-Kette: Auto → Wärmepumpe → Warmwasser (der Speicher hat seinen Platz
             # über 'Batterie zuerst bis …")
             ids = {d.driver_id: d.id for d in demo_devices}
-            prio.value = {"order": [ids["sim_wallbox"], ids["sim_water_heater"]]}
+            prio.value = {"order": [ids["sim_wallbox"], ids["sim_heat_pump"], ids["sim_water_heater"]]}
         user_count = await session.scalar(select(func.count(User.id)))
         if not user_count:
             session.add(User(email="demo@minepower.de", name="Demo",
