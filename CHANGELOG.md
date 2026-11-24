@@ -10,6 +10,8 @@ und nach einem Update als Hinweisfenster.
 - Statistik: Kennzahlen, Ladevorgänge und Diagrammachsen auf Deutsch mit Dezimalkomma und Tausenderpunkt (vorher z. B. "7,000" und "38.4 kWh")
 - Diagramme: Monats- und Wochentagsnamen auf Deutsch ("Okt" statt "Oct"), Tagesachse als "09.10."
 - Wand-Ansicht: Strompreis mit Dezimalkomma
+- Simulation: Warmwasser heizte etwa 1000-mal zu schnell (nach Boost in Sekunden über 75 °C bis 100 °C); jetzt rund 14 K pro Stunde bei 3 kW
+- Simulation: Standverlust des Warmwasserspeichers 3,6 K pro Tag statt pro Stunde
 
 ## 3.3.1 (2026-11-18)
 

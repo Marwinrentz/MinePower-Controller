@@ -124,8 +124,8 @@ class SimulationWorld:
             self.wh_power = 2980.0 if self.wh_temp < 75.0 else 0.0
         else:
             self.wh_power = min(self.wh_set_power, self.wh_rated) if self.wh_temp < 72.0 else 0.0
-        self.wh_temp += (self.wh_power * h) / (180 * 1.163 / 1000.0)  # kWh je K für 180 l
-        self.wh_temp = max(20.0, self.wh_temp - 0.15 * h * 24)        # Standverlust
+        self.wh_temp += (self.wh_power * h) / (180 * 1.163)  # Wh / (Wh je K für 180 l) = K
+        self.wh_temp = max(20.0, self.wh_temp - 0.15 * h)             # Standverlust ~3,6 K/Tag
 
         # Batterie reagiert auf Residual (Eigenverbrauchsoptimierung)
         residual = self.pv_power() - self.house_load() - self.wb_power - self.wh_power
