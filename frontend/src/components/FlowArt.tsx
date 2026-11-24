@@ -298,3 +298,93 @@ export function WaterArt({ active, temp }: { active: boolean; temp: number | nul
     </Art>
   );
 }
+
+/** Kreis in einer senkrechten Fläche y = const (Front links) als Vieleck. */
+function ring(cx: number, y: number, cz: number, r: number, n = 28): string {
+  const p: P3[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    p.push([cx + r * Math.cos(a), y, cz + r * Math.sin(a)]);
+  }
+  return pts(...p);
+}
+
+/** Wärmepumpe: Außengerät mit Ventilator; die Flügel drehen sich im Betrieb,
+ *  rechts unten zeigt ein kleines Thermometer die Speichertemperatur. */
+export function HeatPumpArt({ active, temp }: { active: boolean; temp: number | null }) {
+  const x0 = -17, y0 = -8, z0 = 4, dx = 34, dy = 16, dz = 27;
+  const fy = y0 + dy, fx = -5, fz = z0 + dz / 2;
+  const blades = (phase: number) => [0, 1, 2].map((k) => {
+    const a = phase + (k * Math.PI * 2) / 3;
+    const tip: P3 = [fx + 8 * Math.cos(a), fy, fz + 8 * Math.sin(a)];
+    const side: P3 = [fx + 6.5 * Math.cos(a + 0.55), fy, fz + 6.5 * Math.sin(a + 0.55)];
+    return <polygon key={k} className="fa-blade" points={pts([fx, fy, fz], tip, side)} />;
+  });
+  const lvl = temp == null ? null : Math.max(0.08, Math.min(1, (temp - 25) / 35));
+  const led = iso([x0 + dx - 6, fy, z0 + dz - 6.5]);
+  const pipeA = iso([x0, y0 + 5, z0 + 8]);
+  const pipeB = iso([x0, y0 + 10, z0 + 5]);
+  return (
+    <Art className={active ? "on" : ""}>
+      <Tile tone="green" />
+      {/* Füße */}
+      <Box x={x0 + 2} y={y0 + 1} z={0} dx={3} dy={dy - 2} dz={z0} top="#6b7280" left="#4b5563" right="#374151" />
+      <Box x={x0 + dx - 5} y={y0 + 1} z={0} dx={3} dy={dy - 2} dz={z0} top="#6b7280" left="#4b5563" right="#374151" />
+      {/* Rohre ins Haus (hinter dem Gerät) */}
+      <path className="fa-pipe hot" d={"M " + pipeA[0] + " " + pipeA[1] + " q -6 -2 -10 -8"} />
+      <path className="fa-pipe cold" d={"M " + pipeB[0] + " " + pipeB[1] + " q -7 -1 -12 -7"} />
+      <Box x={x0} y={y0} z={z0} dx={dx} dy={dy} dz={dz} top="#eef1f4" left="#f8fafc" right="#d5dbe2" stroke="#c3cad3" />
+      {/* Lüftungsschlitze rechts */}
+      {[0, 1, 2, 3, 4].map((i) => line([x0 + dx, y0 + 3, z0 + 5 + i * 4.5], [x0 + dx, y0 + dy - 3, z0 + 5 + i * 4.5],
+        { className: "fa-vent" }, `v${i}`))}
+      {/* Ventilator */}
+      <polygon points={ring(fx, fy, fz, 10.5)} fill="#d7dde4" />
+      <polygon points={ring(fx, fy, fz, 9)} fill="#2b313a" />
+      <g className="fa-fan a">{blades(0.3)}</g>
+      <g className="fa-fan b">{blades(0.3 + Math.PI / 3)}</g>
+      <polygon points={ring(fx, fy, fz, 1.6, 12)} fill="#9aa3ad" />
+      {[6, 3].map((r) => <polygon key={r} points={ring(fx, fy, fz, r)} fill="none" className="fa-grille" />)}
+      {/* Anzeige */}
+      <Quad p={[[x0 + dx - 9, fy, z0 + dz - 9], [x0 + dx - 3, fy, z0 + dz - 9], [x0 + dx - 3, fy, z0 + dz - 4],
+        [x0 + dx - 9, fy, z0 + dz - 4]]} fill="#1f2937" />
+      <circle className="fa-led" cx={led[0]} cy={led[1]} r={1.1} />
+      {lvl != null && (
+        <g>
+          <Quad p={[[x0 + dx - 8, fy, z0 + 3], [x0 + dx - 4, fy, z0 + 3], [x0 + dx - 4, fy, z0 + 14], [x0 + dx - 8, fy, z0 + 14]]}
+            fill="#e5e9ee" />
+          <Quad className="fa-temp" fill="#e5484d" p={[[x0 + dx - 7.3, fy, z0 + 3.6], [x0 + dx - 4.7, fy, z0 + 3.6],
+            [x0 + dx - 4.7, fy, z0 + 3.6 + 9.8 * lvl], [x0 + dx - 7.3, fy, z0 + 3.6 + 9.8 * lvl]]} />
+        </g>
+      )}
+    </Art>
+  );
+}
+
+/** Klimaanlage: Innengerät an einem Wandstück, im Betrieb strömt Luft. */
+export function ClimateArt({ active, cooling = false }: { active: boolean; cooling?: boolean }) {
+  const wy0 = -15, wy1 = -11;
+  const u = { x0: -16, x1: 16, y0: wy1, y1: wy1 + 8, z0: 27, z1: 38 };
+  const fy = u.y1;
+  const led = iso([u.x1 - 4, fy, u.z0 + 6]);
+  const air = [-9, 0, 9].map((x, i) => {
+    const [ax, ay] = iso([x, fy + 1, u.z0 - 1]);
+    return <path key={i} className={"fa-air " + (cooling ? "cool" : "warm")} style={{ animationDelay: `${i * 0.35}s` }}
+      d={"M " + ax + " " + ay + " q -3 7 1 13 q 3 5 -1 10"} />;
+  });
+  return (
+    <Art className={active ? "on" : ""}>
+      <Tile tone="green" />
+      {/* Wandstück */}
+      <Box x={-22} y={wy0} z={0} dx={44} dy={wy1 - wy0} dz={46} top="#e2d6c4" left="#f1e8da" right="#d8cab5" />
+      {/* Kältemittelleitung nach unten */}
+      {line([u.x1 - 1, u.y0 + 1, u.z0], [u.x1 - 1, u.y0 + 1, 2], { className: "fa-cable" })}
+      {/* Innengerät */}
+      <Box x={u.x0} y={u.y0} z={u.z0} dx={u.x1 - u.x0} dy={u.y1 - u.y0} dz={u.z1 - u.z0}
+        top="#f3f5f7" left="#ffffff" right="#dfe4ea" stroke="#c7ced6" />
+      <Quad p={[[u.x0 + 2, fy, u.z0 + 0.8], [u.x1 - 2, fy, u.z0 + 0.8], [u.x1 - 2, fy, u.z0 + 2.6], [u.x0 + 2, fy, u.z0 + 2.6]]}
+        fill="#374151" />
+      <circle className="fa-led" cx={led[0]} cy={led[1]} r={1} />
+      {active && air}
+    </Art>
+  );
+}

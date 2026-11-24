@@ -9,6 +9,7 @@ import { useState } from "react";
 import { useI18n } from "../i18n";
 import type { Device } from "../lib/types";
 import { Icon, CATEGORY_ICON } from "./icons";
+import { HEAT_LABEL, configuredKind, deviceIcon } from "../lib/heat";
 
 
 export function PriorityChain({ devices, order, onChange }: {
@@ -70,10 +71,10 @@ export function PriorityChain({ devices, order, onChange }: {
         >
           <span className="prio-grip" aria-hidden="true">⠿</span>
           <span className="prio-rank">{i + 1}</span>
-          <Icon name={CATEGORY_ICON[d.category] ?? "settings"} size={17} />
+          <Icon name={deviceIcon(d, CATEGORY_ICON[d.category] ?? "settings")} size={17} />
           <div className="col" style={{ gap: 0, minWidth: 0 }}>
             <strong style={{ color: "var(--text-strong)" }}>{d.name}</strong>
-            <small>{t(`device.categories.${d.category}`)}</small>
+            <small>{configuredKind(d) ? t(HEAT_LABEL[configuredKind(d) ?? "water"]) : t(`device.categories.${d.category}`)}</small>
           </div>
           <div className="spacer" />
           <div className="prio-move">

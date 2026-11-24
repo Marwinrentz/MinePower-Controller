@@ -27,6 +27,7 @@
  */
 import { fmtW } from "../lib/format";
 import type { Snapshot } from "../lib/types";
+import { HEAT_ICON, HEAT_TONE, devPower, heatKind } from "../lib/heat";
 import { useAnimatedNumber } from "./ui";
 import { Icon, type IconName } from "./icons";
 
@@ -178,14 +179,36 @@ type Row = { key: string; label: string; icon: IconName; watts: number; color: s
  *  Farbe der Energieart, die Zahl rechts groß. Keine Beschriftung im Balken
  *  (die wird bei kleinen Werten unlesbar), keine Mini-Segmente. Die Skala
  *  springt nur in festen Stufen, damit die Anzeige nicht 'atmet". */
+/** Eine Zeile je Auto und je Wärmegerät (Warmwasser, Wärmepumpe, Klima) –
+ *  bei mehreren Geräten derselben Art mit Namen. Ohne Gerät bleibt die
+ *  Sammelzeile stehen, damit die Wand ihr gewohntes Bild behält. */
+function loadRows(snapshot: Snapshot, t: (k: string) => string): Row[] {
+  const cars = snapshot.devices.filter((d) => d.category === "wallbox" && d.enabled);
+  const heats = snapshot.devices.filter((d) => d.category === "water_heater" && d.enabled);
+  const rows: Row[] = cars.length
+    ? cars.map((d) => ({ key: `car-${d.id}`, label: cars.length > 1 ? d.name : t("dash.car"), icon: "car" as IconName,
+                         watts: devPower(d), color: "var(--c-car)" }))
+    : [{ key: "car", label: t("dash.car"), icon: "car", watts: snapshot.wallbox_power, color: "var(--c-car)" }];
+  if (!heats.length) {
+    rows.push({ key: "water", label: t("dash.water"), icon: "water", watts: snapshot.water_power, color: "var(--c-water)" });
+  }
+  for (const d of heats) {
+    const kind = heatKind(d);
+    rows.push({
+      key: `heat-${d.id}`, label: heats.length > 1 || kind !== "water" ? d.name : t("dash.water"),
+      icon: HEAT_ICON[kind], watts: devPower(d), color: `var(--c-${HEAT_TONE[kind]})`,
+    });
+  }
+  return rows;
+}
+
 export function WallBars({ snapshot, t }: { snapshot: Snapshot; t: (k: string) => string }) {
   const grid = snapshot.grid_power ?? 0;
   const bat = snapshot.battery?.power ?? 0;
   const rows: Row[] = [
     { key: "pv", label: t("dash.pv"), icon: "sun", watts: snapshot.pv_power, color: "var(--c-pv)" },
     { key: "house", label: t("dash.house"), icon: "house", watts: snapshot.house_power, color: "var(--c-house)" },
-    { key: "car", label: t("dash.car"), icon: "car", watts: snapshot.wallbox_power, color: "var(--c-car)" },
-    { key: "water", label: t("dash.water"), icon: "water", watts: snapshot.water_power, color: "var(--c-water)" },
+    ...loadRows(snapshot, t),
   ];
   if (snapshot.battery) {
     rows.push({

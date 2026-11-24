@@ -51,6 +51,8 @@
   --c-battery: #d39222;
   --c-car: #0b9db0;
   --c-water: #8b5cf6;
+  --c-heatpump: #db2777;
+  --c-climate: #0284c7;
   --c-house: #748196;
   --c-waste: #d97706;
 
@@ -152,6 +154,8 @@
   --c-battery: #fbbf24;
   --c-car: #22d3ee;
   --c-water: #a78bfa;
+  --c-heatpump: #f472b6;
+  --c-climate: #38bdf8;
   --c-house: #94a3b8;
   --c-waste: #fb923c;
   --ok: #34d399;
@@ -852,6 +856,8 @@ button.chip.on { background: var(--accent-soft); border-color: var(--accent); co
 .pflow-wire.active.tone-battery .pflow-track { stroke: var(--c-battery); }
 .pflow-wire.active.tone-car .pflow-track { stroke: var(--c-car); }
 .pflow-wire.active.tone-water .pflow-track { stroke: var(--c-water); }
+.pflow-wire.active.tone-heatpump .pflow-track { stroke: var(--c-heatpump); }
+.pflow-wire.active.tone-climate .pflow-track { stroke: var(--c-climate); }
 
 .pflow-node {
   align-items: center; border-radius: var(--r-lg); color: var(--text-strong); display: flex; flex-direction: column;
@@ -896,6 +902,18 @@ a.pflow-node:focus-visible { outline: 2px solid var(--c-grid-export); outline-of
 .fa.on .fa-heat { animation: fa-heat 2.2s ease-in-out infinite; }
 @keyframes fa-heat { 0%, 100% { opacity: 0.25; } 50% { opacity: 0.6; } }
 .fa-temp { fill: #e5484d; }
+.fa-vent { stroke: #b9c1cb; stroke-linecap: round; stroke-width: 0.7; }
+.fa-grille { stroke: #6b7280; stroke-width: 0.5; }
+.fa-blade { fill: #8b95a1; }
+.fa-fan.b { opacity: 0; }
+.fa.on .fa-fan.a { animation: fa-fan-a 0.5s steps(1) infinite; }
+.fa.on .fa-fan.b { animation: fa-fan-b 0.5s steps(1) infinite; }
+@keyframes fa-fan-a { 0% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes fa-fan-b { 0% { opacity: 0; } 50% { opacity: 1; } }
+.fa-air { fill: none; stroke-linecap: round; stroke-width: 1.3; opacity: 0; animation: fa-air 2.4s ease-in-out infinite; }
+.fa-air.warm { stroke: #fb923c; }
+.fa-air.cool { stroke: #38bdf8; }
+@keyframes fa-air { 0% { opacity: 0; transform: translateY(-2px); } 40% { opacity: 0.8; } 100% { opacity: 0; transform: translateY(4px); } }
 .fa.on .fa-soc { animation: led 2s ease-in-out infinite; }
 [data-theme="dark"] .fa { filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.45)); }
 [data-theme="dark"] .pflow-badge.ok { color: #9be15d; }
@@ -1202,6 +1220,7 @@ a.pflow-node:focus-visible { outline: 2px solid var(--c-grid-export); outline-of
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
   .pflow-dots { animation: none !important; }
   .fa-glint { display: none; }
+  .fa-fan, .fa-air { animation: none !important; }
   .phase-leaving .g-car, .phase-arriving .g-car { animation: none !important; }
   .phase-leaving .g-car { opacity: 0; }
   .g-ghost { animation: none !important; }
@@ -1340,3 +1359,42 @@ a.pflow-node:focus-visible { outline: 2px solid var(--c-grid-export); outline-of
 .log-line.level-warning .log-level { color: var(--warn); }
 .log-line.level-error .log-level, .log-line.level-critical .log-level { color: var(--err); }
 .log-text { overflow-wrap: anywhere; white-space: pre-wrap; }
+
+/* ---------------------------------------------------------------- Wärme (3.4) */
+.quick-icon.tone-heatpump { background: color-mix(in srgb, var(--c-heatpump) 15%, transparent); color: var(--c-heatpump); }
+.quick-icon.tone-climate { background: color-mix(in srgb, var(--c-climate) 15%, transparent); color: var(--c-climate); }
+/* Vier Verbraucher unten: etwas kleinere Schrift, damit nichts überlappt */
+.pflow.dense .pflow-value { font-size: clamp(13px, 3.6vw, 17px); }
+.pflow.dense .pflow-sub { font-size: clamp(10px, 2.6vw, 12px); max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.pflow.dense .pflow-badge { font-size: 11px; }
+
+.heat-overview { display: grid; gap: var(--s3); grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 720px) { .heat-overview { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); } }
+.heat-tile {
+  align-items: center; color: inherit; display: grid; gap: var(--s3); grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: var(--s3) var(--s4); text-decoration: none; transition: border-color var(--t-fast), transform var(--t-fast);
+}
+.heat-tile:hover { transform: translateY(-1px); }
+.heat-tile.on.tone-water { border-color: color-mix(in srgb, var(--c-water) 45%, var(--line)); }
+.heat-tile.on.tone-heatpump { border-color: color-mix(in srgb, var(--c-heatpump) 45%, var(--line)); }
+.heat-tile.on.tone-climate { border-color: color-mix(in srgb, var(--c-climate) 45%, var(--line)); }
+.heat-tile.on.tone-car { border-color: color-mix(in srgb, var(--c-car) 45%, var(--line)); }
+.heat-tile-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.heat-tile-main strong { color: var(--text-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.heat-tile-main small { color: var(--text-dim); }
+.heat-tile-status { font-size: var(--text-sm, 14px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.heat-tile-status.tone-pv { color: var(--c-pv); }
+.heat-tile-status.tone-import { color: var(--c-grid-import); }
+.heat-tile-status.tone-err { color: var(--err); }
+.heat-tile-values { align-items: flex-end; display: flex; flex-direction: column; }
+.heat-tile-values b { color: var(--text-strong); font-size: var(--text-lg); }
+.heat-tile-values small { color: var(--text-dim); }
+
+.device-section { display: flex; flex-direction: column; gap: var(--s4); scroll-margin-top: 72px; }
+.device-section + .device-section { border-top: 1px solid var(--line); padding-top: var(--s5, 24px); }
+.device-section-head { align-items: center; color: var(--text-strong); display: flex; font-size: var(--text-lg); gap: var(--s3); margin: 0; }
+.device-section-head small { color: var(--text-dim); font-size: var(--text-sm, 14px); font-weight: 500; }
+
+.hp-art { display: flex; justify-content: center; }
+.hp-art .fa { max-width: 260px; width: 100%; }
+.hp-temp { align-items: center; color: var(--text-dim); display: inline-flex; gap: 4px; }

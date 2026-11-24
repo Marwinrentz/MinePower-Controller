@@ -116,14 +116,51 @@ function usePolledData<T>(url: string, intervalMs = 60000): T | null | undefined
   return data;
 }
 
-export function PowerHistoryChart({ range }: { range: string }) {
+/** Ein Gerät als eigene Linie im Verlauf (Auto, Wärmepumpe, Heizstab …). */
+export type DeviceLine = { id: number; name: string; field: "wallbox_power" | "water_power"; tone: string };
+
+/** Verlauf je Gerät laden (eine Abfrage je Gerät, Quelle device:<id>). */
+function useDeviceSeries(lines: DeviceLine[], range: string, intervalMs = 60000) {
+  const key = lines.map((l) => `${l.id}:${l.field}`).join(",");
+  const [data, setData] = useState<Record<number, { time: string; value: number }[]>>({});
+  useEffect(() => {
+    let alive = true;
+    const load = () => Promise.all(lines.map((l) =>
+      get<SeriesData>(`/api/history?fields=${l.field}&source=device:${l.id}&range=${range}`)
+        .then((d) => [l.id, d[l.field] ?? []] as const)
+        .catch(() => [l.id, []] as const),
+    )).then((rows) => alive && setData(Object.fromEntries(rows)));
+    if (lines.length) void load();
+    else setData({});
+    const timer = window.setInterval(() => lines.length && void load(), intervalMs);
+    return () => { alive = false; window.clearInterval(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, range, intervalMs]);
+  return data;
+}
+
+/** Strichart je Gerät derselben Farbe, damit zwei Wärmepumpen unterscheidbar bleiben. */
+const DASHES = ["solid", "dashed", "dotted"] as const;
+
+export function PowerHistoryChart({ range, devices = [] }: { range: string; devices?: DeviceLine[] }) {
   const data = usePolledData<SeriesData>(
     `/api/history?fields=pv_power,house_power,grid_power,battery_power&range=${range}`,
   );
+  const perDevice = useDeviceSeries(devices, range);
   const theme = useThemeVersion();
   let option: echarts.EChartsOption | null = null;
   if (data && Object.keys(data).length) {
     const mk = (field: string) => (data[field] || []).map((p) => [p.time, p.value]);
+    const seen: Record<string, number> = {};
+    const deviceSeries = devices.map((l) => {
+      const n = (seen[l.tone] = (seen[l.tone] ?? -1) + 1);
+      return {
+        name: l.name, type: "line" as const, showSymbol: false, smooth: true,
+        lineStyle: { width: 1.6, type: DASHES[n % DASHES.length] },
+        color: cssVar(`--c-${l.tone}`),
+        data: (perDevice[l.id] ?? []).map((p) => [p.time, p.value]),
+      };
+    });
     option = {
       ...baseOption(),
       xAxis: timeAxis(),
@@ -137,10 +174,11 @@ export function PowerHistoryChart({ range }: { range: string }) {
           lineStyle: { width: 1.6 }, color: cssVar("--c-grid-import"), data: mk("grid_power") },
         { name: "Batterie", type: "line", showSymbol: false, smooth: true,
           lineStyle: { width: 1.6 }, color: cssVar("--c-battery"), data: mk("battery_power") },
+        ...deviceSeries,
       ],
     };
   }
-  return <EChart key={theme} option={option} height={300} loading={data === undefined} />;
+  return <EChart key={theme} option={option} height={devices.length > 2 ? 330 : 300} loading={data === undefined} />;
 }
 
 /** Verschenkter Solarstrom über die Zeit – macht das Regelziel überprüfbar. */

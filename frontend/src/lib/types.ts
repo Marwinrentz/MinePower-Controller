@@ -118,6 +118,11 @@ export type SnapshotDevice = {
   boost_duration_min?: number;
   max_power_w?: number;
   surplus_temp_c?: number | null;
+  /** Wärmelast: Art (seit 3.4), regelt selbst, Verdichterschutz (s) */
+  kind?: "water" | "heat_pump" | "climate" | "heating";
+  self_regulating?: boolean;
+  min_on_s?: number;
+  min_off_s?: number;
   /** Sekunden seit Beginn eines Eigenprogramms des Geräts (my-PV 'Boost"). */
   self_mode_since_s?: number | null;
   /** Batterie: darf MinePower schreiben, kann der Treiber es, und welcher
@@ -205,6 +210,8 @@ export type Snapshot = {
   battery_plan?: BatteryPlan;
   battery_first?: boolean;
   battery_priority_soc?: number;
+  /** Reihenfolge der Lasten (Geräte-IDs, seit 3.4) */
+  priority?: number[];
   /** Lasten, die gerade absichtlich Netzstrom ziehen */
   grid_loads?: string[];
   /** Netzanschluss-Grenze und nach der Verteilung freier Rest (W). */
