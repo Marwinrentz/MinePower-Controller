@@ -1282,6 +1282,17 @@ a.pflow-node:focus-visible { outline: 2px solid var(--c-grid-export); outline-of
 .device-notes > summary { align-items: center; cursor: pointer; display: flex; font-weight: 700; gap: var(--s2); min-height: 40px; }
 .device-notes p { color: var(--text); font-size: var(--text-sm); margin: var(--s2) 0 0; }
 
+/* Einrichtungshilfe: Schritte für Zugangsdaten, Knopf 'Verbinden' (3.5) */
+.setup-guide .section-label { align-items: center; display: inline-flex; gap: var(--s2); }
+.setup-steps { counter-reset: step; display: grid; gap: var(--s2); list-style: none; margin: var(--s3) 0 0; padding: 0; }
+.setup-steps > li { counter-increment: step; display: grid; gap: var(--s1) var(--s3); grid-template-columns: 26px 1fr; font-size: var(--text-sm); line-height: 1.45; }
+.setup-steps > li::before { align-items: center; background: var(--accent-soft, var(--surface-3)); border-radius: 50%; color: var(--accent); content: counter(step); display: flex; font-size: 12.5px; font-weight: 700; grid-row: span 2; height: 26px; justify-content: center; width: 26px; }
+.setup-steps > li > span { color: var(--text); }
+.setup-link { color: var(--accent); font-size: var(--text-sm); font-weight: 650; text-decoration: none; }
+.setup-link:hover { text-decoration: underline; }
+.oauth-connect { border-color: var(--accent); display: grid; gap: var(--s3); }
+.oauth-connect .row.tight > .input { flex: 1; min-width: 0; }
+
 /* ---------------------------------------------------------------- 2.16: Wand-Balken */
 
 /* Ein gemeinsames Raster für alle Zeilen: Beschriftung und Wert so breit wie

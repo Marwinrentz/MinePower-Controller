@@ -269,6 +269,7 @@ Eigenbetrieb, nicht als Ungehorsam.
 |---|---|---|---|
 | Viessmann (`viessmann_vicare`) | Viessmann Developer Portal, Endpunkte `/iot/v2/features/…` (Umstellung 30.04.2025), Feature-Namen `heating.dhw.sensors.temperature.dhwCylinder` (neu) bzw. `…hotWaterStorage` (alt) | `heating.dhw.oneTimeCharge` activate/deactivate oder `heating.dhw.temperature.main` setTargetTemperature | Doku |
 | Homey Pro (`homey_pro`) | Homey Web API: `GET /api/manager/devices/device/<id>`, `PUT …/capability/<cap>` | `onoff` oder `target_temperature` | unverifiziert |
+| Daikin Onecta (`daikin_onecta`) | Daikin Developer Portal (Onecta-API): `GET /v1/gateway-devices`, `PATCH …/management-points/{mp}/characteristics/{name}`; Token `idp.onecta.daikineurope.com/v1/oidc/token` (Refresh-Token rotiert) | `onOffMode`, `operationMode`, `temperatureControl` mit `path`, `powerfulMode` | Doku |
 | Daikin (`daikin_local`) | lokale Adapter-Schnittstelle `/aircon/get_control_info`, `set_control_info`, `get_sensor_info` (Airbase mit Präfix `/skyfi`) | `pow=1` mit Betriebsart/Soll oder nur `stemp` | unverifiziert |
 
 Einschränkungen:
@@ -276,16 +277,22 @@ Einschränkungen:
 - **Viessmann:** Cloud, Internet nötig; rund 1450 Abfragen am Tag frei,
   daher Abfrage höchstens alle 90–900 s (Vorgabe 120 s). Keine
   Momentanleistung in der API – läuft der Verdichter, gilt die
-  eingestellte Leistungsaufnahme. Refresh-Token mit
-  `backend/tools/vicare_token.py` (gilt 180 Tage). Nicht jedes Gerät bietet
+  eingestellte Leistungsaufnahme. Refresh-Token über den Knopf „Mit
+  Viessmann verbinden“ oder `backend/tools/vicare_token.py` (gilt 180 Tage). Nicht jedes Gerät bietet
   die Einmalladung an (Verbindungstest zeigt es).
 - **Homey:** API-Schlüssel mit Recht „Geräte steuern“. Leistung aus
   `measure_power` des Geräts oder eines eigenen Messgeräts, sonst
   Nennleistung, solange an.
-- **Daikin:** nur ältere Adapter mit lokaler Schnittstelle. Onecta
-  (BRP069C, nur Cloud) und Altherma werden nicht unterstützt – dafür SG-Ready,
-  Home Assistant oder Homey. Keine Leistungsmessung: Verdichterfrequenz > 0
-  bzw. eingeschaltet = Nennleistung.
+- **Daikin (lokal):** nur ältere Adapter mit lokaler Schnittstelle. Neuere
+  Adapter (BRP069C) und Altherma über `daikin_onecta`. Keine
+  Leistungsmessung: Verdichterfrequenz > 0 bzw. eingeschaltet = Nennleistung.
+- **Daikin Onecta:** Cloud, 200 Anfragen am Tag je Client-Anwendung. Abfrage
+  alle 600–3600 s (Vorgabe 900 s), ein gemeinsamer Abruf für alle Geräte
+  eines Kontos, Befehle nur bei Änderung, danach 2 min keine Abfrage. Bei
+  HTTP 429 Pause nach `Retry-After` (sonst 30 min, verdoppelt bis 12 h).
+  Das Refresh-Token rotiert bei jeder Erneuerung; das aktuelle liegt
+  verschlüsselt unter `<data>/oauth/`. Redirect-URI muss https sein und darf
+  nicht localhost heißen. Keine Momentanleistung: an/Boost = Nennleistung.
 
 ## Abfrage, Zeitlimits, Wiederverbinden
 

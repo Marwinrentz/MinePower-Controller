@@ -226,6 +226,7 @@ Skalierung und Vorzeichen. Solche Treiber sind in der Oberfläche als
 | Viessmann-Wärmepumpe (Vitocal & Co.) | Wärme (Warmwasser-Einmalladung oder höhere Warmwasser-Solltemperatur) | Viessmann-API (Cloud, eigene Client-ID) | Nein |
 | Homey Pro | Wärme (beliebiges Homey-Gerät ein/aus oder Solltemperatur) | Lokale Homey-API mit API-Schlüssel | Nein |
 | Daikin-Klimaanlage | Wärme/Kälte (einschalten oder Solltemperatur verschieben) | Lokaler WLAN-Adapter BRP069A/B, Airbase | Nein |
+| Daikin Onecta (Klima, Altherma) | Wärme/Kälte (einschalten, Sollwert, Powerful/Warmwasser-Boost) | Daikin-Cloud (Onecta-API, eigene Client-ID, Knopf „Verbinden“) | Nein |
 | cFos Power Brain | Wallbox | Modbus TCP | Nein |
 | Alfen Eve Single/Double Pro-line | Wallbox | Modbus TCP | Nein |
 | Amperfied connect.home/business/solar | Wallbox | Modbus TCP | Nein |
@@ -663,6 +664,7 @@ the actually read values via "Test connection" before productive use.
 | Viessmann heat pump (Vitocal etc.) | Heat (one-time hot water charge or higher hot water setpoint) | Viessmann API (cloud, own client ID) | No |
 | Homey Pro | Heat (any Homey device on/off or setpoint) | Local Homey API with API key | No |
 | Daikin air conditioner | Heating/cooling (switch on or shift setpoint) | Local Wi-Fi adapter BRP069A/B, Airbase | No |
+| Daikin Onecta (air con, Altherma) | Heating/cooling (switch on, setpoint, powerful/hot water boost) | Daikin cloud (Onecta API, own client ID, "Connect" button) | No |
 | cFos Power Brain | Wallbox | Modbus TCP | No |
 | Alfen Eve Single/Double Pro-line | Wallbox | Modbus TCP | No |
 | Amperfied connect.home/business/solar | Wallbox | Modbus TCP | No |

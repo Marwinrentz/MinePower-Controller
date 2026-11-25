@@ -47,6 +47,10 @@ export type DriverMeta = {
   offline_hint: string | null;
   /** Abhilfe bei Geräteprogramm (Capability "own_program") */
   own_program_hint: string | null;
+  /** Schritt-für-Schritt-Anleitung für Zugangsdaten (seit 3.5) */
+  setup?: { text: string; link: string | null; link_label: string | null }[];
+  /** Anbieter für den Knopf 'Verbinden' (OAuth), z. B. "viessmann" */
+  oauth?: string | null;
 };
 
 export type DeviceCategory = "inverter" | "meter" | "wallbox" | "water_heater" | "battery";

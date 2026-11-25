@@ -17,6 +17,7 @@ from .api import (
     events,
     history,
     mcp,
+    oauth,
     sessions,
     settings_api,
     statistics,
@@ -201,7 +202,7 @@ if cors:
     )
 
 for router_module in (auth, drivers, devices, battery, settings_api, status, history,
-                      sessions, events, vehicles, system, statistics, mcp):
+                      sessions, events, vehicles, system, statistics, mcp, oauth):
     app.include_router(router_module.router)
 
 

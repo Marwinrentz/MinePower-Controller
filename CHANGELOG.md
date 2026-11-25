@@ -4,6 +4,18 @@ Format: eine Version je Abschnitt, Einträge gruppiert in Neu, Geändert und
 Behoben, ein Eintrag je Zeile. Die App zeigt diese Datei unter „Changelog“
 und nach einem Update als Hinweisfenster.
 
+## 3.5.0 (2026-11-25)
+
+### Neu
+- Treiber Daikin Onecta (Cloud): Klimaanlagen mit neuerem WLAN-Adapter (BRP069C) und Daikin Altherma (Raumheizung oder Warmwasserspeicher): bei Überschuss einschalten, Sollwert verstellen oder Powerful/Warmwasser-Boost
+- Knopf „Mit Viessmann verbinden“ und „Mit Daikin verbinden“ im Geräteformular: Anmeldung beim Hersteller im Browser, MinePower trägt das Token selbst ein, kein Skript mehr nötig
+- Schritt-für-Schritt-Anleitung im Geräteformular für alle Geräte mit Token, Passwort oder API-Schlüssel (Home Assistant, Homey, MQTT, Tasmota, Easee, Zaptec, Wattpilot, SMA, OCPP, Tesla, Viessmann, Daikin …), mit Links zur passenden Seite
+- Homey Pro: Geräte-ID leer lassen und „Verbindung testen“, MinePower listet dann alle Homey-Geräte mit ID
+
+### Geändert
+- Daikin Onecta erlaubt nur 200 Anfragen am Tag: mehrere Geräte am selben Konto teilen sich Anmeldung und Abfrage, Befehle nur bei Änderung, Pause bei erschöpftem Kontingent
+- Rotierende Refresh-Tokens (Daikin) werden verschlüsselt im Datenverzeichnis gemerkt und überstehen Neustarts
+
 ## 3.4.0 (2026-11-25)
 
 ### Neu

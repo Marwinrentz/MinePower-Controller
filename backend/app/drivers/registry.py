@@ -23,6 +23,9 @@ def register(cls: type[BaseDriver]) -> type[BaseDriver]:
     meta = cls.meta
     if meta.id in _REGISTRY:
         raise ValueError(f"Treiber-ID doppelt registriert: {meta.id}")
+    from .setup_guides import apply as _apply_setup
+
+    _apply_setup(meta)
     _REGISTRY[meta.id] = cls
     return cls
 
