@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { DeviceForm } from "../../components/DeviceForm";
 import { atLimit, useLimits } from "../../lib/useLimits";
 import { Icon, CATEGORY_ICON } from "../../components/icons";
+import { deviceIcon } from "../../lib/heat";
 import { ActionButton, Badge, Button, Card, CardHead, Empty, StatusDot, Toggle } from "../../components/ui";
 import { useI18n } from "../../i18n";
 import { del, patch } from "../../lib/api";
@@ -109,7 +110,7 @@ export function DevicesPanel() {
               const online = l?.online ?? false;
               return (
                 <li key={d.id} className={`card device-row ${d.enabled ? "" : "disabled"}`}>
-                  <span className="device-icon"><Icon name={CATEGORY_ICON[d.category] ?? "settings"} size={22} /></span>
+                  <span className="device-icon"><Icon name={deviceIcon(d, CATEGORY_ICON[d.category] ?? "settings")} size={22} /></span>
                   <div className="device-main">
                     <div className="device-name">
                       <StatusDot state={!d.enabled ? "offline" : online ? "online" : l?.last_error ? "error" : "offline"} />

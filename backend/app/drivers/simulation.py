@@ -87,6 +87,15 @@ class SimulationWorld:
         self.wh_power = 0.0
         self.wh_temp = 44.0
 
+        # Wärmepumpe (SG-Ready-artig): läuft bei Freigabe mit Nennleistung,
+        # bis der Pufferspeicher warm ist; sonst gelegentlich im eigenen
+        # Normalbetrieb (Heizen nach Außentemperatur).
+        self.hp_rated = 1800.0
+        self.hp_allowed = False
+        self.hp_power = 0.0
+        self.hp_temp = 46.0
+        self.hp_own_until = 0.0
+
         self._last_tick = time.monotonic()
 
     # ------------------------------------------------------------ Physik
@@ -124,11 +133,24 @@ class SimulationWorld:
             self.wh_power = 2980.0 if self.wh_temp < 75.0 else 0.0
         else:
             self.wh_power = min(self.wh_set_power, self.wh_rated) if self.wh_temp < 72.0 else 0.0
-        self.wh_temp += (self.wh_power * h) / (180 * 1.163 / 1000.0)  # kWh je K für 180 l
-        self.wh_temp = max(20.0, self.wh_temp - 0.15 * h * 24)        # Standverlust
+        self.wh_temp += (self.wh_power * h) / (180 * 1.163)  # Wh / (Wh je K für 180 l) = K
+        self.wh_temp = max(20.0, self.wh_temp - 0.15 * h)             # Standverlust ~3,6 K/Tag
+
+        # Wärmepumpe: Puffer 300 l, Arbeitszahl 3 – 1,8 kW elektrisch heben
+        # ihn um rund 15 K pro Stunde; das Haus zieht stetig Wärme ab.
+        if self.hp_allowed and self.hp_temp < 55.0:
+            self.hp_power = self.hp_rated
+        elif now < self.hp_own_until or self.hp_temp < 38.0:
+            self.hp_power = self.hp_rated * 0.8
+            if self.hp_own_until <= now:
+                self.hp_own_until = now + 900.0
+        else:
+            self.hp_power = 0.0
+        self.hp_temp += (self.hp_power * 3.0 * h) / (300 * 1.163) - 2.5 * h
+        self.hp_temp = max(25.0, min(60.0, self.hp_temp))
 
         # Batterie reagiert auf Residual (Eigenverbrauchsoptimierung)
-        residual = self.pv_power() - self.house_load() - self.wb_power - self.wh_power
+        residual = self.pv_power() - self.house_load() - self.wb_power - self.wh_power - self.hp_power
         if self.bat_mode == BatteryMode.FORCE_CHARGE:
             target = min(self.bat_force_w or self.bat_max_charge, self.bat_max_charge)
         elif self.bat_mode == BatteryMode.FORCE_DISCHARGE:
@@ -167,7 +189,7 @@ class SimulationWorld:
     def grid_power(self) -> float:
         """+ Bezug / − Einspeisung (Bilanz aller Simulationsgrößen)."""
         return (
-            self.house_load() + self.wb_power + self.wh_power + self.bat_power - self.pv_power()
+            self.house_load() + self.wb_power + self.wh_power + self.hp_power + self.bat_power - self.pv_power()
         )
 
 
@@ -321,6 +343,41 @@ class SimWaterHeater(WaterHeaterDriver):
     async def set_power(self, watts: float) -> None:
         w = SimulationWorld.instance()
         w.wh_set_power = max(0.0, min(watts, w.wh_rated))
+
+
+@register
+class SimHeatPump(WaterHeaterDriver):
+    meta = DriverMeta(
+        id="sim_heat_pump",
+        name="Simulation: Wärmepumpe",
+        category=DeviceCategory.WATER_HEATER,
+        maturity=Maturity.STABLE,
+        description="Simulierte Wärmepumpe mit SG-Ready-Freigabe (1,8 kW) und 300-l-Pufferspeicher.",
+        capabilities={"relay", "heat_pump", "temperature"},
+        fields=[
+            ConfigField(key="rated_power", label="Leistungsaufnahme im Betrieb (W)", type=FieldType.NUMBER,
+                        default=1800),
+        ],
+    )
+
+    modulating = False
+    heat_kind = "heat_pump"
+
+    def __init__(self, config: dict) -> None:
+        super().__init__(config)
+        self.rated_power = float(config.get("rated_power") or 1800)
+
+    async def connect(self) -> None:
+        SimulationWorld.instance().hp_rated = self.rated_power
+
+    async def read_data(self) -> WaterHeaterData:
+        w = _world()
+        return WaterHeaterData(power=round(w.hp_power, 1), temperature_c=round(w.hp_temp, 1),
+                               is_on=w.hp_allowed, extra={"SG-Ready": "Einschaltempfehlung" if w.hp_allowed
+                                                          else "Normalbetrieb"})
+
+    async def set_power(self, watts: float) -> None:
+        SimulationWorld.instance().hp_allowed = watts >= self.rated_power * 0.5
 
 
 @register

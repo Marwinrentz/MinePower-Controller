@@ -325,6 +325,7 @@ def validate_device_settings(category: str, settings: dict | None) -> None:
     mode = settings.get("mode")
     if category == "water_heater":
         _validate_boost(settings)
+        _validate_heat(settings)
         if mode is not None:
             _check_mode(mode, WATER_MODES)
     elif category == "wallbox" and mode is not None:
@@ -365,6 +366,26 @@ def _validate_common(settings: dict) -> None:
     if settings.get("min_current") is not None and settings.get("max_current") is not None:
         if float(settings["min_current"]) > float(settings["max_current"]):
             bad("Mindeststrom darf nicht über dem Höchststrom liegen.")
+
+
+def _validate_heat(settings: dict) -> None:
+    """Wärmepumpe/Klimaanlage: Art, Selbstregelung, Verdichterschutz."""
+    from ..core.regulation import HEAT_KINDS, MIN_RUN_MAX_S
+
+    kind = settings.get("kind")
+    if kind is not None and kind not in HEAT_KINDS:
+        raise HTTPException(422, "Art muss " + ", ".join(f"'{k}'" for k in HEAT_KINDS) + " sein.")
+    if settings.get("self_regulating") is not None and not isinstance(settings["self_regulating"], bool):
+        raise HTTPException(422, "Selbstregelung muss ja oder nein sein.")
+    for key, label in (("min_on_s", "Mindestlaufzeit"), ("min_off_s", "Mindestpause")):
+        if settings.get(key) is None:
+            continue
+        try:
+            value = float(settings[key])
+        except (TypeError, ValueError):
+            raise HTTPException(422, f"{label}: keine Zahl")
+        if not 0 <= value <= MIN_RUN_MAX_S:
+            raise HTTPException(422, f"{label} muss zwischen 0 und {MIN_RUN_MAX_S / 60:.0f} min liegen.")
 
 
 def _validate_boost(settings: dict) -> None:

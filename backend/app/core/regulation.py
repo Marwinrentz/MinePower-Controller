@@ -1252,6 +1252,21 @@ class WaterHeaterSettings:
     #: Temperaturfühler, der klemmt oder einen Fantasiewert meldet, darf den
     #: Stab nicht die ganze Nacht heizen lassen.
     boost_max_min: float = 180.0
+    # --- Wärmepumpe, Klimaanlage (seit 3.4) ---------------------------------
+    #: Art der Wärmelast, für Anzeige und Vorgaben:
+    #: water (Heizstab/Warmwasser), heat_pump, climate (Klimaanlage), heating.
+    kind: str = "water"
+    #: Das Gerät regelt seine Temperatur selbst (Wärmepumpe, Klimaanlage).
+    #: MinePower gibt dann nur frei (Überschuss da) oder nimmt die Freigabe
+    #: zurück. Ziel- und Boost-Temperatur gelten nicht, und Leistung im
+    #: eigenen Normalbetrieb ist kein Ungehorsam.
+    self_regulating: bool = False
+    #: Verdichterschutz: einmal freigegeben, mindestens so lange laufen lassen
+    #: (s) – auch wenn eine Wolke kommt. 0 = aus.
+    min_on_s: float = 0.0
+    #: Nach dem Abschalten mindestens so lange warten, bis wieder freigegeben
+    #: wird (s). 0 = aus.
+    min_off_s: float = 0.0
 
     @classmethod
     def from_dict(cls, d: dict) -> "WaterHeaterSettings":
@@ -1280,9 +1295,18 @@ class WaterHeaterSettings:
         self.target_temp_c = _bounded(self.target_temp_c, TARGET_TEMP_MIN_C, TARGET_TEMP_MAX_C, defaults.target_temp_c)
         for name in ("start_delay_s", "stop_delay_s", "forecast_hold_max_s"):
             setattr(self, name, _bounded(getattr(self, name), 0.0, 86400.0, getattr(defaults, name)))
+        for name in ("min_on_s", "min_off_s"):
+            setattr(self, name, _bounded(getattr(self, name), 0.0, MIN_RUN_MAX_S, 0.0))
+        if self.kind not in HEAT_KINDS:
+            self.kind = "water"
+        self.self_regulating = bool(self.self_regulating)
         self.mode = str(self.mode)
 
 
+#: Arten von Wärmelasten (Anzeige, Vorgaben)
+HEAT_KINDS = ("water", "heat_pump", "climate", "heating")
+#: Längste Mindestlauf-/Mindestpausenzeit (s)
+MIN_RUN_MAX_S = 7200.0
 #: Erlaubte Abschaltmodi des Boosts
 BOOST_END_MODES = ("time", "temp", "both")
 #: Sichere Grenzen für die Boost-Zieltemperatur. 80 °C liegen unter der
@@ -1339,6 +1363,10 @@ class WaterHeaterController:
         #: Grund des zuletzt beendeten Boosts – vom Loop einmal abgeholt und
         #: ins Protokoll geschrieben (siehe pop_boost_end).
         self._boost_end: str | None = None
+        #: Verdichterschutz: seit wann die Freigabe läuft bzw. ruht (monoton)
+        self._running = False
+        self._run_since: float | None = None
+        self._stop_since: float | None = None
 
     # ------------------------------------------------------------ Boost
 
@@ -1443,8 +1471,41 @@ class WaterHeaterController:
         return (now - self._forecast_hold_since) <= self.s.forecast_hold_max_s
 
     def decide(self, budget_w: float, data: WaterHeaterData, ctx: ChargeContext) -> WaterHeaterDecision:
+        """Entscheidung mit Verdichterschutz (Mindestlaufzeit, Mindestpause).
+
+        Eine Wärmepumpe oder Klimaanlage, die im Minutentakt an- und abgeht,
+        verschleißt den Verdichter. Deshalb gilt um die eigentliche
+        Entscheidung herum: einmal freigegeben läuft sie `min_on_s` lang,
+        einmal gestoppt ruht sie `min_off_s` lang. 'Aus' schlägt beides."""
+        d = self._decide(budget_w, data, ctx)
         s = self.s
-        temp = data.temperature_c
+        now = self.clock()
+        if s.mode != "off":
+            min_w = s.min_power_w if s.modulating else s.max_power_w
+            if self._running and d.power_w <= 0 and s.min_on_s > 0 and self._run_since is not None:
+                left = s.min_on_s - (now - self._run_since)
+                if left > 0:
+                    self.on = True
+                    return WaterHeaterDecision(min_w, f"Mindestlaufzeit – noch {max(1.0, left / 60):.0f} min")
+            if not self._running and d.power_w > 0 and s.min_off_s > 0 and self._stop_since is not None:
+                left = s.min_off_s - (now - self._stop_since)
+                if left > 0:
+                    self.on = False
+                    return WaterHeaterDecision(0.0, f"Mindestpause – noch {max(1.0, left / 60):.0f} min")
+        running = d.power_w > 0
+        if running and not self._running:
+            self._run_since = now
+        elif not running and self._running:
+            self._stop_since = now
+        self._running = running
+        return d
+
+    def _decide(self, budget_w: float, data: WaterHeaterData, ctx: ChargeContext) -> WaterHeaterDecision:
+        s = self.s
+        # Regelt das Gerät seine Temperatur selbst, ist sein Fühler (oft die
+        # Raumtemperatur) kein Abschaltkriterium – Ziel- und Boost-Temperatur
+        # gelten nicht, der Boost endet nach Zeit.
+        temp = None if s.self_regulating else data.temperature_c
 
         # 'Aus" schlägt alles – auch einen noch laufenden Boost.
         #

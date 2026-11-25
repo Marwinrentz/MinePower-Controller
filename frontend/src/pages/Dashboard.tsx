@@ -13,7 +13,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { PowerHistoryChart } from "../components/charts";
+import { PowerHistoryChart, type DeviceLine } from "../components/charts";
 import { confirmTouch } from "../components/Confirm";
 import { Icon } from "../components/icons";
 import { PowerFlow } from "../components/PowerFlow";
@@ -22,7 +22,8 @@ import {
 } from "../components/ui";
 import { useI18n } from "../i18n";
 import { get, post } from "../lib/api";
-import { carSentence, carState, explain, shortError, waterSentence } from "../lib/explain";
+import { carSentence, carState, explain, heatSentence, shortError } from "../lib/explain";
+import { HEAT_ICON, HEAT_TONE, heatKind, seriesTone } from "../lib/heat";
 import { fmtClock, fmtCt, fmtDuration, fmtKwh, fmtPct, fmtTemp, fmtW } from "../lib/format";
 import type { Snapshot, SnapshotDevice, Statistics } from "../lib/types";
 import { useDeviceCommand } from "../lib/useCommand";
@@ -38,6 +39,8 @@ export function boostPlan(dev: SnapshotDevice, t: (k: string, v?: Record<string,
   const endMode = dev.boost_end_mode ?? "both";
   const time = fmtDuration((dev.boost_duration_min ?? 60) * 60);
   const temp = fmtTemp(dev.boost_temp_c);
+  // Wärmepumpe/Klima: Freigabe von Hand endet nach Zeit
+  if (dev.self_regulating) return t("heat.releasePlan", { time });
   if (endMode === "time") return t("heat.boostPlanTime", { time });
   if (endMode === "temp") return t("heat.boostPlanTemp", { temp });
   return t("heat.boostPlan", { time, temp });
@@ -46,6 +49,7 @@ export function boostPlan(dev: SnapshotDevice, t: (k: string, v?: Record<string,
 /** Boost wäre wirkungslos: Das Wasser ist schon wärmer als das Boost-Ziel und
  *  der Boost endet nach Temperatur (bei 'nur Zeit" heizt er trotzdem). */
 export function boostTooHot(dev: SnapshotDevice): boolean {
+  if (dev.self_regulating) return false;
   const temp = typeof dev.data?.temperature_c === "number" ? (dev.data.temperature_c as number) : null;
   return !dev.boost && temp != null && dev.boost_temp_c != null && temp >= dev.boost_temp_c
     && (dev.boost_end_mode ?? "both") !== "time";
@@ -71,9 +75,11 @@ function QuickWater({ dev, named = false }: { dev: SnapshotDevice; named?: boole
   const remaining = useCountdown(dev.boost ? dev.boost_state?.remaining_s : null);
   const temp = typeof dev.data?.temperature_c === "number" ? (dev.data.temperature_c as number) : null;
   const power = Number(dev.data?.power ?? 0);
-  const s = waterSentence(dev, t);
+  const s = heatSentence(dev, t);
   const endMode = dev.boost_end_mode ?? "both";
   const busy = cmd.pending("boost");
+  const kind = heatKind(dev);
+  const selfReg = dev.self_regulating === true;
 
   const toggle = async () => {
     if (!boost && !(await confirmBoost(dev, t))) return;
@@ -83,26 +89,26 @@ function QuickWater({ dev, named = false }: { dev: SnapshotDevice; named?: boole
   return (
     <Card className="quick quick-water">
       <div className="quick-head">
-        <span className="quick-icon tone-water"><Icon name="water" size={22} /></span>
+        <span className={`quick-icon tone-${HEAT_TONE[kind]}`}><Icon name={HEAT_ICON[kind]} size={22} /></span>
         <div className="quick-title">
-          <h2>{named ? dev.name : t("heat.title")}</h2>
-          <span className="quick-meta num">{fmtTemp(temp)} · {fmtW(power)}</span>
+          <h2>{named || selfReg ? dev.name : t("heat.title")}</h2>
+          <span className="quick-meta num">{temp != null ? `${fmtTemp(temp)} · ` : ""}{fmtW(power)}</span>
         </div>
-        <Link to="/warmwasser" className="btn ghost btn-sm quick-more">{t("home.details")} <Icon name="chevron" size={16} /></Link>
+        <Link to={`/warmwasser#dev-${dev.id}`} className="btn ghost btn-sm quick-more">{t("home.details")} <Icon name="chevron" size={16} /></Link>
       </div>
       <p className={`quick-status tone-${s.tone}`}>{s.text}</p>
       {boost ? (
         <div className="boost-running" aria-live="polite">
           <div className="boost-running-text">
-            <strong><Icon name="boost" size={18} /> {t("heat.boostRunning")}</strong>
+            <strong><Icon name="boost" size={18} /> {selfReg ? t("heat.releaseRunning") : t("heat.boostRunning")}</strong>
             <span className="num">
-              {remaining != null && endMode !== "temp"
+              {remaining != null && (endMode !== "temp" || selfReg)
                 ? t("heat.boostRemaining", { time: fmtDuration(remaining) })
                 : t("heat.boostUntil", { temp: fmtTemp(dev.boost_state?.target_temp_c ?? dev.boost_temp_c) })}
             </span>
           </div>
           <Button size="lg" variant="danger" onClick={toggle} loading={busy}>
-            <Icon name="stop" size={16} /> {t("heat.boostStop")}
+            <Icon name="stop" size={16} /> {selfReg ? t("heat.releaseStop") : t("heat.boostStop")}
           </Button>
         </div>
       ) : (
@@ -110,7 +116,7 @@ function QuickWater({ dev, named = false }: { dev: SnapshotDevice; named?: boole
           <Button size="lg" variant="primary" block onClick={toggle} disabled={!dev.online || boostTooHot(dev)} loading={busy}>
             <Icon name="boost" size={20} />
             <span className="btn-text-2">
-              <span>{t("heat.boostStart")}</span>
+              <span>{selfReg ? t("heat.releaseStart") : t("heat.boostStart")}</span>
               <small>{boostPlan(dev, t)}</small>
             </span>
           </Button>
@@ -325,6 +331,11 @@ export function Dashboard() {
   const ex = explain(snapshot, t);
   const devices = snapshot.devices.filter((d) => d.enabled);
   const offline = devices.filter((d) => !d.online);
+  // Jedes Auto und jedes Wärmegerät als eigene Linie im Verlauf
+  const lines: DeviceLine[] = devices
+    .filter((d) => d.category === "wallbox" || d.category === "water_heater")
+    .map((d) => ({ id: d.id, name: d.name, field: d.category === "wallbox" ? "wallbox_power" : "water_power",
+                   tone: seriesTone(d) }));
   const failing = devices.filter((d) => d.online && d.command_error);
   const warnings = snapshot.warnings ?? [];
   const car = devices.find((d) => d.category === "wallbox");
@@ -496,14 +507,14 @@ export function Dashboard() {
       {isPhone ? (
         <Disclosure title={t("home.history")}>
           <Segment options={RANGES.map((r) => ({ value: r, label: r }))} value={range} onChange={setRange} />
-          <PowerHistoryChart range={range} />
+          <PowerHistoryChart range={range} devices={lines} />
         </Disclosure>
       ) : (
         <Card>
           <CardHead title={t("home.history")}>
             <Segment options={RANGES.map((r) => ({ value: r, label: r }))} value={range} onChange={setRange} />
           </CardHead>
-          <PowerHistoryChart range={range} />
+          <PowerHistoryChart range={range} devices={lines} />
         </Card>
       )}
       {isPhone && <ActionBar water={water} car={car} />}

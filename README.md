@@ -222,7 +222,10 @@ Skalierung und Vorzeichen. Solche Treiber sind in der Oberfläche als
 | MQTT (beliebige Topics) | Netzzähler, Wechselrichter, Batterie (lesend), Schaltaktor | MQTT | Nein |
 | Home Assistant | Netzzähler, Wechselrichter, Batterie (lesend), Schaltaktor, Wallbox | REST-API | Nein |
 | Tasmota | Netzzähler (SML-Lesekopf), Schaltaktor | HTTP | Nein |
-| Wärmepumpe mit SG-Ready | Warmwasser (Einschaltempfehlung) | Shelly Gen2+ oder Home Assistant | Nein |
+| Wärmepumpe mit SG-Ready | Wärme (Einschaltempfehlung) | Shelly Gen2+ oder Home Assistant | Nein |
+| Viessmann-Wärmepumpe (Vitocal & Co.) | Wärme (Warmwasser-Einmalladung oder höhere Warmwasser-Solltemperatur) | Viessmann-API (Cloud, eigene Client-ID) | Nein |
+| Homey Pro | Wärme (beliebiges Homey-Gerät ein/aus oder Solltemperatur) | Lokale Homey-API mit API-Schlüssel | Nein |
+| Daikin-Klimaanlage | Wärme/Kälte (einschalten oder Solltemperatur verschieben) | Lokaler WLAN-Adapter BRP069A/B, Airbase | Nein |
 | cFos Power Brain | Wallbox | Modbus TCP | Nein |
 | Alfen Eve Single/Double Pro-line | Wallbox | Modbus TCP | Nein |
 | Amperfied connect.home/business/solar | Wallbox | Modbus TCP | Nein |
@@ -656,7 +659,10 @@ the actually read values via "Test connection" before productive use.
 | MQTT (any topics) | Grid meter, inverter, battery (read only), switch | MQTT | No |
 | Home Assistant | Grid meter, inverter, battery (read only), switch, wallbox | REST API | No |
 | Tasmota | Grid meter (SML reader), switch | HTTP | No |
-| Heat pump with SG-Ready | Water heating (switch-on recommendation) | Shelly Gen2+ or Home Assistant | No |
+| Heat pump with SG-Ready | Heat (switch-on recommendation) | Shelly Gen2+ or Home Assistant | No |
+| Viessmann heat pump (Vitocal etc.) | Heat (one-time hot water charge or higher hot water setpoint) | Viessmann API (cloud, own client ID) | No |
+| Homey Pro | Heat (any Homey device on/off or setpoint) | Local Homey API with API key | No |
+| Daikin air conditioner | Heating/cooling (switch on or shift setpoint) | Local Wi-Fi adapter BRP069A/B, Airbase | No |
 | cFos Power Brain | Wallbox | Modbus TCP | No |
 | Alfen Eve Single/Double Pro-line | Wallbox | Modbus TCP | No |
 | Amperfied connect.home/business/solar | Wallbox | Modbus TCP | No |

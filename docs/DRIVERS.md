@@ -254,7 +254,38 @@ Hardy Barth eCB1/Salia, SMA EV Charger, EVSE-WiFi, openWB Pro, openWB 1.9
 ## Wärmepumpe SG-Ready, Schaltaktoren
 
 - Schalten zwei Ausgänge (Shelly Gen2+, Home Assistant) bzw. ein Relais.
+- Seit 3.4 als Wärmepumpe gekennzeichnet: selbstregelnd, Verdichterschutz
+  10 min Lauf / 5 min Pause als Vorgabe.
 - **Stand:** unverifiziert an Geräten.
+
+## Wärmepumpen und Klimaanlagen (3.4)
+
+Alle drei Treiber schalten nur zurück, was MinePower selbst eingeschaltet
+oder verstellt hat. Ein Gerät, das der Nutzer von Hand eingeschaltet hat,
+bleibt an. Leistung ohne Freigabe (Heizen nach Raumtemperatur) gilt als
+Eigenbetrieb, nicht als Ungehorsam.
+
+| Treiber | Quelle | Was bei Überschuss passiert | Stand |
+|---|---|---|---|
+| Viessmann (`viessmann_vicare`) | Viessmann Developer Portal, Endpunkte `/iot/v2/features/…` (Umstellung 30.04.2025), Feature-Namen `heating.dhw.sensors.temperature.dhwCylinder` (neu) bzw. `…hotWaterStorage` (alt) | `heating.dhw.oneTimeCharge` activate/deactivate oder `heating.dhw.temperature.main` setTargetTemperature | Doku |
+| Homey Pro (`homey_pro`) | Homey Web API: `GET /api/manager/devices/device/<id>`, `PUT …/capability/<cap>` | `onoff` oder `target_temperature` | unverifiziert |
+| Daikin (`daikin_local`) | lokale Adapter-Schnittstelle `/aircon/get_control_info`, `set_control_info`, `get_sensor_info` (Airbase mit Präfix `/skyfi`) | `pow=1` mit Betriebsart/Soll oder nur `stemp` | unverifiziert |
+
+Einschränkungen:
+
+- **Viessmann:** Cloud, Internet nötig; rund 1450 Abfragen am Tag frei,
+  daher Abfrage höchstens alle 90–900 s (Vorgabe 120 s). Keine
+  Momentanleistung in der API – läuft der Verdichter, gilt die
+  eingestellte Leistungsaufnahme. Refresh-Token mit
+  `backend/tools/vicare_token.py` (gilt 180 Tage). Nicht jedes Gerät bietet
+  die Einmalladung an (Verbindungstest zeigt es).
+- **Homey:** API-Schlüssel mit Recht „Geräte steuern“. Leistung aus
+  `measure_power` des Geräts oder eines eigenen Messgeräts, sonst
+  Nennleistung, solange an.
+- **Daikin:** nur ältere Adapter mit lokaler Schnittstelle. Onecta
+  (BRP069C, nur Cloud) und Altherma werden nicht unterstützt – dafür SG-Ready,
+  Home Assistant oder Homey. Keine Leistungsmessung: Verdichterfrequenz > 0
+  bzw. eingeschaltet = Nennleistung.
 
 ## Abfrage, Zeitlimits, Wiederverbinden
 

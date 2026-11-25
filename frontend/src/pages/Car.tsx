@@ -8,7 +8,6 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { DevicePicker } from "../components/DevicePicker";
 import { Garage, type GarageState } from "../components/Garage";
 import { Icon } from "../components/icons";
 import {
@@ -26,6 +25,7 @@ import { useDevices } from "../lib/useDevices";
 import { useDraft } from "../lib/useDraft";
 import { useLive } from "../store/live";
 import { toast } from "../store/toast";
+import { useDeviceAnchor } from "./Water";
 
 type ModeKey = "off" | "pv_only" | "min_pv" | "pv_price" | "target" | "fast";
 const MODES: ModeKey[] = ["pv_only", "min_pv", "pv_price", "target", "fast", "off"];
@@ -323,16 +323,17 @@ export function Car() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const snapshot = useLive((s) => s.snapshot);
-  const [picked, setPicked] = useState<number | null>(null);
+  const cars = snapshot?.devices.filter((d) => d.category === "wallbox" && d.enabled) ?? [];
+  useDeviceAnchor(cars.length > 0);
 
   if (!snapshot) return <div className="page"><div className="skeleton" style={{ height: 300 }} /></div>;
-  const cars = snapshot.devices.filter((d) => d.category === "wallbox" && d.enabled);
-  const car = cars.find((c) => c.id === picked) ?? cars[0];
+  const priority = snapshot.priority ?? [];
+  const multi = cars.length > 1;
 
   return (
     <div className="page">
       <PageHead title={t("car.title")} sub={t("car.sub")} />
-      {!car ? (
+      {!cars.length ? (
         <Card>
           <Empty icon={<Icon name="car" size={32} />} title={t("car.none")}
                  action={<Button variant="primary" onClick={() => navigate("/einstellungen?tab=devices")}>{t("car.addDevice")}</Button>}>
@@ -341,8 +342,41 @@ export function Car() {
         </Card>
       ) : (
         <>
-          <DevicePicker devices={cars} active={car.id} onPick={setPicked} />
-          <CarDetail key={car.id} dev={car} />
+          {multi && (
+            <section className="heat-overview" aria-label={t("car.title")}>
+              {cars.map((c) => {
+                const s = carSentence(c, t);
+                const soc = typeof c.data?.soc === "number" ? (c.data.soc as number) : null;
+                const pos = priority.indexOf(c.id);
+                return (
+                  <a key={c.id} href={`#dev-${c.id}`} className={`card heat-tile tone-car ${Number(c.data?.power ?? 0) > 50 ? "on" : ""}`}
+                     onClick={(e) => { e.preventDefault(); document.getElementById(`dev-${c.id}`)?.scrollIntoView({ behavior: "smooth" }); }}>
+                    <span className="quick-icon tone-car"><Icon name="car" size={22} /></span>
+                    <span className="heat-tile-main">
+                      <strong>{c.name}</strong>
+                      <small>{t(`car.state.${carState(c)}`)}{pos >= 0 ? ` · ${t("heat.priority", { n: pos + 1 })}` : ""}</small>
+                      <span className={`heat-tile-status tone-${s.tone}`}>{s.text}</span>
+                    </span>
+                    <span className="heat-tile-values num">
+                      <b>{fmtW(Number(c.data?.power ?? 0))}</b>
+                      {soc != null && <small>{fmtPct(soc)}</small>}
+                    </span>
+                  </a>
+                );
+              })}
+            </section>
+          )}
+          {cars.map((c) => (
+            <section key={c.id} id={`dev-${c.id}`} className="device-section">
+              {multi && (
+                <h2 className="device-section-head">
+                  <span className="quick-icon tone-car"><Icon name="car" size={20} /></span>
+                  {c.name}
+                </h2>
+              )}
+              <CarDetail dev={c} />
+            </section>
+          ))}
         </>
       )}
     </div>

@@ -261,6 +261,37 @@ def _endpoint_key(dev: "ManagedDevice") -> tuple:
     return (dev.driver_id, json.dumps(cfg, sort_keys=True, default=str))
 
 
+def heat_defaults(driver: Any, settings: dict) -> dict:
+    """Vorgaben für Wärmelasten aus dem Treiber.
+
+    * Ein Gerät, das nur EIN/AUS kann (Relais, SG-Ready, Wärmepumpe), ist
+      nie modulierend – egal, was gespeichert ist. Sonst schickte der Regler
+      800 W an ein Relais, das darunter abschaltet.
+    * Ein Wärmepumpen- oder Klimatreiber bringt sinnvolle Grundwerte mit
+      (selbstregelnd, Verdichterschutz 10 min Lauf / 5 min Pause, Leistung =
+      eingestellte Nennleistung). Was der Nutzer gespeichert hat, gilt."""
+    out = dict(settings)
+    caps = driver.meta.capabilities
+    if not getattr(driver, "modulating", True):
+        out["modulating"] = False
+    kind = getattr(driver, "heat_kind", None) or (
+        "heat_pump" if "heat_pump" in caps else "climate" if "climate" in caps else None)
+    if kind not in ("heat_pump", "climate"):
+        if kind:
+            out.setdefault("kind", kind)
+        return out
+    out.setdefault("kind", kind)
+    out.setdefault("self_regulating", True)
+    out.setdefault("min_on_s", 600.0)
+    out.setdefault("min_off_s", 300.0)
+    rated = float(getattr(driver, "rated_power", 0.0) or 0.0)
+    # Ein-/Aus-Gerät: Was es im Betrieb zieht, steht in der Gerätekonfiguration
+    # (Nennleistung). Danach richtet sich die Startschwelle.
+    if rated > 0 and ("max_power_w" not in settings or not getattr(driver, "modulating", True)):
+        out["max_power_w"] = rated
+    return out
+
+
 class ManagedDevice:
     """Laufzeit-Hülle um ein konfiguriertes Gerät + Treiber-Instanz."""
 
@@ -288,7 +319,9 @@ class ManagedDevice:
         if self.category == DeviceCategory.WALLBOX.value:
             self.controller = WallboxController(self._wallbox_settings())
         elif self.category == DeviceCategory.WATER_HEATER.value:
-            self.controller = WaterHeaterController(WaterHeaterSettings.from_dict(self.settings))
+            self.controller = WaterHeaterController(
+                WaterHeaterSettings.from_dict(heat_defaults(self.driver, self.settings))
+            )
 
         # Dedup der zuletzt gesendeten Stellgrößen …
         self.sent: dict[str, Any] = {}
@@ -1319,6 +1352,11 @@ class ControlLoop:
 
     # ------------------------------------------------------------ Umverteilbar
 
+    @staticmethod
+    def _self_regulating(dev: ManagedDevice) -> bool:
+        c = dev.controller
+        return isinstance(c, WaterHeaterController) and c.s.self_regulating
+
     def _redirectable_power(self, dev: ManagedDevice) -> float:
         """Wie viel der gemessenen Leistung eines Geräts kann die Regelung
         umverteilen?
@@ -2044,6 +2082,15 @@ class ControlLoop:
                 # Einstellung am Gerät. Einmal sauber melden, nicht im
                 # Minutentakt warnen, und die Energie für die Diagnose zählen.
                 await self._track_self_mode(dev, data)
+            elif self._self_regulating(dev) and power_w <= 0:
+                # Wärmepumpe/Klimaanlage ohne Freigabe läuft im eigenen
+                # Normalbetrieb weiter (Heizen nach Raumtemperatur) – das
+                # ist kein Ungehorsam, sondern genau so gewollt.
+                if dev.self_mode_since is not None:
+                    await self._end_self_mode(dev)
+                dev.ignored_ticks = 0
+                if dev.uncontrolled:
+                    dev.uncontrolled = False
             else:
                 if dev.self_mode_since is not None:
                     await self._end_self_mode(dev)
@@ -2558,6 +2605,11 @@ class ControlLoop:
                 payload["boost_duration_min"] = dev.controller.s.boost_duration_min
                 payload["max_power_w"] = dev.controller.s.max_power_w
                 payload["surplus_temp_c"] = dev.controller.surplus_cap()
+                # Wärmepumpe, Klimaanlage, Heizstab: Art und Verdichterschutz
+                payload["kind"] = dev.controller.s.kind
+                payload["self_regulating"] = dev.controller.s.self_regulating
+                payload["min_on_s"] = dev.controller.s.min_on_s
+                payload["min_off_s"] = dev.controller.s.min_off_s
                 payload["self_mode_since_s"] = (
                     round(time.monotonic() - dev.self_mode_since) if dev.self_mode_since else None
                 )
@@ -2648,6 +2700,12 @@ class ControlLoop:
             "price_limit_ct": self._price_limit_ct(),
             "weather": self.volatility.describe(),
             "devices": devices_payload,
+            # Reihenfolge der Lasten (Geräte-IDs), damit die Oberfläche
+            # 'Platz 1, 2 …' je Gerät zeigen kann.
+            "priority": [d.id for d in self._priority_order(
+                [d for d in self.devices.values() if d.category == DeviceCategory.WALLBOX.value and d.enabled],
+                [d for d in self.devices.values() if d.category == DeviceCategory.WATER_HEATER.value and d.enabled],
+            )],
         }
 
         b = self.buffer

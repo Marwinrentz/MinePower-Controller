@@ -8,6 +8,7 @@
 import { tr, type T } from "../i18n";
 import { fmtCt, fmtDuration, fmtTemp, fmtW } from "./format";
 import type { Snapshot, SnapshotDevice } from "./types";
+import { HEAT_ICON, heatKind } from "./heat";
 import type { IconName } from "../components/icons";
 
 export type Tone = "pv" | "import" | "export" | "battery" | "car" | "water" | "warn" | "idle" | "err";
@@ -199,10 +200,60 @@ export function waterSentence(d: SnapshotDevice, t: T): { text: string; tone: To
   return { text: reason ? t("explain.waterOther", { reason }) : t("explain.waterIdle"), tone: "idle" };
 }
 
+/** Wärmepumpe/Klimaanlage (regelt selbst): MinePower gibt frei oder nicht –
+ *  was das Gerät ohne Freigabe zieht, ist sein eigener Normalbetrieb. */
+export function heatPumpSentence(d: SnapshotDevice, t: T): { text: string; tone: Tone } {
+  const reason = reasonOf(d);
+  const power = num(d, "power") ?? 0;
+  const name = d.name;
+  const released = Number((d.decision as { power_w?: number } | undefined)?.power_w ?? 0) > 0;
+  if (!d.online) return { text: t("explain.hpOffline", { name }), tone: "err" };
+  if (d.boost) {
+    const rem = d.boost_state?.remaining_s;
+    return { text: t("explain.hpBoost", { name, time: rem != null ? fmtDuration(rem) : "–" }), tone: "water" };
+  }
+  const left = /(Mindestlaufzeit|Mindestpause) – noch (\d+) min/.exec(reason);
+  if (left && left[1] === "Mindestlaufzeit") return { text: t("explain.hpMinRun", { name, min: left[2] }), tone: "pv" };
+  if (released) {
+    if (/Netzladen|Zeitfenster/.test(reason)) return { text: t("explain.hpGrid", { name, power: fmtW(power) }), tone: "import" };
+    return power > 50
+      ? { text: t("explain.hpSolar", { name, power: fmtW(power) }), tone: "pv" }
+      : { text: t("explain.hpReleased", { name }), tone: "pv" };
+  }
+  if (left) return { text: t("explain.hpMinPause", { name, min: left[2] }), tone: "idle" };
+  if (d.mode === "off") return { text: t("explain.hpOff", { name }), tone: "idle" };
+  if (/Vorrang/.test(reason)) return { text: t("explain.hpBatteryFirst", { name }), tone: "battery" };
+  const starting = startIn(reason);
+  if (starting != null) return { text: t("explain.hpStarting", { name, sec: starting }), tone: "pv" };
+  if (power > 50) return { text: t("explain.hpOwn", { name, power: fmtW(power) }), tone: "idle" };
+  return { text: t("explain.hpWaiting", { name }), tone: "idle" };
+}
+
+/** Satz für jede Wärmelast – Heizstab/Warmwasser oder selbstregelnd. */
+export function heatSentence(d: SnapshotDevice, t: T, named = false): { text: string; tone: Tone } {
+  if (d.self_regulating) return heatPumpSentence(d, t);
+  const w = waterSentence(d, t);
+  return named ? { ...w, text: `${d.name}: ${w.text}` } : w;
+}
+
+/** Läuft die Wärmelast auf Anweisung von MinePower (nicht im eigenen Betrieb)? */
+export function heatControlledOn(d: SnapshotDevice): boolean {
+  const p = num(d, "power") ?? 0;
+  if (p <= 50) return false;
+  if (!d.self_regulating) return true;
+  return Number((d.decision as { power_w?: number } | undefined)?.power_w ?? 0) > 0;
+}
+
 export function explain(s: Snapshot, t: T): Explanation {
   const reasons: Reason[] = [];
-  const car = s.devices.find((d) => d.category === "wallbox" && d.enabled);
-  const water = s.devices.find((d) => d.category === "water_heater" && d.enabled);
+  const cars = s.devices.filter((d) => d.category === "wallbox" && d.enabled);
+  const heats = s.devices.filter((d) => d.category === "water_heater" && d.enabled);
+  const car = cars[0];
+  const water = heats.find((d) => !d.self_regulating) ?? heats[0];
+  // Was MinePower an Wärme gerade steuert (ohne Eigenbetrieb einer Wärmepumpe)
+  const heatOn = heats.filter(heatControlledOn);
+  const heatW = heatOn.reduce((sum, d) => sum + (num(d, "power") ?? 0), 0);
+  const heatKindOn = heatOn.length === 1 && heatOn[0].self_regulating ? heatOn[0] : null;
   const grid = s.grid_power ?? 0;
   const bat = s.battery?.power ?? 0;
   const ownProgram = water && typeof water.data?.device_mode === "string" && water.data.device_mode;
@@ -216,15 +267,19 @@ export function explain(s: Snapshot, t: T): Explanation {
   } else if (s.safety) {
     headline = t("explain.hSafety");
     tone = "err";
-  } else if (s.wallbox_power > 50 && s.water_power > 50) {
-    headline = t("explain.hBoth");
+  } else if (s.wallbox_power > 50 && heatW > 50) {
+    headline = heatKindOn ? t("explain.hBothHeat", { name: heatKindOn.name }) : t("explain.hBoth");
     tone = grid > 300 ? "import" : "pv";
   } else if (s.wallbox_power > 50) {
     headline = grid > s.wallbox_power * 0.5 ? t("explain.hCarGrid") : t("explain.hCarSolar");
     tone = grid > s.wallbox_power * 0.5 ? "import" : "car";
-  } else if (s.water_power > 50) {
-    headline = ownProgram ? t("explain.hWaterOwn") : grid > s.water_power * 0.5 ? t("explain.hWaterGrid") : t("explain.hWaterSolar");
-    tone = ownProgram ? "warn" : grid > s.water_power * 0.5 ? "import" : "water";
+  } else if (heatW > 50 && heatKindOn) {
+    headline = grid > heatW * 0.5 ? t("explain.hHeatGrid", { name: heatKindOn.name })
+      : t("explain.hHeatSolar", { name: heatKindOn.name });
+    tone = grid > heatW * 0.5 ? "import" : "water";
+  } else if (heatW > 50) {
+    headline = ownProgram ? t("explain.hWaterOwn") : grid > heatW * 0.5 ? t("explain.hWaterGrid") : t("explain.hWaterSolar");
+    tone = ownProgram ? "warn" : grid > heatW * 0.5 ? "import" : "water";
   } else if (s.battery_grid_charging) {
     headline = t("explain.hBatteryGrid");
     tone = "import";
@@ -273,13 +328,16 @@ export function explain(s: Snapshot, t: T): Explanation {
     });
   }
 
-  if (car) {
-    const c = carSentence(car, t);
-    reasons.push({ key: "car", icon: "car", text: c.text, tone: c.tone });
+  // Jedes Gerät bekommt seine Zeile – bei mehreren derselben Art mit Namen.
+  for (const c of cars) {
+    const sentence = carSentence(c, t);
+    reasons.push({ key: `car-${c.id}`, icon: "car", tone: sentence.tone,
+                   text: cars.length > 1 ? `${c.name}: ${sentence.text}` : sentence.text });
   }
-  if (water) {
-    const w = waterSentence(water, t);
-    reasons.push({ key: "water", icon: "water", text: w.text, tone: w.tone });
+  const waterCount = heats.filter((d) => !d.self_regulating).length;
+  for (const h of heats) {
+    const sentence = heatSentence(h, t, waterCount > 1);
+    reasons.push({ key: `heat-${h.id}`, icon: HEAT_ICON[heatKind(h)], text: sentence.text, tone: sentence.tone });
   }
 
   // Angezeigt wird die aktuelle Einspeisung – dieselbe Zahl wie oben im
@@ -287,7 +345,7 @@ export function explain(s: Snapshot, t: T): Explanation {
   // kurzer Ausschlag keine Meldung erzeugt.
   const exportW = Math.max(0, -grid);
   if (s.waste_w > 150 && exportW > 150) {
-    const shown = [car?.name, water?.name].filter((x): x is string => !!x);
+    const shown = [...cars, ...heats].map((d) => d.name).filter((x): x is string => !!x);
     const causes = s.waste_reason ? wasteCauses(s.waste_reason, t, shown) : [];
     reasons.push({
       key: "waste", icon: "export", tone: "export",

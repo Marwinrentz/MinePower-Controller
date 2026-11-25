@@ -10,10 +10,14 @@ import * as echarts from "echarts";
 // ECharts 6 hat neue Standardwerte (Farben, Legende, Achsen). Das v5-Theme
 // hält die Diagramme optisch auf dem bisherigen Stand.
 import "echarts/theme/v5";
+// Monats- und Wochentagsnamen auf den Zeitachsen (sonst englisch: "Oct").
+import langDE from "echarts/lib/i18n/langDE.js";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n";
 import { get } from "../lib/api";
-import { cssVar } from "../lib/format";
+import { cssVar, fmtDayMonth, fmtNum } from "../lib/format";
+
+echarts.registerLocale("DE", langDE);
 
 function useThemeVersion(): number {
   // Beobachtet das data-theme-Attribut, damit die Charts beim Umschalten
@@ -30,13 +34,13 @@ function useThemeVersion(): number {
 /** Diagramm-Hülle. Ohne `option` zeigt sie statt einer leeren Fläche, ob
  *  noch geladen wird oder ob es (noch) keine Daten gibt. */
 function EChart({ option, height, loading = false }: { option: echarts.EChartsOption | null; height: number; loading?: boolean }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const ref = useRef<HTMLDivElement>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
 
   useEffect(() => {
     if (!ref.current) return;
-    chartRef.current = echarts.init(ref.current, "v5");
+    chartRef.current = echarts.init(ref.current, "v5", { locale: lang === "en" ? "EN" : "DE" });
     const onResize = () => chartRef.current?.resize();
     window.addEventListener("resize", onResize);
     return () => {
@@ -44,11 +48,11 @@ function EChart({ option, height, loading = false }: { option: echarts.EChartsOp
       chartRef.current?.dispose();
       chartRef.current = null;
     };
-  }, []);
+  }, [lang]);
 
   useEffect(() => {
     if (option && chartRef.current) chartRef.current.setOption(option, { notMerge: true });
-  }, [option]);
+  }, [option, lang]);
 
   return (
     <div className="chart-wrap" style={{ height }}>
@@ -92,6 +96,8 @@ function valueAxis(name: string) {
     axisLine: { show: false },
     axisTick: { show: false },
     splitLine: { lineStyle: { color: cssVar("--line") } },
+    // Tausenderpunkt und Dezimalkomma wie im Rest der Oberfläche (sonst "7,000")
+    axisLabel: { formatter: (v: number) => fmtNum(v, Number.isInteger(v) ? 0 : 1) },
   };
 }
 
@@ -110,14 +116,51 @@ function usePolledData<T>(url: string, intervalMs = 60000): T | null | undefined
   return data;
 }
 
-export function PowerHistoryChart({ range }: { range: string }) {
+/** Ein Gerät als eigene Linie im Verlauf (Auto, Wärmepumpe, Heizstab …). */
+export type DeviceLine = { id: number; name: string; field: "wallbox_power" | "water_power"; tone: string };
+
+/** Verlauf je Gerät laden (eine Abfrage je Gerät, Quelle device:<id>). */
+function useDeviceSeries(lines: DeviceLine[], range: string, intervalMs = 60000) {
+  const key = lines.map((l) => `${l.id}:${l.field}`).join(",");
+  const [data, setData] = useState<Record<number, { time: string; value: number }[]>>({});
+  useEffect(() => {
+    let alive = true;
+    const load = () => Promise.all(lines.map((l) =>
+      get<SeriesData>(`/api/history?fields=${l.field}&source=device:${l.id}&range=${range}`)
+        .then((d) => [l.id, d[l.field] ?? []] as const)
+        .catch(() => [l.id, []] as const),
+    )).then((rows) => alive && setData(Object.fromEntries(rows)));
+    if (lines.length) void load();
+    else setData({});
+    const timer = window.setInterval(() => lines.length && void load(), intervalMs);
+    return () => { alive = false; window.clearInterval(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, range, intervalMs]);
+  return data;
+}
+
+/** Strichart je Gerät derselben Farbe, damit zwei Wärmepumpen unterscheidbar bleiben. */
+const DASHES = ["solid", "dashed", "dotted"] as const;
+
+export function PowerHistoryChart({ range, devices = [] }: { range: string; devices?: DeviceLine[] }) {
   const data = usePolledData<SeriesData>(
     `/api/history?fields=pv_power,house_power,grid_power,battery_power&range=${range}`,
   );
+  const perDevice = useDeviceSeries(devices, range);
   const theme = useThemeVersion();
   let option: echarts.EChartsOption | null = null;
   if (data && Object.keys(data).length) {
     const mk = (field: string) => (data[field] || []).map((p) => [p.time, p.value]);
+    const seen: Record<string, number> = {};
+    const deviceSeries = devices.map((l) => {
+      const n = (seen[l.tone] = (seen[l.tone] ?? -1) + 1);
+      return {
+        name: l.name, type: "line" as const, showSymbol: false, smooth: true,
+        lineStyle: { width: 1.6, type: DASHES[n % DASHES.length] },
+        color: cssVar(`--c-${l.tone}`),
+        data: (perDevice[l.id] ?? []).map((p) => [p.time, p.value]),
+      };
+    });
     option = {
       ...baseOption(),
       xAxis: timeAxis(),
@@ -131,10 +174,11 @@ export function PowerHistoryChart({ range }: { range: string }) {
           lineStyle: { width: 1.6 }, color: cssVar("--c-grid-import"), data: mk("grid_power") },
         { name: "Batterie", type: "line", showSymbol: false, smooth: true,
           lineStyle: { width: 1.6 }, color: cssVar("--c-battery"), data: mk("battery_power") },
+        ...deviceSeries,
       ],
     };
   }
-  return <EChart key={theme} option={option} height={300} loading={data === undefined} />;
+  return <EChart key={theme} option={option} height={devices.length > 2 ? 330 : 300} loading={data === undefined} />;
 }
 
 /** Verschenkter Solarstrom über die Zeit – macht das Regelziel überprüfbar. */
@@ -186,7 +230,7 @@ export function EnergyBalanceChart({ range }: { range: string }) {
   let option: echarts.EChartsOption | null = null;
   if (data && Object.keys(data).length) {
     const days = Object.keys(data).sort();
-    const short = days.map((d) => d.slice(5));
+    const short = days.map(fmtDayMonth);
     option = {
       ...baseOption(),
       xAxis: {
