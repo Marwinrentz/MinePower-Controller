@@ -4,6 +4,12 @@ Format: eine Version je Abschnitt, Einträge gruppiert in Neu, Geändert und
 Behoben, ein Eintrag je Zeile. Die App zeigt diese Datei unter „Changelog“
 und nach einem Update als Hinweisfenster.
 
+## 3.5.1 (2026-11-25)
+
+### Geändert
+- Daikin Onecta zeigt Geräte mit dem Raumnamen aus der Onecta-App, z. B. „Daikin Wohnzimmer (dx4)“
+- Neuer Live-Wert „Geräte im Konto“ mit Anzahl und Namen aller Daikin-Geräte; „Verbindung testen“ nennt Anzahl, Namen und IDs
+
 ## 3.5.0 (2026-11-25)
 
 ### Neu

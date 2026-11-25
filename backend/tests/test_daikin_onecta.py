@@ -252,7 +252,22 @@ async def test_test_command_lists_devices():
     drv = make()
     drv.http = fake
     res = await drv.test_command()
-    assert res["ok"] and "Perfera = d-2" in res["message"]
+    assert res["ok"] and "Perfera = d-2" in res["message"] and res["message"].startswith("Anmeldung")
+    assert "2 –" in res["message"]
+
+
+async def test_room_names_from_app_are_shown():
+    a, b = mp_climate(), mp_climate()
+    a["name"] = {"settable": True, "value": "Daikin Schlafzimmer"}
+    b["name"] = {"settable": True, "value": "Daikin Wohnzimmer"}
+    fake = FakeOnecta([device("s", a), device("w", b)])
+    drv = make(device_id="w")
+    drv.http = fake
+    data = await drv.read_data()
+    assert data.extra["Gerät"] == "Daikin Wohnzimmer (dx4)"
+    assert data.extra["Geräte im Konto"].startswith("2: Daikin Schlafzimmer (dx4)")
+    res = await drv.test_command()
+    assert "Daikin Schlafzimmer (dx4) = s" in res["message"] and "Daikin Wohnzimmer (dx4) = w" in res["message"]
 
 
 # ---------------------------------------------------------------- Anleitungen
