@@ -336,6 +336,17 @@ class DaikinOnecta(WaterHeaterDriver):
 
     # ------------------------------------------------------------ Gerät finden
 
+    @staticmethod
+    def _label(dev: dict) -> str:
+        """Raumname aus der Onecta-App (climateControl.name), sonst das Modell."""
+        model = str(dev.get("deviceModel") or "?")
+        for mp in dev.get("managementPoints") or []:
+            if isinstance(mp, dict) and mp.get("managementPointType") in ("climateControl", "domesticHotWaterTank"):
+                name = str(char_value(mp, "name") or "").strip()
+                if name:
+                    return f"{name} ({model})"
+        return model
+
     def _pick(self, devices: list[dict]) -> tuple[dict, dict]:
         wanted = MP_TYPE[self.target]
         candidates = [d for d in devices if not self.device_id or str(d.get("id")) == self.device_id]
@@ -400,7 +411,9 @@ class DaikinOnecta(WaterHeaterDriver):
             running = v["on"]
         extra: dict[str, Any] = {}
         if self._device is not None:
-            extra["Gerät"] = f"{self._device.get('deviceModel') or '?'} ({self._device.get('id')})"
+            extra["Gerät"] = self._label(self._device)
+            known = self.account._devices or []
+            extra["Geräte im Konto"] = f"{len(known)}: " + ", ".join(self._label(d) for d in known)
             if self._device.get("isCloudConnectionUp") is False:
                 extra["Cloud"] = "Gerät offline"
         if self.target == "climate":
@@ -516,7 +529,7 @@ class DaikinOnecta(WaterHeaterDriver):
     async def test_command(self) -> dict | None:
         await self._refresh(force=True)
         devices = await self.account.devices()
-        listing = ", ".join(f"{d.get('deviceModel') or '?'} = {d.get('id')}" for d in devices)
+        listing = f"{len(devices)} – " + "; ".join(f"{self._label(d)} = {d.get('id')}" for d in devices)
         ok = {"powerful": self._settable("powerfulMode"),
               "setpoint": (sp := self._setpoint(self._mp or {})) is not None and sp[1].get("settable") is not False,
               "power": self._settable("onOffMode")}[self.action]
