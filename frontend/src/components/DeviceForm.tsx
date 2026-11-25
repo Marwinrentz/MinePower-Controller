@@ -9,10 +9,11 @@
  *  'steuert' verwechselt wird.
  */
 import { Icon } from "./icons";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useI18n } from "../i18n";
 import { get, patch, post } from "../lib/api";
 import type { ConfigField, Device, DeviceCategory, DriverMeta, TestResult } from "../lib/types";
+import { OAuthConnect, SetupGuide } from "./SetupGuide";
 import { Badge, Banner, Button, Field, Toggle } from "./ui";
 
 function FieldInput({ field, value, onChange }: {
@@ -166,10 +167,22 @@ export function DeviceForm({ category, existing, onSaved, onCancel }: {
             <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
 
+          <SetupGuide driver={driver} config={config} />
+
           {driver.fields.map((f) => (
-            <Field key={f.key} label={f.required ? f.label : `${f.label} (${t("common.optional")})`} help={f.help}>
-              <FieldInput field={f} value={config[f.key]} onChange={(v) => setConfig({ ...config, [f.key]: v })} />
-            </Field>
+            <Fragment key={f.key}>
+              <Field label={f.required ? f.label : `${f.label} (${t("common.optional")})`} help={f.help}>
+                <FieldInput field={f} value={config[f.key]} onChange={(v) => setConfig({ ...config, [f.key]: v })} />
+              </Field>
+              {/* 'Verbinden' direkt unter den Zugangsdaten, nicht am Formularende */}
+              {driver.oauth && f.key === "refresh_token" && (
+                <OAuthConnect driver={driver} config={config} deviceId={existing?.id ?? null}
+                              onToken={(field, token) => {
+                                setConfig((c) => ({ ...c, [field]: token }));
+                                setTestResult(null);
+                              }} />
+              )}
+            </Fragment>
           ))}
 
           {category === "wallbox" && (

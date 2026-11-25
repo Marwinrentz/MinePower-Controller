@@ -21,7 +21,7 @@ def _s(text: str, link: str | None = None, label: str | None = None) -> SetupSte
 
 HOME_ASSISTANT = [
     _s("Home-Assistant-URL oben eintragen, so wie du Home Assistant im Browser öffnest "
-       "(z. B. http://192.168.1.10:8123)."),
+       "(z. B. http://homeassistant.local:8123)."),
     _s("Home Assistant öffnen, unten links auf deinen Namen (Profil) klicken und den Reiter "
        "„Sicherheit“ wählen.", "{url}/profile/security", "Profil in Home Assistant öffnen"),
     _s("Ganz unten bei „Langlebige Zugangstoken“ auf „Token erstellen“ klicken, Name „MinePower“."),

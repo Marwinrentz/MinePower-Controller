@@ -7,6 +7,7 @@ import { Car } from "./pages/Car";
 import { Dashboard } from "./pages/Dashboard";
 import { Diagnose } from "./pages/Diagnose";
 import { Login } from "./pages/Login";
+import { OAuthCallback } from "./pages/OAuthCallback";
 import { Settings } from "./pages/Settings";
 import { Statistics } from "./pages/Statistics";
 import { Tariff } from "./pages/Tariff";
@@ -28,6 +29,7 @@ export function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/oauth/callback" element={<OAuthCallback />} />
         <Route element={<RequireAuth />}>
           <Route path="/wizard" element={<Wizard />} />
           {/* Wand-Ansicht ohne Rahmen: ein Wandgerät zeigt nur die Anlage. */}

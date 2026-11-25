@@ -1,0 +1,364 @@
+[
+ {
+  "id": "daikin_onecta",
+  "name": "Daikin Onecta (Klimaanlage, Altherma – Cloud)",
+  "category": "water_heater",
+  "description": "Daikin-Geräte mit Onecta-App (WLAN-Adapter BRP069C4x, Altherma) über die offizielle Daikin-Cloud: bei Überschuss einschalten, Sollwert verstellen oder Powerful/Warmwasser-Boost.",
+  "fields": [
+   {
+    "key": "client_id",
+    "label": "Client-ID (Developer Portal)",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "client_secret",
+    "label": "Client-Secret",
+    "type": "password",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "refresh_token",
+    "label": "Refresh-Token",
+    "type": "password",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "Füllt der Knopf 'Mit Daikin verbinden' aus. MinePower erneuert es danach selbst."
+   },
+   {
+    "key": "device_id",
+    "label": "Geräte-ID",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "Leer = erstes passendes Gerät des Kontos. Die IDs zeigt 'Verbindung testen'."
+   },
+   {
+    "key": "target",
+    "label": "Was steuern",
+    "type": "select",
+    "required": true,
+    "default": "climate",
+    "options": [
+     {
+      "value": "climate",
+      "label": "Klimaanlage / Raumheizung"
+     },
+     {
+      "value": "dhw",
+      "label": "Warmwasserspeicher (Altherma)"
+     }
+    ],
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "action",
+    "label": "Bei Überschuss",
+    "type": "select",
+    "required": true,
+    "default": "power",
+    "options": [
+     {
+      "value": "power",
+      "label": "Einschalten (nur Klima/Raum)"
+     },
+     {
+      "value": "setpoint",
+      "label": "Solltemperatur verstellen"
+     },
+     {
+      "value": "powerful",
+      "label": "Powerful-Modus / Warmwasser-Boost"
+     }
+    ],
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "surplus_mode",
+    "label": "Betriebsart bei Überschuss",
+    "type": "select",
+    "required": false,
+    "default": "heating",
+    "options": [
+     {
+      "value": "heating",
+      "label": "Heizen"
+     },
+     {
+      "value": "cooling",
+      "label": "Kühlen"
+     },
+     {
+      "value": "auto",
+      "label": "Automatik"
+     }
+    ],
+    "placeholder": null,
+    "help": "Nur Klima/Raum. Beim Verstellen des Sollwerts gilt die laufende Betriebsart."
+   },
+   {
+    "key": "surplus_temp",
+    "label": "Solltemperatur bei Überschuss (°C)",
+    "type": "number",
+    "required": false,
+    "default": 23,
+    "options": null,
+    "placeholder": null,
+    "help": "Raum (Heizen höher, Kühlen tiefer) bzw. Warmwasser, z. B. 55."
+   },
+   {
+    "key": "poll_s",
+    "label": "Abfrageabstand (s)",
+    "type": "number",
+    "required": true,
+    "default": 900,
+    "options": null,
+    "placeholder": null,
+    "help": "600–3600 s. 900 s = 96 Abfragen am Tag, Rest bleibt für Befehle."
+   },
+   {
+    "key": "rated_power",
+    "label": "Leistungsaufnahme im Betrieb (W)",
+    "type": "number",
+    "required": true,
+    "default": 1000,
+    "options": null,
+    "placeholder": null,
+    "help": "Elektrische Leistung, wenn das Gerät läuft. Gilt, solange es keine Messung liefert; MinePower gibt erst frei, wenn mindestens so viel Überschuss da ist."
+   },
+   {
+    "key": "heat_kind",
+    "label": "Art des Geräts",
+    "type": "select",
+    "required": false,
+    "default": "climate",
+    "options": [
+     {
+      "value": "heat_pump",
+      "label": "Wärmepumpe"
+     },
+     {
+      "value": "climate",
+      "label": "Klimaanlage"
+     },
+     {
+      "value": "water",
+      "label": "Warmwasser / Heizstab"
+     },
+     {
+      "value": "heating",
+      "label": "Heizung"
+     }
+    ],
+    "placeholder": null,
+    "help": "Nur für Anzeige und Vorgaben (Symbol, Verdichterschutz)."
+   }
+  ],
+  "capabilities": [
+   "write_test",
+   "relay",
+   "climate"
+  ],
+  "maturity": "experimental",
+  "notes": "Braucht Internet, Client-ID und Client-Secret aus dem Daikin Developer Portal (developer.cloud.daikineurope.com); das Token holt der Knopf 'Mit Daikin verbinden'. Daikin erlaubt nur 200 Anfragen am Tag – Abfrageabstand nicht unter 10 min. Mehrere Geräte am selben Konto teilen sich die Abfrage.",
+  "offline_hint": null,
+  "own_program_hint": null,
+  "setup": [
+   {
+    "text": "Daikin Developer Portal öffnen und mit deinem Onecta-Konto anmelden (dieselben Zugangsdaten wie in der Onecta-App).",
+    "link": "https://developer.cloud.daikineurope.com",
+    "link_label": "Daikin Developer Portal"
+   },
+   {
+    "text": "„My Apps“ → „New application“: Name „MinePower“. Als Redirect-URI die Adresse aus dem Kasten unten eintragen (Knopf „Kopieren“). Daikin verlangt eine https-Adresse.",
+    "link": null,
+    "link_label": null
+   },
+   {
+    "text": "Client-ID und Client-Secret kopieren und unten einfügen. Das Secret zeigt Daikin nur einmal.",
+    "link": null,
+    "link_label": null
+   },
+   {
+    "text": "Auf „Mit Daikin verbinden“ klicken, anmelden und den Zugriff erlauben.",
+    "link": null,
+    "link_label": null
+   },
+   {
+    "text": "Zeigt der Browser danach „Seite nicht erreichbar“, ist das normal: die komplette Adresse aus der Adresszeile kopieren und im Kasten unten einfügen.",
+    "link": null,
+    "link_label": null
+   },
+   {
+    "text": "„Verbindung testen“ zeigt alle Geräte des Kontos. Speichern – MinePower erneuert das Token danach selbst.",
+    "link": null,
+    "link_label": null
+   }
+  ],
+  "oauth": "daikin_onecta"
+ },
+ {
+  "id": "homey_pro",
+  "name": "Homey Pro (Gerät schalten)",
+  "category": "water_heater",
+  "description": "Wärmepumpe, Klimaanlage, Heizstab oder Thermostat über Homey Pro (lokale API): bei Überschuss einschalten oder Solltemperatur anheben.",
+  "fields": [
+   {
+    "key": "host",
+    "label": "IP-Adresse des Homey Pro",
+    "type": "text",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": "192.0.2.50",
+    "help": null
+   },
+   {
+    "key": "api_key",
+    "label": "API-Schlüssel",
+    "type": "password",
+    "required": true,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "device_id",
+    "label": "Geräte-ID",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": "z. B. 0b5a…-…",
+    "help": "Leer lassen und 'Verbindung testen': MinePower listet alle Geräte mit ID."
+   },
+   {
+    "key": "action",
+    "label": "Bei Überschuss",
+    "type": "select",
+    "required": true,
+    "default": "onoff",
+    "options": [
+     {
+      "value": "onoff",
+      "label": "Einschalten (und danach wieder aus)"
+     },
+     {
+      "value": "target",
+      "label": "Solltemperatur verschieben"
+     }
+    ],
+    "placeholder": null,
+    "help": null
+   },
+   {
+    "key": "surplus_temp",
+    "label": "Solltemperatur bei Überschuss (°C)",
+    "type": "number",
+    "required": false,
+    "default": 23,
+    "options": null,
+    "placeholder": null,
+    "help": "Nur für 'Solltemperatur verschieben'."
+   },
+   {
+    "key": "power_device_id",
+    "label": "Geräte-ID des Messgeräts (optional)",
+    "type": "text",
+    "required": false,
+    "default": null,
+    "options": null,
+    "placeholder": null,
+    "help": "Falls das Gerät selbst keine Leistung meldet (measure_power)."
+   },
+   {
+    "key": "rated_power",
+    "label": "Leistungsaufnahme im Betrieb (W)",
+    "type": "number",
+    "required": true,
+    "default": 1500,
+    "options": null,
+    "placeholder": null,
+    "help": "Elektrische Leistung, wenn das Gerät läuft. Gilt, solange es keine Messung liefert; MinePower gibt erst frei, wenn mindestens so viel Überschuss da ist."
+   },
+   {
+    "key": "heat_kind",
+    "label": "Art des Geräts",
+    "type": "select",
+    "required": false,
+    "default": "heat_pump",
+    "options": [
+     {
+      "value": "heat_pump",
+      "label": "Wärmepumpe"
+     },
+     {
+      "value": "climate",
+      "label": "Klimaanlage"
+     },
+     {
+      "value": "water",
+      "label": "Warmwasser / Heizstab"
+     },
+     {
+      "value": "heating",
+      "label": "Heizung"
+     }
+    ],
+    "placeholder": null,
+    "help": "Nur für Anzeige und Vorgaben (Symbol, Verdichterschutz)."
+   }
+  ],
+  "capabilities": [
+   "write_test",
+   "relay"
+  ],
+  "maturity": "experimental",
+  "notes": "API-Schlüssel in der Homey-Web-App anlegen (Einstellungen → API-Schlüssel, Geräte steuern). Die Geräte-ID zeigt 'Verbindung testen' bei leerem Feld. Ausgeschaltet wird nur, was MinePower eingeschaltet hat.",
+  "offline_hint": null,
+  "own_program_hint": null,
+  "setup": [
+   {
+    "text": "Homey-Web-App öffnen und anmelden.",
+    "link": "https://my.homey.app",
+    "link_label": "my.homey.app öffnen"
+   },
+   {
+    "text": "Einstellungen (Zahnrad) → „API-Schlüssel“ → „Neuer API-Schlüssel“, Name „MinePower“, Rechte „Geräte ansehen“ und „Geräte steuern“ anhaken.",
+    "link": null,
+    "link_label": null
+   },
+   {
+    "text": "Schlüssel kopieren (wird nur einmal angezeigt) und unten bei „API-Schlüssel“ einfügen.",
+    "link": null,
+    "link_label": null
+   },
+   {
+    "text": "IP-Adresse des Homey Pro: Einstellungen → Allgemein, oder in der Geräteliste deines Routers.",
+    "link": null,
+    "link_label": null
+   },
+   {
+    "text": "Geräte-ID leer lassen und „Verbindung testen“: MinePower zeigt alle Geräte mit ihrer ID. Die passende ID kopieren und eintragen.",
+    "link": null,
+    "link_label": null
+   }
+  ],
+  "oauth": null
+ }
+]
