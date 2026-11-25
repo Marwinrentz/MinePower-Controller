@@ -10,7 +10,7 @@ Ablauf:
   (``https://iam.viessmann-climatesolutions.com/idp/v3/token``).
 * Gerät: Installation, Gateway-Seriennummer und Geräte-ID. Leer gelassen,
   nimmt MinePower die erste Installation des Kontos
-  (``/iot/v1/equipment/installations?includeGateways=true``).
+  (``/iot/v2/equipment/installations?includeGateways=true``).
 * Features: ``/iot/v2/features/installations/{i}/gateways/{g}/devices/{d}/features``
 
 Bei Überschuss (Konfiguration):
@@ -149,7 +149,7 @@ class ViessmannViCare(WaterHeaterDriver):
     async def _discover(self) -> None:
         if self.installation and self.gateway:
             return
-        res = await self._call("GET", "/iot/v1/equipment/installations?includeGateways=true")
+        res = await self._call("GET", "/iot/v2/equipment/installations?includeGateways=true")
         items = (res or {}).get("data") or []
         if not items:
             raise DeviceRejected("Viessmann: keine Installation im Konto gefunden")

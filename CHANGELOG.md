@@ -4,6 +4,11 @@ Format: eine Version je Abschnitt, Einträge gruppiert in Neu, Geändert und
 Behoben, ein Eintrag je Zeile. Die App zeigt diese Datei unter „Changelog“
 und nach einem Update als Hinweisfenster.
 
+## 3.5.4 (2026-11-25)
+
+### Behoben
+- Viessmann: Anlagensuche nutzt /iot/v2/equipment/installations, weil Viessmann /iot/v1 abgeschaltet hat (HTTP 410 GONE)
+
 ## 3.5.3 (2026-11-25)
 
 ### Behoben
