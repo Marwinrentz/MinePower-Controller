@@ -4,6 +4,12 @@ Format: eine Version je Abschnitt, Einträge gruppiert in Neu, Geändert und
 Behoben, ein Eintrag je Zeile. Die App zeigt diese Datei unter „Changelog“
 und nach einem Update als Hinweisfenster.
 
+## 3.5.2 (2026-11-25)
+
+### Neu
+- Geräteauswahl per Liste: Nach „Verbindung testen“ zeigt das Formular alle Geräte des Kontos (z. B. alle Daikin-Klimageräte mit Raumnamen) zum Antippen statt einer ID zum Abtippen
+- Mehrere Geräte auf einmal: Jedes angetippte Gerät wird beim Speichern ein eigener Eintrag mit Raumnamen und einzeln gesteuert; schon angelegte Geräte sind ausgegraut
+
 ## 3.5.1 (2026-11-25)
 
 ### Geändert

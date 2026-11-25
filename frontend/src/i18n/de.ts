@@ -277,6 +277,12 @@ export const de = {
     writeTest: "Steuerbefehl-Test",
     writeTestFailed: "Befehl nicht übernommen",
     writeTestHelp: "Sendet einen unkritischen Befehl und prüft die Rückmeldung",
+    pickTitle: "Geräte im Konto – antippen",
+    pickHelp: "Jedes gewählte Gerät wird ein eigener Eintrag und einzeln gesteuert.",
+    pickTestFirst: "Erst „Verbindung testen“, dann erscheinen hier alle Geräte des Kontos.",
+    pickMany: "Beim Speichern entstehen {n} Einträge: {names}",
+    pickAlready: "schon angelegt",
+    pickCurrent: "dieser Eintrag",
     writeTestOk: "Befehl übernommen",
   },
   diag: {

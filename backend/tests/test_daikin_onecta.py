@@ -270,6 +270,21 @@ async def test_room_names_from_app_are_shown():
     assert "Daikin Schlafzimmer (dx4) = s" in res["message"] and "Daikin Wohnzimmer (dx4) = w" in res["message"]
 
 
+async def test_connection_test_offers_all_matching_devices_as_choices():
+    a, b = mp_climate(), mp_climate()
+    a["name"] = {"settable": True, "value": "Daikin Schlafzimmer"}
+    b["name"] = {"settable": True, "value": "Daikin Wohnzimmer"}
+    fake = FakeOnecta([device("s", a), device("w", b), device("t", mp_dhw(), model="Altherma")])
+    drv = make()
+    drv.http = fake
+    res = await drv.test_connection()
+    assert res.ok
+    assert res.choices == {"device_id": [
+        {"value": "s", "label": "Daikin Schlafzimmer (dx4)"},
+        {"value": "w", "label": "Daikin Wohnzimmer (dx4)"},
+    ]}
+
+
 # ---------------------------------------------------------------- Anleitungen
 
 def test_every_driver_with_secret_has_setup_steps():

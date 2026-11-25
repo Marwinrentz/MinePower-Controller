@@ -258,6 +258,7 @@ export type TestResult = {
   values: Record<string, unknown>;
   warnings: string[];
   write_test: { ok: boolean; message: string; sent?: unknown; readback?: unknown } | null;
+  choices?: Record<string, { value: string; label: string }[]>;
 };
 
 export type Statistics = {
