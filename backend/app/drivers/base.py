@@ -224,6 +224,10 @@ class TestResult(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     #: Ergebnis des optionalen Schreibtests (Befehl → Readback → übernommen?)
     write_test: dict[str, Any] | None = None
+    #: Auswahllisten, die erst nach der Anmeldung bekannt sind:
+    #: {Feld-Key: [{value, label}]} – z. B. alle Klimageräte eines Cloud-Kontos.
+    #: Das GUI zeigt sie als Liste zum Antippen (mehrere = mehrere Geräte).
+    choices: dict[str, list[dict[str, str]]] = Field(default_factory=dict)
 
 
 # ---------------------------------------------------------------- Interfaces
@@ -268,11 +272,16 @@ class BaseDriver(abc.ABC):
                     write_test = await self.test_command()
                 except Exception as exc:  # noqa: BLE001 – Schreibtest darf den Lesetest nicht kippen
                     write_test = {"ok": False, "message": _human(exc)}
+            try:
+                choices = await self._choices()
+            except Exception:  # noqa: BLE001 – Auswahlliste ist nur Komfort
+                choices = {}
             message = "Verbindung erfolgreich"
             if write_test is not None and not write_test.get("ok", False):
                 message = "Verbindung steht, aber der Testbefehl wurde nicht übernommen"
             return TestResult(
-                ok=True, message=message, values=values, warnings=warnings, write_test=write_test
+                ok=True, message=message, values=values, warnings=warnings, write_test=write_test,
+                choices=choices,
             )
         except Exception as exc:  # noqa: BLE001 – bewusst breit für klare GUI-Meldung
             return TestResult(ok=False, message=_human(exc))
@@ -281,6 +290,10 @@ class BaseDriver(abc.ABC):
                 await self.disconnect()
             except Exception:  # noqa: BLE001
                 pass
+
+    async def _choices(self) -> dict[str, list[dict[str, str]]]:
+        """Auswahllisten für Felder (überschreibbar), siehe TestResult.choices."""
+        return {}
 
     async def _probe(self) -> dict[str, Any]:
         """Kategorie-spezifischer Beispiel-Read für test_connection()."""

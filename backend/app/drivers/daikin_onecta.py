@@ -260,7 +260,7 @@ class DaikinOnecta(WaterHeaterDriver):
             ConfigField(key="refresh_token", label="Refresh-Token", type=FieldType.PASSWORD,
                         help="Füllt der Knopf 'Mit Daikin verbinden' aus. MinePower erneuert es danach selbst."),
             ConfigField(key="device_id", label="Geräte-ID", required=False,
-                        help="Leer = erstes passendes Gerät des Kontos. Die IDs zeigt 'Verbindung testen'."),
+                        help="Nach 'Verbindung testen' erscheinen alle Geräte des Kontos zum Antippen. Mehrere wählen legt je Gerät einen eigenen, einzeln gesteuerten Eintrag an."),
             ConfigField(key="target", label="Was steuern", type=FieldType.SELECT, default="climate",
                         options=[{"value": "climate", "label": "Klimaanlage / Raumheizung"},
                                  {"value": "dhw", "label": "Warmwasserspeicher (Altherma)"}]),
@@ -346,6 +346,15 @@ class DaikinOnecta(WaterHeaterDriver):
                 if name:
                     return f"{name} ({model})"
         return model
+
+    async def _choices(self) -> dict[str, list[dict[str, str]]]:
+        """Alle Geräte des Kontos mit passender Steuerung, zum Antippen im Formular."""
+        wanted = MP_TYPE[self.target]
+        out = [{"value": str(d.get("id")), "label": self._label(d)}
+               for d in (self.account._devices or [])
+               if d.get("id") and any(isinstance(mp, dict) and mp.get("managementPointType") == wanted
+                                      for mp in d.get("managementPoints") or [])]
+        return {"device_id": out} if out else {}
 
     def _pick(self, devices: list[dict]) -> tuple[dict, dict]:
         wanted = MP_TYPE[self.target]

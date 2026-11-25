@@ -160,6 +160,12 @@ export const en: DeepPartial<Dict> = {
     writeTest: "Control command test",
     writeTestFailed: "Command not applied",
     writeTestHelp: "Sends a harmless command and checks the readback",
+    pickTitle: "Devices in this account – tap to select",
+    pickHelp: "Every selected device becomes its own entry and is controlled separately.",
+    pickTestFirst: "Run “Test connection” first; then all devices of the account appear here.",
+    pickMany: "Saving creates {n} entries: {names}",
+    pickAlready: "already added",
+    pickCurrent: "this entry",
     writeTestOk: "Command applied",
   },
   diag: {
