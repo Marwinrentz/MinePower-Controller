@@ -4,7 +4,8 @@ Ablauf:
 
 * Anmeldung: OAuth2 mit eigener Client-ID (kostenlos im Viessmann Developer
   Portal anlegen, Redirect-URI ``http://localhost:4200/``) und einem
-  Refresh-Token. Das Token holt einmalig ``backend/tools/vicare_token.py``;
+  Refresh-Token. Das Token holt der Knopf 'Mit Viessmann verbinden' (api/oauth.py)
+  oder ``backend/tools/vicare_token.py``;
   es gilt 180 Tage. Daraus wird stündlich ein Zugriffstoken erzeugt
   (``https://iam.viessmann.com/idp/v3/token``).
 * Gerät: Installation, Gateway-Seriennummer und Geräte-ID. Leer gelassen,
@@ -64,12 +65,13 @@ class ViessmannViCare(WaterHeaterDriver):
         description="Vitocal & Co. über die offizielle Viessmann-API: bei Überschuss Warmwasser-Einmalladung "
                     "oder höhere Warmwasser-Solltemperatur.",
         capabilities={"relay", "heat_pump", "write_test"},
-        notes="Braucht Internet und eine eigene Client-ID aus dem Viessmann Developer Portal. Das Refresh-Token "
-              "erzeugt das Skript backend/tools/vicare_token.py (gilt 180 Tage). Rund 1450 Abfragen am Tag "
-              "frei – Abfrageabstand nicht unter 90 s.",
+        notes="Braucht Internet und eine eigene Client-ID aus dem Viessmann Developer Portal. Das Token holt der "
+              "Knopf 'Mit Viessmann verbinden' (gilt 180 Tage). Rund 1450 Abfragen am Tag frei – "
+              "Abfrageabstand nicht unter 90 s.",
         fields=[
             ConfigField(key="client_id", label="Client-ID (Developer Portal)"),
-            ConfigField(key="refresh_token", label="Refresh-Token", type=FieldType.PASSWORD),
+            ConfigField(key="refresh_token", label="Refresh-Token", type=FieldType.PASSWORD,
+                        help="Füllt der Knopf 'Mit Viessmann verbinden' aus."),
             ConfigField(key="installation_id", label="Installations-ID", required=False,
                         help="Leer = erste Installation des Kontos"),
             ConfigField(key="gateway_serial", label="Gateway-Seriennummer", required=False,
@@ -125,7 +127,7 @@ class ViessmannViCare(WaterHeaterDriver):
             "grant_type": "refresh_token", "client_id": self.client_id, "refresh_token": self.refresh_token})
         if not isinstance(res, dict) or not res.get("access_token"):
             raise DeviceRejected("Viessmann: Anmeldung abgelehnt – Refresh-Token abgelaufen? "
-                                 "Mit backend/tools/vicare_token.py neu erzeugen.")
+                                 "Im Geräteformular neu verbinden.")
         self._token = str(res["access_token"])
         if res.get("refresh_token"):
             self.refresh_token = str(res["refresh_token"])

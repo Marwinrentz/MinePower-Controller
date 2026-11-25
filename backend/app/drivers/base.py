@@ -66,6 +66,18 @@ class Maturity(str, Enum):
     EXPERIMENTAL = "experimental"  # nie an echter Hardware gelaufen
 
 
+class SetupStep(BaseModel):
+    """Ein Schritt der Einrichtungsanleitung im Geräteformular (seit 3.5).
+
+    ``link`` darf Platzhalter ``{feld}`` enthalten (z. B. ``{url}/profile/security``
+    für Home Assistant); die Oberfläche setzt den eingegebenen Wert ein und
+    blendet den Link aus, solange das Feld leer ist."""
+
+    text: str
+    link: str | None = None
+    link_label: str | None = None
+
+
 class DriverMeta(BaseModel):
     id: str  # eindeutig, z. B. "sungrow_sh"
     name: str  # Anzeigename, z. B. "Sungrow SH-Serie (Hybrid)"
@@ -85,6 +97,10 @@ class DriverMeta(BaseModel):
     offline_hint: str | None = None
     #: Abhilfe, wenn das Gerät im eigenen Programm läuft (Capability "own_program").
     own_program_hint: str | None = None
+    #: Schritt-für-Schritt-Anleitung für Zugangsdaten (Token, Passwort, API-Schlüssel)
+    setup: list[SetupStep] = Field(default_factory=list)
+    #: Anbieter für den Knopf 'Verbinden' (OAuth im Browser), z. B. 'viessmann'
+    oauth: str | None = None
 
 
 # ---------------------------------------------------------------- Messdaten

@@ -55,13 +55,14 @@ class HomeyPro(WaterHeaterDriver):
                     "bei Überschuss einschalten oder Solltemperatur anheben.",
         capabilities={"relay", "write_test"},
         notes="API-Schlüssel in der Homey-Web-App anlegen (Einstellungen → API-Schlüssel, Geräte steuern). "
-              "Geräte-ID steht in der Homey-Web-App in der Adresszeile des Geräts. Ausgeschaltet wird nur, "
+              "Die Geräte-ID zeigt 'Verbindung testen' bei leerem Feld. Ausgeschaltet wird nur, "
               "was MinePower eingeschaltet hat.",
         fields=[
             ConfigField(key="host", label="IP-Adresse des Homey Pro", placeholder="192.0.2.50"),
             ConfigField(key="api_key", label="API-Schlüssel", type=FieldType.PASSWORD),
-            ConfigField(key="device_id", label="Geräte-ID",
-                        placeholder="z. B. 0b5a…-…", help="UUID des Geräts in Homey"),
+            ConfigField(key="device_id", label="Geräte-ID", required=False,
+                        placeholder="z. B. 0b5a…-…",
+                        help="Leer lassen und 'Verbindung testen': MinePower listet alle Geräte mit ID."),
             ConfigField(key="action", label="Bei Überschuss", type=FieldType.SELECT, default="onoff",
                         options=[{"value": "onoff", "label": "Einschalten (und danach wieder aus)"},
                                  {"value": "target", "label": "Solltemperatur verschieben"}]),
@@ -95,9 +96,18 @@ class HomeyPro(WaterHeaterDriver):
     async def disconnect(self) -> None:
         await self.http.close()
 
+    async def device_list(self) -> list[tuple[str, str]]:
+        """(Name, ID) aller Geräte – damit niemand IDs aus der Adresszeile suchen muss."""
+        res = await self.http.get_json(PATH)
+        items = res.values() if isinstance(res, dict) else res if isinstance(res, list) else []
+        out = [(str(d.get("name") or "?"), str(d.get("id") or "")) for d in items if isinstance(d, dict)]
+        return sorted((n, i) for n, i in out if i)
+
     async def _device(self, device_id: str) -> dict:
         if not device_id:
-            raise DeviceRejected("Homey: keine Geräte-ID eingetragen")
+            found = await self.device_list()
+            listing = "; ".join(f"{n} = {i}" for n, i in found[:40]) or "keine"
+            raise DeviceRejected(f"Homey: Anmeldung klappt. Jetzt die Geräte-ID eintragen – gefunden: {listing}")
         res = await self.http.get_json(PATH + device_id)
         if not isinstance(res, dict):
             raise DeviceRejected("Homey: unerwartete Antwort – Geräte-ID prüfen")

@@ -42,6 +42,7 @@ class HttpDevice:
         self.name = name
         self.verify_ssl = verify_ssl
         self.headers = headers or {}
+        self.last_headers: dict[str, str] = {}
         self._timeout = aiohttp.ClientTimeout(total=timeout)
         self._session: aiohttp.ClientSession | None = None
 
@@ -101,6 +102,9 @@ class HttpDevice:
             async with session.request(
                 method, url, params=_stringify(params), json=json, data=data, headers=headers
             ) as resp:
+                # Kopfzeilen der letzten Antwort (Cloud-APIs melden darin ihr
+                # Kontingent, z. B. X-RateLimit-Remaining-Day, Retry-After).
+                self.last_headers = dict(resp.headers)
                 await self._check_status(resp, url)
                 if want == "text":
                     return await resp.text()
