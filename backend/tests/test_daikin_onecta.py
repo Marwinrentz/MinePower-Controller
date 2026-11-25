@@ -334,7 +334,7 @@ async def test_oauth_start_builds_url_and_finish_exchanges_code(admin_token, mon
         "provider": "viessmann", "client_id": "cid", "redirect_uri": "http://192.168.1.5:8000/oauth/callback"})
     assert status == 200, res
     q = urllib.parse.parse_qs(urllib.parse.urlsplit(res["auth_url"]).query)
-    assert res["auth_url"].startswith("https://iam.viessmann.com/idp/v3/authorize?")
+    assert res["auth_url"].startswith("https://iam.viessmann-climatesolutions.com/idp/v3/authorize?")
     assert q["state"] == [res["state"]] and q["code_challenge_method"] == ["S256"]
 
     seen = {}

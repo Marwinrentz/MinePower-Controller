@@ -15,7 +15,7 @@ Google reCAPTCHA aus. Die angezeigte Client-ID hier angeben.
    Gerät 'Viessmann Wärmepumpe (ViCare-API)' eintragen.
 
 Nur Python-Standardbibliothek, keine Daten verlassen den Rechner außer an
-iam.viessmann.com.
+iam.viessmann-climatesolutions.com.
 """
 from __future__ import annotations
 
@@ -27,8 +27,8 @@ import sys
 import urllib.parse
 import urllib.request
 
-AUTH = "https://iam.viessmann.com/idp/v3/authorize"
-TOKEN = "https://iam.viessmann.com/idp/v3/token"
+AUTH = "https://iam.viessmann-climatesolutions.com/idp/v3/authorize"
+TOKEN = "https://iam.viessmann-climatesolutions.com/idp/v3/token"
 REDIRECT = "http://localhost:4200/"
 
 

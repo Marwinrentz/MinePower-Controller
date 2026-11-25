@@ -4,6 +4,12 @@ Format: eine Version je Abschnitt, Einträge gruppiert in Neu, Geändert und
 Behoben, ein Eintrag je Zeile. Die App zeigt diese Datei unter „Changelog“
 und nach einem Update als Hinweisfenster.
 
+## 3.5.3 (2026-11-25)
+
+### Behoben
+- Viessmann: Anmeldung und API auf die neuen Adressen iam./api.viessmann-climatesolutions.com umgestellt, weil es die alten viessmann.com-Adressen nicht mehr gibt
+- „Mit Viessmann verbinden“ zeigt nicht mehr „Seite nicht erreichbar“
+
 ## 3.5.2 (2026-11-25)
 
 ### Neu

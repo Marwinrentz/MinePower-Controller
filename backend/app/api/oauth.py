@@ -60,7 +60,7 @@ class Provider:
 PROVIDERS: dict[str, Provider] = {
     "viessmann": Provider(
         name="Viessmann", driver_id="viessmann_vicare",
-        authorize="https://iam.viessmann.com/idp/v3/authorize", token="https://iam.viessmann.com/idp/v3/token",
+        authorize="https://iam.viessmann-climatesolutions.com/idp/v3/authorize", token="https://iam.viessmann-climatesolutions.com/idp/v3/token",
         scope="IoT User offline_access", pkce=True, needs_secret=False, https_redirect=False),
     "daikin_onecta": Provider(
         name="Daikin", driver_id="daikin_onecta",
