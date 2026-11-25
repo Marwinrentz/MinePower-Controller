@@ -215,6 +215,7 @@ class FakeViessmann:
             assert body["grant_type"] == "refresh_token" and body["refresh_token"] == "rt"
             return {"access_token": "at", "expires_in": 3600}
         if "equipment/installations" in path:
+            assert "/iot/v2/equipment/installations" in path  # v1 seit 2025 abgeschaltet (HTTP 410)
             return {"data": [{"id": 4711, "gateways": [{"serial": "7637415000000000"}]}]}
         if method == "GET" and path.endswith("/features"):
             assert "/iot/v2/features/installations/4711/gateways/7637415000000000/devices/0/features" in path

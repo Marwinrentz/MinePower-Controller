@@ -1,7 +1,7 @@
 {
   "name": "minepower-frontend",
   "private": true,
-  "version": "3.5.3",
+  "version": "3.5.4",
   "license": "MIT",
   "type": "module",
   "scripts": {
