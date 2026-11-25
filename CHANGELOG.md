@@ -4,7 +4,7 @@ Format: eine Version je Abschnitt, Einträge gruppiert in Neu, Geändert und
 Behoben, ein Eintrag je Zeile. Die App zeigt diese Datei unter „Changelog“
 und nach einem Update als Hinweisfenster.
 
-## 3.4.0 (2026-11-24)
+## 3.4.0 (2026-11-25)
 
 ### Neu
 - Wärmepumpen und Klimaanlagen: Überschuss geht auch in Wärme; MinePower gibt das Gerät frei, die Temperatur regelt es selbst
