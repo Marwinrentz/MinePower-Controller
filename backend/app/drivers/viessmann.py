@@ -7,7 +7,7 @@ Ablauf:
   Refresh-Token. Das Token holt der Knopf 'Mit Viessmann verbinden' (api/oauth.py)
   oder ``backend/tools/vicare_token.py``;
   es gilt 180 Tage. Daraus wird stündlich ein Zugriffstoken erzeugt
-  (``https://iam.viessmann.com/idp/v3/token``).
+  (``https://iam.viessmann-climatesolutions.com/idp/v3/token``).
 * Gerät: Installation, Gateway-Seriennummer und Geräte-ID. Leer gelassen,
   nimmt MinePower die erste Installation des Kontos
   (``/iot/v1/equipment/installations?includeGateways=true``).
@@ -44,8 +44,8 @@ from .http_util import HttpDevice
 from .registry import register
 from .validation import ConnectionProblem, DeviceRejected, checked, sanitized
 
-TOKEN_URL = "https://iam.viessmann.com/idp/v3/token"
-API = "https://api.viessmann.com"
+TOKEN_URL = "https://iam.viessmann-climatesolutions.com/idp/v3/token"
+API = "https://api.viessmann-climatesolutions.com"
 DHW_TEMP = ("heating.dhw.sensors.temperature.dhwCylinder", "heating.dhw.sensors.temperature.hotWaterStorage")
 ONCE = "heating.dhw.oneTimeCharge"
 DHW_TARGET = "heating.dhw.temperature.main"
