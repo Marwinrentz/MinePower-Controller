@@ -34,7 +34,7 @@ from __future__ import annotations
 import asyncio
 
 from .base import ConfigField, DeviceCategory, DriverMeta, FieldType, WaterHeaterData, WaterHeaterDriver
-from .heat_common import kind_field, num, rated_field, wants_on
+from .heat_common import ROOM_TEMP_MAX_C, ROOM_TEMP_MIN_C, kind_field, num, rated_field, room_temp, wants_on
 from .http_util import HttpDevice
 from .registry import register
 from .validation import CommandNotApplied, DeviceRejected, checked, sanitized
@@ -76,7 +76,8 @@ class DaikinLocal(WaterHeaterDriver):
                                                  {"value": "cool", "label": "Kühlen"},
                                                  {"value": "auto", "label": "Automatik"}]),
             ConfigField(key="surplus_temp", label="Solltemperatur bei Überschuss (°C)", type=FieldType.NUMBER,
-                        default=23, help="Heizen: etwas höher als sonst, Kühlen: etwas tiefer."),
+                        default=23, help=f"Raumtemperatur {ROOM_TEMP_MIN_C:.0f}–{ROOM_TEMP_MAX_C:.0f} °C. "
+                             "Heizen: etwas höher als sonst, Kühlen: etwas tiefer."),
             rated_field(1000),
             kind_field("climate"),
         ],
@@ -90,7 +91,7 @@ class DaikinLocal(WaterHeaterDriver):
         self.prefix = "/skyfi" if config.get("variant") == "airbase" else ""
         self.action = "setpoint" if config.get("action") == "setpoint" else "power"
         self.surplus_mode = MODE_CODES.get(str(config.get("surplus_mode") or "heat"), "4")
-        self.surplus_temp = num(config.get("surplus_temp"), 23.0) or 23.0
+        self.surplus_temp = room_temp(config.get("surplus_temp"), 23.0)
         self.rated_power = num(config.get("rated_power"), 1000.0) or 1000.0
         self.heat_kind = str(config.get("heat_kind") or "climate")
         #: Was MinePower verändert hat – nur das wird zurückgenommen.

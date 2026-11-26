@@ -413,3 +413,61 @@ def test_validate_heat_settings():
 def test_json_roundtrip_of_payload_fields():
     s = WaterHeaterSettings.from_dict({"kind": "climate", "self_regulating": True, "min_on_s": 300})
     assert json.loads(json.dumps({"kind": s.kind, "min_on_s": s.min_on_s}))["kind"] == "climate"
+
+
+# ---------------------------------------------------------------- Klima: Raumtemperatur statt Speicher (3.5.5)
+
+def test_climate_settings_never_use_tank_temperatures():
+    s = WaterHeaterSettings.from_dict({"kind": "climate", "target_temp_c": 60, "boost_temp_c": 65,
+                                       "boost_end_mode": "both", "self_regulating": False,
+                                       "surplus_temp_c": 70})
+    assert s.self_regulating is True
+    assert s.target_temp_c == 22.0 and s.boost_end_mode == "time" and s.surplus_temp_c is None
+    # Wärmepumpe/Warmwasser bleiben unverändert
+    w = WaterHeaterSettings.from_dict({"kind": "water", "target_temp_c": 60, "boost_end_mode": "both"})
+    assert w.target_temp_c == 60 and w.boost_end_mode == "both" and w.self_regulating is False
+
+
+def test_climate_is_always_self_regulating():
+    # Kühlen bei 26 °C Raumtemperatur: früher hätte 'unter 60 °C' ewig geheizt –
+    # jetzt gilt nur die Freigabe nach Überschuss.
+    ctl = WaterHeaterController(WaterHeaterSettings.from_dict({"kind": "climate", "self_regulating": False,
+                                                               "max_power_w": 1000, "modulating": False}))
+    assert ctl.s.self_regulating
+
+
+def test_room_temp_clamp():
+    from app.drivers.heat_common import room_temp
+    assert room_temp(55) == 22.0        # Warmwasser-Wert im Klima-Feld = Versehen
+    assert room_temp(32) == 30.0
+    assert room_temp(10) == 16.0
+    assert room_temp(None, 23.0) == 23.0
+    assert room_temp("21.5") == 21.5
+
+
+@pytest.mark.parametrize("driver_id,config,ok", [
+    ("daikin_local", {"host": "192.0.2.5", "surplus_temp": 55}, False),
+    ("daikin_local", {"host": "192.0.2.5", "surplus_temp": 18}, True),
+    ("daikin_onecta", {"target": "climate", "surplus_temp": 60}, False),
+    ("daikin_onecta", {"target": "climate", "surplus_temp": 24}, True),
+    ("daikin_onecta", {"target": "dhw", "surplus_temp": 23}, False),
+    ("daikin_onecta", {"target": "dhw", "surplus_temp": 55}, True),
+    ("homey_pro", {"host": "192.0.2.6", "api_key": "k", "heat_kind": "climate", "surplus_temp": 40}, False),
+    ("homey_pro", {"host": "192.0.2.6", "api_key": "k", "heat_kind": "heat_pump", "surplus_temp": 50}, True),
+])
+def test_surplus_temp_validation(driver_id, config, ok):
+    from app.drivers.config_validation import validate_config
+    errors = [e for e in validate_config(registry.get_driver_class(driver_id).meta, config)
+              if e["key"] == "surplus_temp"]
+    assert (not errors) == ok, errors
+
+
+def test_daikin_drivers_clamp_old_values():
+    assert make("daikin_local", host="192.0.2.5", surplus_temp=55).surplus_temp == 23.0
+    assert make("daikin_local", host="192.0.2.5", surplus_temp=31).surplus_temp == 30.0
+    dhw = make("daikin_onecta", target="dhw", surplus_temp=23, client_id="c", client_secret="s", refresh_token="r")
+    assert dhw.surplus_temp == 55.0
+    room = make("daikin_onecta", target="climate", surplus_temp=55, client_id="c", client_secret="s", refresh_token="r")
+    assert room.surplus_temp == 23.0
+    assert make("homey_pro", host="192.0.2.6", api_key="k", heat_kind="climate", surplus_temp=45).surplus_temp == 23.0
+    assert make("homey_pro", host="192.0.2.6", api_key="k", heat_kind="heat_pump", surplus_temp=50).surplus_temp == 50.0

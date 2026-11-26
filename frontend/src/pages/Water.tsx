@@ -379,9 +379,12 @@ function HeatPumpDetail({ dev }: { dev: SnapshotDevice }) {
               }))}
             />
           </Field>
-          <ToggleRow label={t("heat.selfReg")} help={t("heat.selfRegHelp")}
-                     on={d.draft.self_regulating !== undefined ? d.draft.self_regulating === true : dev.self_regulating === true}
-                     onChange={(v) => d.set("self_regulating", v)} />
+          {/* Klimaanlage regelt immer selbst (Raumtemperatur, Heizen und Kühlen) */}
+          {d.str("kind", kind) !== "climate" && (
+            <ToggleRow label={t("heat.selfReg")} help={t("heat.selfRegHelp")}
+                       on={d.draft.self_regulating !== undefined ? d.draft.self_regulating === true : dev.self_regulating === true}
+                       onChange={(v) => d.set("self_regulating", v)} />
+          )}
           <div className="form-actions">
             {d.dirty && <Button variant="ghost" onClick={d.reset}>{t("set.discard")}</Button>}
             <ActionButton variant="primary" disabled={!d.dirty} onClick={() => saveSettings(dev.id, {

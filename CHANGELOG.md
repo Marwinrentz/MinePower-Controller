@@ -4,6 +4,14 @@ Format: eine Version je Abschnitt, Einträge gruppiert in Neu, Geändert und
 Behoben, ein Eintrag je Zeile. Die App zeigt diese Datei unter „Changelog“
 und nach einem Update als Hinweisfenster.
 
+## 3.5.5 (2026-11-26)
+
+### Behoben
+- Klimaanlagen bekommen keine Warmwasser-Temperaturen mehr: Statt 60 °C Ziel und 65 °C Boost regeln sie immer selbst, MinePower gibt nur bei Überschuss frei und die Freigabe von Hand endet nach Zeit
+- Neue Klimaanlagen und Wärmepumpen werden ohne Speicher-Vorgaben (60/65 °C) angelegt
+- Daikin (lokal), Daikin Onecta (Klima/Raum) und Homey (Art Klimaanlage): Solltemperatur bei Überschuss nur noch 16–30 °C, alte Werte wie 55 °C werden auf die Vorgabe zurückgesetzt
+- Daikin Onecta Warmwasser: Solltemperatur 30–65 °C, die Formular-Vorgabe 23 °C wird nicht mehr als Warmwasser-Soll verwendet
+
 ## 3.5.4 (2026-11-25)
 
 ### Behoben
