@@ -1300,7 +1300,25 @@ class WaterHeaterSettings:
         if self.kind not in HEAT_KINDS:
             self.kind = "water"
         self.self_regulating = bool(self.self_regulating)
+        if self.kind == "climate":
+            self._climate()
         self.mode = str(self.mode)
+
+    def _climate(self) -> None:
+        """Klimaanlage: heizt oder kühlt einen Raum, kein Speicher.
+
+        Ihr Fühler misst die Raumtemperatur. Ziel- und Boost-Temperaturen
+        eines Warmwasserspeichers (60/65 °C) würden nie erreicht – beim
+        Kühlen erst recht nicht – und der Regler hätte das Gerät endlos
+        laufen lassen. Die Anlage regelt deshalb immer selbst, MinePower gibt
+        nur bei Überschuss frei, und die Freigabe von Hand endet nach Zeit."""
+        from ..drivers.heat_common import ROOM_TEMP_DEFAULT_C, ROOM_TEMP_MAX_C, ROOM_TEMP_MIN_C
+
+        self.self_regulating = True
+        if not ROOM_TEMP_MIN_C <= self.target_temp_c <= ROOM_TEMP_MAX_C:
+            self.target_temp_c = ROOM_TEMP_DEFAULT_C
+        self.boost_end_mode = "time"
+        self.surplus_temp_c = None
 
 
 #: Arten von Wärmelasten (Anzeige, Vorgaben)

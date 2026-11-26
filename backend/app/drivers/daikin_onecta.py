@@ -64,7 +64,7 @@ from .base import (
     WaterHeaterData,
     WaterHeaterDriver,
 )
-from .heat_common import kind_field, num, rated_field, wants_on
+from .heat_common import ROOM_TEMP_MAX_C, ROOM_TEMP_MIN_C, kind_field, num, rated_field, room_temp, wants_on
 from .http_util import HttpDevice
 from .registry import register
 from .validation import ConnectionProblem, DeviceRejected, checked, sanitized
@@ -80,6 +80,10 @@ BLOCK_FIRST_S = 1800.0
 BLOCK_MAX_S = 12 * 3600.0
 
 MP_TYPE = {"climate": "climateControl", "dhw": "domesticHotWaterTank"}
+#: Warmwasser-Soll bei Überschuss (°C)
+DHW_TEMP_MIN_C = 30.0
+DHW_TEMP_MAX_C = 65.0
+
 MODE_NAMES = {"heating": "Heizen", "cooling": "Kühlen", "auto": "Automatik", "dry": "Entfeuchten",
               "fanOnly": "Lüften"}
 
@@ -275,7 +279,8 @@ class DaikinOnecta(WaterHeaterDriver):
                         help="Nur Klima/Raum. Beim Verstellen des Sollwerts gilt die laufende Betriebsart."),
             ConfigField(key="surplus_temp", label="Solltemperatur bei Überschuss (°C)", type=FieldType.NUMBER,
                         required=False, default=23,
-                        help="Raum (Heizen höher, Kühlen tiefer) bzw. Warmwasser, z. B. 55."),
+                        help=f"Klima/Raum: {ROOM_TEMP_MIN_C:.0f}–{ROOM_TEMP_MAX_C:.0f} °C (Heizen etwas höher, Kühlen etwas tiefer "
+                             f"als sonst). Warmwasser: {DHW_TEMP_MIN_C:.0f}–{DHW_TEMP_MAX_C:.0f} °C, z. B. 55."),
             ConfigField(key="poll_s", label="Abfrageabstand (s)", type=FieldType.NUMBER, default=900,
                         help="600–3600 s. 900 s = 96 Abfragen am Tag, Rest bleibt für Befehle."),
             rated_field(1000),
@@ -300,8 +305,12 @@ class DaikinOnecta(WaterHeaterDriver):
         self.action = action
         mode = str(config.get("surplus_mode") or "heating")
         self.surplus_mode = mode if mode in ("heating", "cooling", "auto") else "heating"
-        default_temp = 55.0 if self.target == "dhw" else 23.0
-        self.surplus_temp = num(config.get("surplus_temp"), default_temp) or default_temp
+        if self.target == "dhw":
+            t = num(config.get("surplus_temp"), 55.0) or 55.0
+            # 23 °C steht als Formular-Vorgabe drin, ist für Warmwasser aber sinnlos
+            self.surplus_temp = 55.0 if t < DHW_TEMP_MIN_C else min(t, DHW_TEMP_MAX_C)
+        else:
+            self.surplus_temp = room_temp(config.get("surplus_temp"), 23.0)
         self.poll_s = max(POLL_MIN_S, min(POLL_MAX_S, num(config.get("poll_s"), 900.0) or 900.0))
         self.rated_power = num(config.get("rated_power"), 1000.0) or 1000.0
         kind = str(config.get("heat_kind") or "")

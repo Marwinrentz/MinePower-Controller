@@ -193,14 +193,14 @@ export function DeviceForm({ category, existing, onSaved, onCancel }: {
           })
         : await post<Device>("/api/devices", {
             name: primaryName, category, driver_id: driverId, config,
-            settings: { ...defaultSettings(category), ...settings },
+            settings: { ...defaultSettings(category, driver?.capabilities, config.heat_kind), ...settings },
           });
       if (many && pickKey) {
         // Jedes weitere gewählte Gerät wird ein eigener, einzeln gesteuerter Eintrag
         for (const id of picked.filter((x) => x !== primaryId)) {
           await post<Device>("/api/devices", {
             name: labelOf(id), category, driver_id: driverId, config: { ...config, [pickKey]: id },
-            settings: { ...defaultSettings(category), ...(existing?.settings ?? {}), ...settings },
+            settings: { ...defaultSettings(category, driver?.capabilities, config.heat_kind), ...(existing?.settings ?? {}), ...settings },
           });
         }
       }
@@ -343,8 +343,15 @@ function TestReport({ result }: { result: TestResult }) {
   );
 }
 
-/** Sinnvolle Regelungs-Defaults je Kategorie beim Anlegen. */
-function defaultSettings(category: DeviceCategory): Record<string, unknown> {
+/** Sinnvolle Regelungs-Defaults je Kategorie beim Anlegen.
+ *  Wärmepumpe und Klimaanlage regeln selbst: keine Speicher-Temperaturen
+ *  (60/65 °C), die Freigabe von Hand endet nach Zeit. */
+function defaultSettings(category: DeviceCategory, caps: string[] = [], heatKind?: unknown): Record<string, unknown> {
+  const selfReg = heatKind === "climate" || heatKind === "heat_pump"
+    || ((heatKind == null || heatKind === "") && (caps.includes("climate") || caps.includes("heat_pump")));
+  if (category === "water_heater" && selfReg) {
+    return { mode: "pv_only", boost_end_mode: "time", boost_duration_min: 60 };
+  }
   switch (category) {
     case "wallbox":
       return { mode: "pv_only", min_current: 6, max_current: 16, phases_mode: "fixed1",

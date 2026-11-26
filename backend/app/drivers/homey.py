@@ -32,7 +32,7 @@ import asyncio
 from typing import Any
 
 from .base import ConfigField, DeviceCategory, DriverMeta, FieldType, WaterHeaterData, WaterHeaterDriver
-from .heat_common import kind_field, num, rated_field, wants_on
+from .heat_common import ROOM_TEMP_MAX_C, ROOM_TEMP_MIN_C, kind_field, num, rated_field, room_temp, wants_on
 from .http_util import HttpDevice
 from .registry import register
 from .validation import CommandNotApplied, DeviceRejected, checked, sanitized
@@ -67,7 +67,9 @@ class HomeyPro(WaterHeaterDriver):
                         options=[{"value": "onoff", "label": "Einschalten (und danach wieder aus)"},
                                  {"value": "target", "label": "Solltemperatur verschieben"}]),
             ConfigField(key="surplus_temp", label="Solltemperatur bei Überschuss (°C)", type=FieldType.NUMBER,
-                        required=False, default=23, help="Nur für 'Solltemperatur verschieben'."),
+                        required=False, default=23,
+                        help=f"Nur für 'Solltemperatur verschieben'. Bei Art 'Klimaanlage' "
+                             f"{ROOM_TEMP_MIN_C:.0f}–{ROOM_TEMP_MAX_C:.0f} °C."),
             ConfigField(key="power_device_id", label="Geräte-ID des Messgeräts (optional)", required=False,
                         help="Falls das Gerät selbst keine Leistung meldet (measure_power)."),
             rated_field(1500),
@@ -84,9 +86,10 @@ class HomeyPro(WaterHeaterDriver):
         self.device_id = str(config.get("device_id") or "").strip()
         self.power_id = str(config.get("power_device_id") or "").strip()
         self.action = "target" if config.get("action") == "target" else "onoff"
-        self.surplus_temp = num(config.get("surplus_temp"), 23.0) or 23.0
         self.rated_power = num(config.get("rated_power"), 1500.0) or 1500.0
         self.heat_kind = str(config.get("heat_kind") or "heat_pump")
+        self.surplus_temp = (room_temp(config.get("surplus_temp"), 23.0) if self.heat_kind == "climate"
+                             else num(config.get("surplus_temp"), 23.0) or 23.0)
         self._switched_on = False
         self._saved_target: float | None = None
 

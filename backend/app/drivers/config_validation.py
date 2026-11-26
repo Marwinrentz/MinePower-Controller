@@ -63,7 +63,32 @@ def validate_config(meta: DriverMeta, config: dict[str, Any], *, masked_ok: bool
                 errors.append(_err(field, "URL mit http:// oder https://"))
             elif (field.key in ("host", "ip") or field.key.endswith(("url", "host"))) and blocked_reason(text):
                 errors.append(_err(field, blocked_reason(text) or ""))
+    errors.extend(_heat_temp_errors(meta, config))
     return errors
+
+
+def _heat_temp_errors(meta: DriverMeta, config: dict[str, Any]) -> list[dict[str, str]]:
+    """Klimaanlage/Raum: Solltemperatur 16–30 °C statt Warmwasser-Werten."""
+    from .heat_common import ROOM_TEMP_MAX_C, ROOM_TEMP_MIN_C, surplus_is_room
+
+    field = next((f for f in meta.fields if f.key == "surplus_temp"), None)
+    raw = config.get("surplus_temp")
+    if field is None or raw in (None, ""):
+        return []
+    try:
+        value = float(str(raw).replace(",", "."))
+    except ValueError:
+        return []  # meldet schon die Zahlenprüfung
+    if surplus_is_room(meta.id, config):
+        low, high, what = ROOM_TEMP_MIN_C, ROOM_TEMP_MAX_C, "Raumtemperatur"
+    elif meta.id == "daikin_onecta":
+        from .daikin_onecta import DHW_TEMP_MAX_C, DHW_TEMP_MIN_C
+        low, high, what = DHW_TEMP_MIN_C, DHW_TEMP_MAX_C, "Warmwasser"
+    else:
+        return []
+    if not low <= value <= high:
+        return [_err(field, f"{what} {low:.0f}–{high:.0f} °C")]
+    return []
 
 
 def config_error(errors: list[dict[str, str]]) -> dict[str, Any]:
